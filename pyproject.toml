@@ -13,6 +13,8 @@ dependencies = [
     "alembic>=1.14",
     "typer>=0.15",
     "httpx>=0.28",
+    "pgvector>=0.5.0",
+    "greenlet>=3.5.4",
 ]
 
 [project.scripts]
