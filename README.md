@@ -6,17 +6,23 @@ Ingests prospectuses, trust deeds, rating reports and announcements; extracts co
 structured, **cited** records; answers portfolio-level questions through a governed LangGraph agent
 that refuses to answer without evidence.
 
-> **Status: Phase 1 (scaffold) complete.** The API serves health/readiness and nothing else yet.
-> See [PLAN.md](PLAN.md) for the phase plan and [CLAUDE.md](CLAUDE.md) for architectural invariants.
+> **Status: Phase 2 (database & domain) complete.** 17 tables, migrations, repositories and
+> synthetic seed data are in. Ingestion lands in Phase 3; the API still serves only
+> health/readiness. See [PLAN.md](PLAN.md) for the phase plan and [CLAUDE.md](CLAUDE.md) for
+> architectural invariants.
 
 ## Quick start
 
 ```bash
 make install     # creates .venv (Python 3.12) and .env
-make check       # lint + type + test
 make up          # postgres+pgvector, api, worker
-curl localhost:8000/health
+make migrate     # apply schema
+make seed        # synthetic instruments, portfolios, holdings (idempotent)
+make check       # lint + type + test
 ```
+
+Tests run against a dedicated `opuscovintel_test` database, created on first use, so they never
+depend on — or disturb — your development data. Override with `TEST_DATABASE_URL`.
 
 Without Docker, run against your own Postgres:
 
