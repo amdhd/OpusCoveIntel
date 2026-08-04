@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help install lint fmt type test test-live check run worker \
-        up down down-volumes logs psql shell migrate migration migrate-down seed clean
+        up down down-volumes logs psql shell migrate migration migrate-down seed \
+        sample-pdf ingest-sample clean
 
 UV := uv
 
@@ -75,6 +76,16 @@ migrate-down:  ## Roll back one migration
 
 seed:  ## Load synthetic demo data (idempotent)
 	$(UV) run opuscovintel seed
+
+# -- ingestion -----------------------------------------------------------
+
+SAMPLE_PDF := var/sample-prospectus.pdf
+
+sample-pdf:  ## Generate the synthetic prospectus fixture
+	$(UV) run python -m tests.fixtures.synthetic_pdf $(SAMPLE_PDF)
+
+ingest-sample: sample-pdf  ## Ingest the synthetic prospectus (parse, score, chunk). $0
+	$(UV) run opuscovintel ingest $(SAMPLE_PDF)
 
 # -- housekeeping --------------------------------------------------------
 

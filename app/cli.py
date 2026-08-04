@@ -1,12 +1,13 @@
 """Operator CLI.
 
-Phase 1 ships configuration inspection only. Ingestion, extraction, query, and
-eval commands arrive in Phases 3-8.
+Configuration inspection, seeding and ingestion. Extraction, query and eval
+commands arrive in Phases 5-8.
 """
 
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import typer
 
@@ -43,6 +44,54 @@ def seed() -> None:
     counts = asyncio.run(_main())
     for key, value in counts.items():
         typer.echo(f"{key}: {value}")
+
+
+@app.command()
+def ingest(
+    path: Path,
+    process: bool = typer.Option(True, help="Parse and chunk now instead of only queueing."),
+    uploaded_by: str | None = typer.Option(None, help="Recorded on the document row."),
+) -> None:
+    """Upload a PDF, then parse, score and chunk it. Idempotent by content hash."""
+    from app.ingest.service import IngestionService
+    from app.ingest.storage import get_object_store
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    if not path.is_file():
+        typer.echo(f"no such file: {path}")
+        raise typer.Exit(code=1)
+
+    async def _run() -> tuple[str, bool, str]:
+        from app.db.session import get_sessionmaker
+
+        try:
+            async with get_sessionmaker()() as session:
+                service = IngestionService(session, get_object_store(), settings)
+                outcome = await service.upload(
+                    filename=path.name,
+                    # Off the event loop: blocking file I/O in an async path.
+                    data=await asyncio.to_thread(path.read_bytes),
+                    uploaded_by=uploaded_by,
+                )
+                document_id = outcome.document.id
+                if not process:
+                    return str(document_id), outcome.duplicate, "queued"
+                result = await service.process(document_id)
+                summary = (
+                    f"{result.page_count} pages, {result.chunk_count} chunks, "
+                    f"{result.pages_flagged_for_vlm} flagged for VLM"
+                    + (" (skipped; already ingested)" if result.skipped else "")
+                )
+                return str(document_id), outcome.duplicate, summary
+        finally:
+            await dispose_engines()
+
+    document_id, duplicate, summary = asyncio.run(_run())
+    typer.echo(f"document: {document_id}")
+    typer.echo(f"duplicate: {duplicate}")
+    typer.echo(summary)
 
 
 @app.command()
