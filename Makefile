@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install lint fmt type test test-live check run worker \
-        up down down-volumes logs psql shell migrate clean
+        up down down-volumes logs psql shell migrate migration migrate-down seed clean
 
 UV := uv
 
@@ -64,10 +64,17 @@ shell:  ## Open a shell in the api container
 
 # -- database ------------------------------------------------------------
 
-migrate:  ## Apply migrations (no-op until Phase 2)
-	@test -f alembic.ini \
-		&& $(UV) run alembic upgrade head \
-		|| echo "no alembic.ini yet -- migrations land in Phase 2"
+migrate:  ## Apply migrations
+	$(UV) run alembic upgrade head
+
+migration:  ## Autogenerate a migration: make migration m="add widgets"
+	$(UV) run alembic revision --autogenerate -m "$(m)"
+
+migrate-down:  ## Roll back one migration
+	$(UV) run alembic downgrade -1
+
+seed:  ## Load synthetic demo data (idempotent)
+	$(UV) run opuscovintel seed
 
 # -- housekeeping --------------------------------------------------------
 

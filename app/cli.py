@@ -34,6 +34,18 @@ def config() -> None:
 
 
 @app.command()
+def seed() -> None:
+    """Load synthetic demo instruments, portfolios and holdings. Idempotent."""
+    from app.db.seed import _main
+
+    settings = get_settings()
+    configure_logging(settings)
+    counts = asyncio.run(_main())
+    for key, value in counts.items():
+        typer.echo(f"{key}: {value}")
+
+
+@app.command()
 def check() -> None:
     """Verify external dependencies are reachable. Exit 1 if any check fails."""
     settings = get_settings()
