@@ -51,6 +51,11 @@ services:
       context: .
       target: runtime
     command: ["python", "-m", "app.worker.main"]
+    # The image's HEALTHCHECK curls /health, but the worker serves no HTTP.
+    # Without this override it is permanently "unhealthy", which trains people
+    # to ignore the one signal that should mean something.
+    healthcheck:
+      disable: true
     depends_on:
       db:
         condition: service_healthy
