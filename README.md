@@ -6,10 +6,10 @@ Ingests prospectuses, trust deeds, rating reports and announcements; extracts co
 structured, **cited** records; answers portfolio-level questions through a governed LangGraph agent
 that refuses to answer without evidence.
 
-> **Status: Phase 2 (database & domain) complete.** 17 tables, migrations, repositories and
-> synthetic seed data are in. Ingestion lands in Phase 3; the API still serves only
-> health/readiness. See [PLAN.md](PLAN.md) for the phase plan and [CLAUDE.md](CLAUDE.md) for
-> architectural invariants.
+> **Status: Phase 3 (ingestion) complete.** PDFs upload, deduplicate by content hash, parse to
+> per-page confidence telemetry, and chunk into spans that can be cited. Retrieval and the rules
+> engine land in Phase 4; the first LLM spend is Phase 5. See [PLAN.md](PLAN.md) for the phase
+> plan and [CLAUDE.md](CLAUDE.md) for architectural invariants.
 
 ## Quick start
 
@@ -20,6 +20,25 @@ make migrate     # apply schema
 make seed        # synthetic instruments, portfolios, holdings (idempotent)
 make check       # lint + type + test
 ```
+
+## Ingesting a document
+
+```bash
+make ingest-sample   # generate a synthetic prospectus, then parse and chunk it
+```
+
+Or over HTTP — `POST` returns 201 for new bytes and 200 with `duplicate: true` for bytes already
+known, because a duplicate is a correct outcome rather than an error:
+
+```bash
+curl -F "file=@var/sample-prospectus.pdf" localhost:8000/documents/upload
+```
+
+Uploading queues the document; the worker claims it (`extraction_jobs.status = 'queued'` is the
+queue — no broker until Phase 8) and writes pages and chunks. `GET /documents/{id}/pages` shows
+per-page parse confidence and, for a page that failed the text-layer checks, which check tripped;
+`GET /documents/{id}/chunks` shows every chunk with the character span it was cut from. Phase 3
+*detects* pages that will need the vision model but never calls one — ingestion costs $0.
 
 Tests run against a dedicated `opuscovintel_test` database, created on first use, so they never
 depend on — or disturb — your development data. Override with `TEST_DATABASE_URL`.
@@ -38,7 +57,7 @@ make run         # uvicorn with autoreload on :8000
 | `app/core/` | Settings, structured logging, request-id middleware. |
 | `app/domain/` | Pydantic schemas + enums. Pure leaf — imports nothing from `db/` or `llm/`. |
 | `app/db/` | SQLAlchemy models, repositories, dual (RW / RO) engines. |
-| `app/ingest/` | PDF parsing, page confidence, VLM fallback, chunking. *(Phase 3)* |
+| `app/ingest/` | Object storage, PDF parsing, page confidence, chunking. |
 | `app/llm/` | Provider adapters behind a budget-guarded router. *(Phase 5)* |
 | `app/extract/` | Prompts, candidate detection, validation loop. *(Phase 6)* |
 | `app/rules/` | Deterministic covenant evaluation. Pure functions. *(Phase 4)* |

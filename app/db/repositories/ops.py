@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from collections.abc import Sequence
 from decimal import Decimal
@@ -10,7 +11,7 @@ from sqlalchemy import func, select
 
 from app.db.models.ops import AuditLog, ExtractionJob, HumanReview, LLMCache, LLMCall
 from app.db.repositories.base import BaseRepository
-from app.domain.enums import JobType, ReviewStatus
+from app.domain.enums import JobStatus, JobType, ReviewStatus
 
 
 class ExtractionJobRepository(BaseRepository[ExtractionJob]):
@@ -40,6 +41,35 @@ class ExtractionJobRepository(BaseRepository[ExtractionJob]):
             )
         )
         return result.scalar_one_or_none()
+
+    async def claim_next(self, job_type: JobType) -> ExtractionJob | None:
+        """Claim the oldest queued job of a type, or return None if there is none.
+
+        `FOR UPDATE ... SKIP LOCKED` is what lets several workers poll the same
+        table without a broker (CLAUDE.md 9 defers Celery/Redis to Phase 8):
+        each worker locks a different row instead of contending for the first.
+
+        The claim is only durable once the caller commits -- repositories do
+        not commit -- so the transaction must be closed before long work starts.
+        """
+        result = await self.session.execute(
+            select(ExtractionJob)
+            .where(
+                ExtractionJob.job_type == job_type,
+                ExtractionJob.status == JobStatus.QUEUED,
+            )
+            .order_by(ExtractionJob.created_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        job = result.scalar_one_or_none()
+        if job is None:
+            return None
+
+        job.status = JobStatus.RUNNING
+        job.started_at = dt.datetime.now(dt.UTC)
+        await self.session.flush()
+        return job
 
     async def total_cost_for_document(self, document_id: uuid.UUID) -> Decimal:
         """Spend so far on one document -- what the per-document cap tests."""

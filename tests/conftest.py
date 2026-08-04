@@ -9,14 +9,23 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+
+if TYPE_CHECKING:
+    # Import-time only: the fixtures below import `app` lazily so the
+    # environment is pinned before settings are ever constructed.
+    from app.ingest.service import IngestionService
+    from app.ingest.storage import LocalFileStore
 
 # Pin the environment before anything imports settings.
 os.environ.setdefault("ENVIRONMENT", "test")
@@ -43,6 +52,7 @@ def _clear_settings_cache() -> Iterator[None]:
         get_readonly_sessionmaker,
         get_sessionmaker,
     )
+    from app.ingest.storage import get_object_store
 
     caches = (
         get_settings,
@@ -50,6 +60,7 @@ def _clear_settings_cache() -> Iterator[None]:
         get_readonly_engine,
         get_sessionmaker,
         get_readonly_sessionmaker,
+        get_object_store,
     )
     for cache in caches:
         cache.cache_clear()
@@ -171,3 +182,57 @@ async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
             await session.close()
             if transaction.is_active:
                 await transaction.rollback()
+
+
+# --------------------------------------------------------------------------
+# Ingestion fixtures
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def storage_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point object storage at a temp directory for the duration of one test."""
+    root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_DIR", str(root))
+    return root
+
+
+@pytest.fixture
+def object_store(storage_root: Path) -> LocalFileStore:
+    from app.ingest.storage import LocalFileStore
+
+    return LocalFileStore(storage_root)
+
+
+@pytest.fixture
+def ingestion_service(db_session: AsyncSession, object_store: LocalFileStore) -> IngestionService:
+    from app.ingest.service import IngestionService
+
+    return IngestionService(db_session, object_store)
+
+
+@pytest_asyncio.fixture
+async def api_client(
+    db_session: AsyncSession, object_store: LocalFileStore
+) -> AsyncIterator[AsyncClient]:
+    """An HTTP client over the real app, wired to the rolled-back test session.
+
+    `httpx.AsyncClient` rather than `TestClient`: the latter drives the app from
+    its own event loop on another thread, and an asyncpg connection belongs to
+    the loop that opened it. Sharing the test's session across loops fails in
+    ways that look like flaky tests rather than a fixture bug.
+    """
+    from app.api.routes.documents import get_ingestion_service
+    from app.db.session import get_session
+    from app.ingest.service import IngestionService
+    from app.main import create_app
+
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db_session
+    app.dependency_overrides[get_ingestion_service] = lambda: IngestionService(
+        db_session, object_store
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
