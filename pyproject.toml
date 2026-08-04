@@ -1,0 +1,109 @@
+[project]
+name = "opuscovintel"
+version = "0.1.0"
+description = "Sukuk & bond covenant intelligence platform"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "typer>=0.15",
+    "httpx>=0.28",
+]
+
+[project.scripts]
+opuscovintel = "app.cli:app"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# ---------------------------------------------------------------- ruff
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "C4",        # comprehensions
+    "SIM",       # simplify
+    "TID",       # tidy-imports
+    "RUF",       # ruff-specific
+    "ASYNC",     # async correctness
+    "BLE",       # blind-except -- intentional catches must be annotated
+    "T20",       # flake8-print  -- CLAUDE.md: logging only, no print
+]
+ignore = [
+    "B008",    # FastAPI Depends() in defaults is the documented idiom
+    "SIM300",  # Settings attributes are SCREAMING_CASE, so ruff misreads
+               # `settings.MAX_COST_USD == Decimal("2.00")` as a Yoda condition.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The CLI is a user-facing terminal program; stdout is its output channel.
+"app/cli.py" = ["T20"]
+"tests/*" = ["T20"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+# ---------------------------------------------------------------- mypy
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app", "tests"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+# CLAUDE.md 7: domain/ and rules/ are pure leaves and are held to --strict.
+[[tool.mypy.overrides]]
+module = ["app.domain.*", "app.rules.*"]
+strict = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------- pytest
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-q --strict-markers"
+markers = [
+    # CLAUDE.md 7: CI must never hit a paid API. Guarded by RUN_LIVE_LLM_TESTS=1.
+    "live_llm: hits a real, billable LLM provider. Deselected unless RUN_LIVE_LLM_TESTS=1.",
+]

@@ -1,0 +1,42 @@
+# -- secrets -------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# -- python --------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# -- tooling caches ------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+uv.lock
+
+# -- runtime data --------------------------------------------------------
+var/
+*.db
+*.sqlite3
+
+# -- evaluation output ---------------------------------------------------
+evals/results/
+
+# -- corpus --------------------------------------------------------------
+# Real prospectuses are copyrighted -- synthetic fixtures only (CLAUDE.md 7).
+data/real/
+*.pdf
+!tests/fixtures/**/*.pdf
+
+# -- editors / os --------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store
