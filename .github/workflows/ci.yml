@@ -76,15 +76,15 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          # uv.lock is gitignored in this repo, so the cache key follows the
-          # manifest. Dependencies therefore resolve fresh in CI -- see the
-          # note in the PR description.
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
+        # --locked, not --frozen: both install exactly what uv.lock pins, but
+        # --frozen ignores pyproject.toml entirely, so a dependency added
+        # without re-locking would be silently absent. --locked fails instead.
         # Python 3.12 comes from uv; the runner's system Python is not the
         # pinned interpreter (pyproject requires >=3.12,<3.13).
-        run: uv sync --all-groups
+        run: uv sync --all-groups --locked
 
       - name: Prepare the database
         # Creates the extensions and the read-only role the query agent will
@@ -136,9 +136,9 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-glob: pyproject.toml
+          cache-dependency-glob: uv.lock
 
-      - run: uv sync --all-groups
+      - run: uv sync --all-groups --locked
 
       - name: Apply from scratch
         run: uv run alembic upgrade head
