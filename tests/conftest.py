@@ -43,6 +43,7 @@ def _clear_settings_cache() -> Iterator[None]:
         get_readonly_sessionmaker,
         get_sessionmaker,
     )
+    from app.ingest.storage import get_object_store
 
     caches = (
         get_settings,
@@ -50,6 +51,7 @@ def _clear_settings_cache() -> Iterator[None]:
         get_readonly_engine,
         get_sessionmaker,
         get_readonly_sessionmaker,
+        get_object_store,
     )
     for cache in caches:
         cache.cache_clear()
