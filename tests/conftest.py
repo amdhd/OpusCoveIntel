@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
@@ -17,6 +19,12 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+
+if TYPE_CHECKING:
+    # Import-time only: the fixtures below import `app` lazily so the
+    # environment is pinned before settings are ever constructed.
+    from app.ingest.service import IngestionService
+    from app.ingest.storage import LocalFileStore
 
 # Pin the environment before anything imports settings.
 os.environ.setdefault("ENVIRONMENT", "test")
@@ -173,3 +181,30 @@ async def db_session(db_engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
             await session.close()
             if transaction.is_active:
                 await transaction.rollback()
+
+
+# --------------------------------------------------------------------------
+# Ingestion fixtures
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def storage_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point object storage at a temp directory for the duration of one test."""
+    root = tmp_path / "storage"
+    monkeypatch.setenv("STORAGE_DIR", str(root))
+    return root
+
+
+@pytest.fixture
+def object_store(storage_root: Path) -> LocalFileStore:
+    from app.ingest.storage import LocalFileStore
+
+    return LocalFileStore(storage_root)
+
+
+@pytest.fixture
+def ingestion_service(db_session: AsyncSession, object_store: LocalFileStore) -> IngestionService:
+    from app.ingest.service import IngestionService
+
+    return IngestionService(db_session, object_store)
