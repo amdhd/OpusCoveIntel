@@ -60,6 +60,20 @@ class ParseMethod(StrEnum):
     NONE = "none"
 
 
+class VlmReason(StrEnum):
+    """Why a page failed the text-layer confidence checks (CLAUDE.md 4).
+
+    Recorded on `document_pages.vlm_reason` so "why did this document cost $8?"
+    is a query. Phase 3 detects these; Phase 5 acts on them.
+    """
+
+    NO_TEXT_LAYER = "no_text_layer"
+    LOW_CHAR_COUNT = "low_char_count"
+    HIGH_IMAGE_AREA = "high_image_area"
+    TABLE_EXTRACTION_FAILED = "table_extraction_failed"
+    GARBLED_UNICODE = "garbled_unicode"
+
+
 class ChunkType(StrEnum):
     PARAGRAPH = "paragraph"
     TABLE = "table"
