@@ -1,0 +1,208 @@
+# Continuous integration.
+#
+# Three jobs, because they fail for different reasons and a red tick should say
+# which: `check` is the code, `migrations` is the schema, `image` is the
+# container. PLAN.md Phase 8 scheduled this; it lands early because Phase 3 is
+# the first phase with enough moving parts to regress silently.
+#
+# CLAUDE.md 7 makes "CI must never hit a paid API" an invariant. The enforcement
+# is structural rather than aspirational: no provider secret is passed to any
+# job, and the `no paid API calls` step below fails the build if one ever is.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A force-push supersedes the run it interrupted; don't burn minutes finishing it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Matches the compose stack and the settings defaults, so the suite needs no
+  # .env in CI (app/core/config.py).
+  DATABASE_URL: postgresql+asyncpg://opuscovintel:opuscovintel@localhost:5432/opuscovintel
+  DATABASE_URL_RO: postgresql+asyncpg://opuscovintel_ro:opuscovintel_ro@localhost:5432/opuscovintel
+  ENVIRONMENT: test
+  LOG_LEVEL: WARNING
+
+jobs:
+  check:
+    name: lint · type · test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        # pgvector, not plain postgres: document_chunks.embedding is a
+        # vector(1024) column, so the extension has to exist before the schema
+        # can be created at all.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: opuscovintel
+          POSTGRES_PASSWORD: opuscovintel
+          POSTGRES_DB: opuscovintel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opuscovintel -d opuscovintel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify no paid API calls are possible
+        # The suite skips `live_llm` tests unless RUN_LIVE_LLM_TESTS=1, but that
+        # guard only helps while nobody hands CI a key. This fails loudly if a
+        # future change adds one.
+        run: |
+          for name in ANTHROPIC_API_KEY OPENAI_API_KEY QWEN_API_KEY RUN_LIVE_LLM_TESTS; do
+            if [ -n "${!name:-}" ]; then
+              echo "::error::$name is set in CI; CLAUDE.md 7 forbids billable calls here"
+              exit 1
+            fi
+          done
+          echo "no provider credentials in the environment"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          # uv.lock is gitignored in this repo, so the cache key follows the
+          # manifest. Dependencies therefore resolve fresh in CI -- see the
+          # note in the PR description.
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install dependencies
+        # Python 3.12 comes from uv; the runner's system Python is not the
+        # pinned interpreter (pyproject requires >=3.12,<3.13).
+        run: uv sync --all-groups
+
+      - name: Prepare the database
+        # Creates the extensions and the read-only role the query agent will
+        # use (CLAUDE.md 1.6). Compose runs this from an init mount, which
+        # service containers have no equivalent for.
+        env:
+          PGPASSWORD: opuscovintel
+        run: |
+          psql -h localhost -U opuscovintel -d opuscovintel -v ON_ERROR_STOP=1 \
+            -f docker/postgres/init/01-init.sql
+
+      - name: Lint
+        run: make lint
+
+      - name: Type-check
+        run: make type
+
+      - name: Test
+        # REQUIRE_POSTGRES turns "no database reachable" from a skip into a
+        # failure. Without it, losing the service container would silently skip
+        # every database-backed test and CI would still be green.
+        env:
+          REQUIRE_POSTGRES: "1"
+        run: make test
+
+  migrations:
+    name: migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: opuscovintel
+          POSTGRES_PASSWORD: opuscovintel
+          POSTGRES_DB: opuscovintel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opuscovintel -d opuscovintel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - run: uv sync --all-groups
+
+      - name: Apply from scratch
+        run: uv run alembic upgrade head
+
+      - name: Roll all the way back and re-apply
+        # A downgrade nobody exercises is a downgrade that does not work. This
+        # is also what catches an anonymous constraint the naming convention
+        # missed, since Alembic cannot drop what it cannot name.
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
+      - name: Check for model/schema drift
+        # Fails when a model changed without a migration -- the failure mode
+        # that only shows up in production, on someone else's machine.
+        run: |
+          uv run alembic check 2>&1 | tee drift.txt
+          grep -q "No new upgrade operations detected" drift.txt
+
+  image:
+    name: docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: false
+          load: true
+          tags: opuscovintel:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Probe liveness and readiness
+        # /health must answer even with no database -- a database blip should
+        # not make an orchestrator kill a healthy container. /ready must answer
+        # 503 in the same situation, so the instance leaves the load balancer
+        # without being restarted. Running with no database reachable is the
+        # only way to tell those two apart.
+        run: |
+          docker run -d --name opuscovintel-ci -p 8000:8000 opuscovintel:ci
+          for _ in $(seq 1 30); do
+            curl -fsS http://localhost:8000/health >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+          curl -fsS http://localhost:8000/health | tee health.json
+          grep -q '"status":"ok"' health.json
+
+          ready_code=$(curl -s -o ready.json -w '%{http_code}' http://localhost:8000/ready)
+          echo "GET /ready -> $ready_code"
+          if [ "$ready_code" != "503" ]; then
+            echo "::error::/ready returned $ready_code with no database; it must report 503"
+            docker logs opuscovintel-ci
+            exit 1
+          fi
+
+      - name: Container logs
+        if: always()
+        run: docker logs opuscovintel-ci || true
