@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -208,3 +209,30 @@ def ingestion_service(db_session: AsyncSession, object_store: LocalFileStore) ->
     from app.ingest.service import IngestionService
 
     return IngestionService(db_session, object_store)
+
+
+@pytest_asyncio.fixture
+async def api_client(
+    db_session: AsyncSession, object_store: LocalFileStore
+) -> AsyncIterator[AsyncClient]:
+    """An HTTP client over the real app, wired to the rolled-back test session.
+
+    `httpx.AsyncClient` rather than `TestClient`: the latter drives the app from
+    its own event loop on another thread, and an asyncpg connection belongs to
+    the loop that opened it. Sharing the test's session across loops fails in
+    ways that look like flaky tests rather than a fixture bug.
+    """
+    from app.api.routes.documents import get_ingestion_service
+    from app.db.session import get_session
+    from app.ingest.service import IngestionService
+    from app.main import create_app
+
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db_session
+    app.dependency_overrides[get_ingestion_service] = lambda: IngestionService(
+        db_session, object_store
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
