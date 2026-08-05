@@ -25,6 +25,7 @@ from app.db.repositories.ops import (
     HumanReviewRepository,
     LLMCacheRepository,
     LLMCallRepository,
+    QueryLogRepository,
 )
 from app.db.repositories.portfolio import PortfolioHoldingRepository, PortfolioRepository
 
@@ -44,6 +45,7 @@ __all__ = [
     "LLMCallRepository",
     "PortfolioHoldingRepository",
     "PortfolioRepository",
+    "QueryLogRepository",
     "RatingTriggerRepository",
     "SukukStructureRepository",
 ]
