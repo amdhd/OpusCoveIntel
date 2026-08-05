@@ -7,11 +7,13 @@ citation verification and the retry loop exactly as real output would.
 
 from __future__ import annotations
 
+import json
 import uuid
 from decimal import Decimal
 
 import pytest
 import pytest_asyncio
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.enums import (
@@ -23,7 +25,7 @@ from app.domain.enums import (
 from app.domain.rules import ComparisonOperator
 from app.extract.candidates import Candidate
 from app.extract.llm_extractor import LLMExtractor
-from app.extract.schemas import LLMCovenantExtraction
+from app.extract.schemas import EXTRACTION_JSON_SCHEMA, LLMCovenantExtraction
 from app.llm.mock import MockLLMProvider
 from app.llm.router import LLMRouter
 
@@ -246,3 +248,46 @@ def test_json_schema_is_deterministic() -> None:
     second = extraction_jsonschema()
     assert first == second
     assert EXTRACTION_JSON_SCHEMA == first
+
+
+class TestSchemaIsAcceptedByTheStructuredOutputEndpoint:
+    """Constraints verified against the live API, pinned so they cannot regress.
+
+    Both were discovered by a 400 on the first real call, and neither is
+    visible to any offline test that does not know the endpoint's rules.
+    """
+
+    def test_every_object_is_closed(self) -> None:
+        """ "For 'object' type, 'additionalProperties' must be explicitly set to false"."""
+
+        def check(node: object) -> None:
+            if isinstance(node, dict):
+                if node.get("type") == "object" or "properties" in node:
+                    assert node.get("additionalProperties") is False, node.get("title", node)
+                for value in node.values():
+                    check(value)
+            elif isinstance(node, list):
+                for item in node:
+                    check(item)
+
+        check(EXTRACTION_JSON_SCHEMA)
+
+    def test_unsupported_validation_keywords_are_absent(self) -> None:
+        """ "For 'number' type, properties maximum, minimum are not supported".
+
+        Pydantic emits these from `Field(ge=…, le=…)` and `max_length`. They are
+        stripped from the wire schema only; `model_validate` still enforces
+        them, which is where the guarantee actually lives.
+        """
+        rendered = json.dumps(EXTRACTION_JSON_SCHEMA)
+        for keyword in ("minimum", "maximum", "minLength", "maxLength", "multipleOf", "pattern"):
+            assert f'"{keyword}"' not in rendered, keyword
+
+    def test_the_model_still_enforces_what_the_schema_no_longer_states(self) -> None:
+        """Stripping keywords from the wire schema must not weaken validation."""
+        with pytest.raises(ValidationError):
+            LLMCovenantExtraction(
+                clause_type=ClauseType.FINANCIAL_COVENANT,
+                source_quote="x",
+                confidence=1.5,  # ge=0, le=1 — no longer in the wire schema
+            )

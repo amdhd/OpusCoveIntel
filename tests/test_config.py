@@ -8,7 +8,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings, get_settings
 
@@ -81,9 +81,9 @@ class TestBlankApiKeysMeanAbsent:
     def test_an_empty_key_normalises_to_none(self) -> None:
         settings = Settings(
             ENVIRONMENT="test",
-            ANTHROPIC_API_KEY="",
-            OPENAI_API_KEY="   ",
-            QWEN_API_KEY="",
+            ANTHROPIC_API_KEY=SecretStr(""),
+            OPENAI_API_KEY=SecretStr("   "),
+            QWEN_API_KEY=SecretStr(""),
         )
 
         assert settings.ANTHROPIC_API_KEY is None
@@ -91,7 +91,9 @@ class TestBlankApiKeysMeanAbsent:
         assert settings.QWEN_API_KEY is None
 
     def test_a_real_key_survives(self) -> None:
-        settings = Settings(ENVIRONMENT="test", ANTHROPIC_API_KEY="sk-ant-not-a-real-key")
+        settings = Settings(
+            ENVIRONMENT="test", ANTHROPIC_API_KEY=SecretStr("sk-ant-not-a-real-key")
+        )
 
         assert settings.ANTHROPIC_API_KEY is not None
         assert settings.ANTHROPIC_API_KEY.get_secret_value() == "sk-ant-not-a-real-key"
@@ -102,7 +104,9 @@ class TestBlankApiKeysMeanAbsent:
         """The failure this actually caused, pinned end to end."""
         from app.llm.embeddings import HashingEmbedder, get_embedder
 
-        blank = Settings(ENVIRONMENT="local", QWEN_API_KEY="", EMBEDDING_MODEL="text-embedding-v4")
+        blank = Settings(
+            ENVIRONMENT="local", QWEN_API_KEY=SecretStr(""), EMBEDDING_MODEL="text-embedding-v4"
+        )
         monkeypatch.setattr("app.llm.embeddings.get_settings", lambda: blank)
 
         assert isinstance(get_embedder(), HashingEmbedder)
