@@ -8,10 +8,11 @@ Ingests prospectuses, trust deeds, rating reports and announcements; extracts co
 structured, **cited** records; answers portfolio-level questions through a governed LangGraph agent
 that refuses to answer without evidence.
 
-> **Status: Phase 3 (ingestion) complete.** PDFs upload, deduplicate by content hash, parse to
-> per-page confidence telemetry, and chunk into spans that can be cited. Retrieval and the rules
-> engine land in Phase 4; the first LLM spend is Phase 5. See [PLAN.md](PLAN.md) for the phase
-> plan and [CLAUDE.md](CLAUDE.md) for architectural invariants.
+> **Status: Phase 4 (search & rules) complete — the first demoable milestone.** Documents ingest,
+> index, extract into cited covenants, and answer questions through hybrid retrieval and a
+> deterministic rules engine. The golden set passes **10/10 with zero LLM calls**. The first LLM
+> spend is Phase 5. See [PLAN.md](PLAN.md) for the phase plan and [CLAUDE.md](CLAUDE.md) for
+> architectural invariants.
 
 ## Quick start
 
@@ -42,6 +43,48 @@ per-page parse confidence and, for a page that failed the text-layer checks, whi
 `GET /documents/{id}/chunks` shows every chunk with the character span it was cut from. Phase 3
 *detects* pages that will need the vision model but never calls one — ingestion costs $0.
 
+## Asking it something
+
+```bash
+make demo            # migrate, seed, ingest, index, extract, then run the golden set
+```
+
+That runs the whole pipeline end to end for **$0**, and finishes by answering ten golden
+questions with no model involved. Individually:
+
+```bash
+make index           # embed + full-text index every chunk
+make extract-sample  # deterministic extractor -> cited clauses and covenants
+make golden          # the golden question set
+```
+
+```bash
+uv run opuscovintel query "Which holdings would breach their rating trigger at the current rating?"
+```
+
+```
+intent:     covenant_breach_check
+confidence: 0.95
+
+1 covenant breach(es) found across 3 instrument(s).
+  - RM300m Green Ijarah Sukuk [BREACH] rating_trigger: A- is below the trigger rating A by 1 notch(es)
+  ...
+Not evaluated for lack of reported facts:
+  - RM300m Green Ijarah Sukuk: cross_default (no accelerated indebtedness reported)
+```
+
+Two things in that output are load-bearing. The breach is **computed** by
+[`app/rules/covenants.py`](app/rules/covenants.py) against an ordinal rating rank, not inferred by
+a model. And covenants that could not be evaluated are **named**, because "could not evaluate" and
+"compliant" are different answers — silently dropping the first is the most dangerous output this
+system could produce.
+
+Ask it something the corpus cannot evidence and it refuses:
+
+```bash
+uv run opuscovintel query "Should we buy more Malaysian sukuk next quarter?"
+```
+
 Tests run against a dedicated `opuscovintel_test` database, created on first use, so they never
 depend on — or disturb — your development data. Override with `TEST_DATABASE_URL`. Database-backed
 tests skip when Postgres is unreachable, which is convenient locally and dangerous in CI, so CI
@@ -67,11 +110,13 @@ make run         # uvicorn with autoreload on :8000
 | `app/domain/` | Pydantic schemas + enums. Pure leaf — imports nothing from `db/` or `llm/`. |
 | `app/db/` | SQLAlchemy models, repositories, dual (RW / RO) engines. |
 | `app/ingest/` | Object storage, PDF parsing, page confidence, chunking. |
-| `app/llm/` | Provider adapters behind a budget-guarded router. *(Phase 5)* |
-| `app/extract/` | Prompts, candidate detection, validation loop. *(Phase 6)* |
-| `app/rules/` | Deterministic covenant evaluation. Pure functions. *(Phase 4)* |
+| `app/llm/` | Embedding seam today; budget-guarded provider adapters in *(Phase 5)*. |
+| `app/extract/` | Regex extractor and citation verification. Prompts in *(Phase 6)*. |
+| `app/rules/` | Deterministic covenant evaluation, money and dates. Pure functions. |
+| `app/retrieval/` | Hybrid retrieval: pgvector + tsvector, fused by reciprocal rank. |
+| `app/query/` | The deterministic query path — intent, evidence, refusal. |
+| `app/evals/` | Golden question set. Metrics harness lands in Phase 8. |
 | `app/agent/` | LangGraph query graph + SQL guardrail. *(Phase 7)* |
-| `app/evals/` | Golden set and metrics harness. *(Phase 8)* |
 
 ## The four things that make this auditable
 
