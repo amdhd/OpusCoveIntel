@@ -95,10 +95,64 @@ class HashingEmbedder:
         return int.from_bytes(digest, "big") % self._dimension
 
 
+class QwenEmbedder:
+    """Real Qwen text-embedding-v4 via the OpenAI-compatible DashScope endpoint.
+
+    Implements the Embedder protocol so it is a drop-in replacement for
+    HashingEmbedder. Batches requests (EMBED_BATCH_SIZE at a time) because
+    Qwen bills per API call.
+
+    Semantics: this closes the gap documented on HashingEmbedder — "gearing"
+    and "leverage" are now related. Multilingual (EN + BM), 1024 dims.
+    """
+
+    def __init__(self) -> None:
+        settings = get_settings()
+        self._model_id = settings.EMBEDDING_MODEL
+        self._dimension = settings.VECTOR_DIMENSION
+        # Lazy-init on first call so imports don't fail when keys are absent
+        # and the mock is in use.
+        self._adapter: object | None = None
+
+    @property
+    def model_id(self) -> str:
+        return self._model_id
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        if self._adapter is None:
+            from app.llm.adapters.qwen import QwenAdapter
+
+            self._adapter = QwenAdapter()
+        adapter: QwenAdapter = self._adapter  # type: ignore[assignment]
+        return await adapter.embed(texts, model_id=self._model_id)
+
+
 def get_embedder() -> Embedder:
     """The embedder for this deployment.
 
-    One call site to change in Phase 5, when `EMBEDDING_MODEL` starts naming a
-    real provider and this returns a budget-guarded adapter instead.
+    Returns a QwenEmbedder when EMBEDDING_MODEL is set to a real provider and
+    QWEN_API_KEY is configured; falls back to HashingEmbedder otherwise (CI,
+    dev without keys, $0 demos).
+
+    Phase 5: the single call site that changed. IndexingService and
+    HybridSearcher consume this and don't know which implementation they got.
     """
+    settings = get_settings()
+
+    # When testing or running without keys, use the free offline embedder.
+    # This also preserves the "make test makes zero paid API calls" invariant.
+    if settings.ENVIRONMENT == "test":
+        return HashingEmbedder()
+
+    if settings.QWEN_API_KEY is None:
+        return HashingEmbedder()
+
+    # Check if EMBEDDING_MODEL names a real provider rather than the fake one.
+    if settings.EMBEDDING_MODEL in ("text-embedding-v4", "text-embedding-v3"):
+        return QwenEmbedder()
+
     return HashingEmbedder()
