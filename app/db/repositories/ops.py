@@ -163,8 +163,6 @@ class QueryLogRepository(BaseRepository[QueryLog]):
 
     async def list_recent(self, *, limit: int = 50) -> Sequence[QueryLog]:
         result = await self.session.execute(
-            select(QueryLog)
-            .order_by(QueryLog.created_at.desc())
-            .limit(limit)
+            select(QueryLog).order_by(QueryLog.created_at.desc()).limit(limit)
         )
         return result.scalars().all()

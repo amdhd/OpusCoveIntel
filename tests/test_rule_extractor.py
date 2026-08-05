@@ -218,13 +218,9 @@ def test_an_empty_quote_fails_rather_than_matching_everything() -> None:
 def test_a_quote_with_a_dropped_footnote_verifies_fuzzy() -> None:
     """Phase 6: an LLM might omit a footnote marker that the PDF text includes."""
     chunk = (
-        "The Issuer shall not create or permit to subsist any security "
-        "interest[1] over its assets."
+        "The Issuer shall not create or permit to subsist any security interest[1] over its assets."
     )
-    quote = (
-        "The Issuer shall not create or permit to subsist any security "
-        "interest over its assets"
-    )
+    quote = "The Issuer shall not create or permit to subsist any security interest over its assets"
 
     check = verify_quote(quote, chunk)
 

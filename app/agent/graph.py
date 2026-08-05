@@ -202,9 +202,7 @@ async def _tools(state: AgentState, config: RunnableConfig) -> AgentState:
 
             if instruments_data:
                 for inst in instruments_data.get("instruments", []):
-                    result = await evaluate_covenant_rule(
-                        session, instrument_id=inst.id
-                    )
+                    result = await evaluate_covenant_rule(session, instrument_id=inst.id)
                     state.tool_results.append(result)
                     state.tools_called.append("evaluate_covenant_rule")
 
@@ -426,19 +424,14 @@ def _format_breach_answer(state: AgentState) -> tuple[str, float]:
         data: object = getattr(r, "data", None)
 
         if tool_name == "get_instrument" and ok and data:
-            instrument_count = (
-                data.get("count", 0) if isinstance(data, dict) else 0
-            )
+            instrument_count = data.get("count", 0) if isinstance(data, dict) else 0
         elif tool_name == "evaluate_covenant_rule" and ok and data:
-            data_dict: dict[str, Any] = (
-                data if isinstance(data, dict) else {}
-            )
+            data_dict: dict[str, Any] = data if isinstance(data, dict) else {}
             inst_name = data_dict.get("instrument_name", "Unknown")
             for ev in data_dict.get("evaluations", []):
                 status = ev["status"]
                 lines.append(
-                    f"{inst_name} [{status.upper()}] {ev['covenant_type']}: "
-                    f"{ev['explanation']}"
+                    f"{inst_name} [{status.upper()}] {ev['covenant_type']}: {ev['explanation']}"
                 )
                 if status == "breach":
                     breaching += 1
@@ -451,8 +444,7 @@ def _format_breach_answer(state: AgentState) -> tuple[str, float]:
         return NO_EVIDENCE, 0.0
 
     headline = (
-        f"{breaching} covenant breach(es) found across "
-        f"{instrument_count} instrument(s)."
+        f"{breaching} covenant breach(es) found across {instrument_count} instrument(s)."
         if breaching
         else f"No covenant breaches found across {instrument_count} instrument(s)."
     )
@@ -550,9 +542,7 @@ def _format_instrument_answer(state: AgentState) -> tuple[str, float]:
                     inst.issuer_name,
                 ]
                 if inst.current_rating:
-                    parts.append(
-                        f"{inst.current_rating} ({inst.rating_agency.value})"
-                    )
+                    parts.append(f"{inst.current_rating} ({inst.rating_agency.value})")
                 if inst.issue_size is not None:
                     parts.append(format_myr(inst.issue_size))
                 if inst.maturity_date is not None:
@@ -562,8 +552,7 @@ def _format_instrument_answer(state: AgentState) -> tuple[str, float]:
             if threshold_rating:
                 return (
                     f"{len(out_lines)} instrument(s) rated below "
-                    f"{threshold_rating}.\n"
-                    + "\n".join(f"  - {line}" for line in out_lines),
+                    f"{threshold_rating}.\n" + "\n".join(f"  - {line}" for line in out_lines),
                     0.95,
                 )
             return (
@@ -604,13 +593,10 @@ def _format_covenant_answer(state: AgentState) -> tuple[str, float]:
             calls = r.data.get("calls", [])
             if calls:
                 call_lines = [
-                    f"{c.call_date.isoformat()} at {c.call_price}% "
-                    f"({c.call_type.value})"
+                    f"{c.call_date.isoformat()} at {c.call_price}% ({c.call_type.value})"
                     for c in calls
                 ]
-                out_lines.append(
-                    "Call schedule: " + "; ".join(call_lines)
-                )
+                out_lines.append("Call schedule: " + "; ".join(call_lines))
 
     if not out_lines:
         return NO_EVIDENCE, 0.0
@@ -629,11 +615,7 @@ def _format_search_answer(state: AgentState) -> tuple[str, float]:
                 return NO_EVIDENCE, 0.0
 
             best = hits[0]
-            section = (
-                f", {best.chunk.section_title}"
-                if best.chunk.section_title
-                else ""
-            )
+            section = f", {best.chunk.section_title}" if best.chunk.section_title else ""
             text = (
                 f"Found {count} supporting passage(s). "
                 f"Best match (page {best.chunk.page_number}{section}):\n"

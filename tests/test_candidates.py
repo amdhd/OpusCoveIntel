@@ -15,6 +15,7 @@ from app.extract.candidates import CandidateDetectionService, _detect_regex
 @dataclass
 class FakeChunk:
     """Plain object standing in for DocumentChunk in unit tests."""
+
     id: uuid.UUID
     chunk_text: str
     page_number: int = 1

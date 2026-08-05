@@ -270,11 +270,7 @@ def validate_sql(
 
     # -- 3. Must be a SELECT -------------------------------------------------
     if not isinstance(parsed, exp.Select):
-        kind = (
-            parsed.key.upper()
-            if hasattr(parsed, "key")
-            else type(parsed).__name__
-        )
+        kind = parsed.key.upper() if hasattr(parsed, "key") else type(parsed).__name__
         return SQLGuardResult(
             allowed=False,
             reason=f"only SELECT statements are permitted; got {kind}",

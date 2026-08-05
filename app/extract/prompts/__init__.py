@@ -147,8 +147,7 @@ _FEW_SHOT_EXAMPLES: list[dict[str, str]] = [
                 "clause_type": "shariah_compliance",
                 "covenant_type": "shariah_non_compliance",
                 "source_quote": (
-                    "Sekiranya berlaku ketidakpatuhan Shariah, ia adalah suatu kejadian "
-                    "pembubaran"
+                    "Sekiranya berlaku ketidakpatuhan Shariah, ia adalah suatu kejadian pembubaran"
                 ),
                 "confidence": 0.90,
                 "summary": (

@@ -144,9 +144,7 @@ class ExtractionPipeline:
         llm_results: list[LLMExtraction] = []
         for candidate in candidates:
             try:
-                llm_result = await self._llm_extractor.extract(
-                    candidate, document_id=document_id
-                )
+                llm_result = await self._llm_extractor.extract(candidate, document_id=document_id)
                 llm_results.append(llm_result)
                 outcome.total_cost_usd += llm_result.cost_usd
             except BudgetExceededError as exc:
@@ -154,7 +152,7 @@ class ExtractionPipeline:
                     "budget exceeded during LLM extraction; stopping",
                     extra={
                         "document_id": str(document_id),
-                        "reason": exc.decision.reason if hasattr(exc, 'decision') else str(exc),
+                        "reason": exc.decision.reason if hasattr(exc, "decision") else str(exc),
                     },
                 )
                 outcome.budget_exceeded = True
@@ -186,9 +184,7 @@ class ExtractionPipeline:
 
     # -- rule extraction -----------------------------------------------------
 
-    async def _run_rule_extraction(
-        self, document: Document
-    ) -> dict[tuple[int, int], _RuleResult]:
+    async def _run_rule_extraction(self, document: Document) -> dict[tuple[int, int], _RuleResult]:
         """Run the rule extractor over all chunks; return results keyed by span.
 
         We key by (page, char_start) so we can look up the rule extraction that
@@ -283,9 +279,7 @@ class ExtractionPipeline:
 
         # If there's a covenant, persist it.
         if output.covenant_type is not None:
-            await self._persist_llm_covenant(
-                clause, output, instrument_id, rule_match, outcome
-            )
+            await self._persist_llm_covenant(clause, output, instrument_id, rule_match, outcome)
 
     async def _persist_llm_covenant(
         self,
@@ -311,8 +305,7 @@ class ExtractionPipeline:
             method=ExtractionMethod.LLM,
             confidence=output.confidence,
             review_status=(
-                ReviewStatus.PENDING if review_trigger is not None
-                else ReviewStatus.NOT_REQUIRED
+                ReviewStatus.PENDING if review_trigger is not None else ReviewStatus.NOT_REQUIRED
             ),
         )
         await self._covenants.add(covenant)
@@ -370,10 +363,7 @@ class ExtractionPipeline:
                 continue
             rule_end = rule_extraction.char_end
             # Overlap check.
-            if (
-                rule_start < candidate.char_end
-                and rule_end > candidate.char_start
-            ):
+            if rule_start < candidate.char_end and rule_end > candidate.char_start:
                 return (rule_extraction, _chunk)
         return None
 
@@ -384,10 +374,7 @@ class ExtractionPipeline:
     ) -> ReviewTrigger | None:
         """Determine if this covenant needs human review."""
         # High-value threshold always triggers review.
-        if (
-            output.threshold_amount is not None
-            and output.threshold_amount > HIGH_VALUE_THRESHOLD
-        ):
+        if output.threshold_amount is not None and output.threshold_amount > HIGH_VALUE_THRESHOLD:
             return ReviewTrigger.HIGH_VALUE_THRESHOLD
 
         # Low confidence triggers review.
@@ -449,9 +436,7 @@ class ExtractionPipeline:
             )
         )
 
-    async def _finalize(
-        self, document: Document, outcome: PipelineOutcome
-    ) -> None:
+    async def _finalize(self, document: Document, outcome: PipelineOutcome) -> None:
         """Mark the document as extracted and commit."""
         if outcome.rule_clauses > 0 or outcome.llm_extracted > 0:
             document.status = DocumentStatus.EXTRACTED
@@ -490,14 +475,14 @@ def _fields_disagree(
     # that is a material disagreement worth reviewing.
     rule_terms = rule_extraction.terms
     llm_has_threshold = (
-        llm_output.threshold_amount is not None
-        or llm_output.threshold_ratio is not None
+        llm_output.threshold_amount is not None or llm_output.threshold_ratio is not None
     )
     if llm_has_threshold and rule_terms is None:
         return True
-    if not llm_has_threshold and rule_terms is not None and (
-        rule_terms.threshold_amount is not None
-        or rule_terms.threshold_ratio is not None
+    if (
+        not llm_has_threshold
+        and rule_terms is not None
+        and (rule_terms.threshold_amount is not None or rule_terms.threshold_ratio is not None)
     ):
         return True
 
@@ -507,11 +492,9 @@ def _fields_disagree(
         if llm_output.threshold_amount is not None and rule_amount is not None:
             try:
                 diff = abs(llm_output.threshold_amount - rule_amount)
-                if (
-                    diff > Decimal("0")
-                    and diff / max(llm_output.threshold_amount, rule_amount)
-                    > Decimal("0.01")
-                ):
+                if diff > Decimal("0") and diff / max(
+                    llm_output.threshold_amount, rule_amount
+                ) > Decimal("0.01"):
                     return True
             except (TypeError, ValueError, ArithmeticError):
                 return True
@@ -523,11 +506,9 @@ def _fields_disagree(
         if llm_output.threshold_ratio is not None and rule_ratio is not None:
             try:
                 diff = abs(llm_output.threshold_ratio - rule_ratio)
-                if (
-                    diff > Decimal("0")
-                    and diff / max(llm_output.threshold_ratio, rule_ratio)
-                    > Decimal("0.01")
-                ):
+                if diff > Decimal("0") and diff / max(
+                    llm_output.threshold_ratio, rule_ratio
+                ) > Decimal("0.01"):
                     return True
             except (TypeError, ValueError, ArithmeticError):
                 return True

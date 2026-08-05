@@ -307,9 +307,7 @@ async def test_pipeline_handles_candidate_without_rule_match(
     # Some clauses will be rule-only, some may be LLM (mock). Verify both methods
     # can coexist in the database.
     assert isinstance(pipeline_outcome, PipelineOutcome)
-    result = await db_session.execute(
-        select(Clause).where(Clause.document_id == document_id)
-    )
+    result = await db_session.execute(select(Clause).where(Clause.document_id == document_id))
     clauses = list(result.scalars().all())
 
     methods = {c.method for c in clauses}

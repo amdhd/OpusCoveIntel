@@ -371,37 +371,38 @@ async def evaluate_covenant_rule(
             severity=trigger.severity,
         )
         ev = evaluate(terms, facts)
-        evaluations.append({
-            "covenant_type": ev.covenant_type.value,
-            "status": ev.status.value,
-            "severity": ev.severity.value,
-            "explanation": ev.explanation,
-            "trigger_rating": trigger.trigger_rating,
-            "trigger_rank": trigger.trigger_rank,
-        })
+        evaluations.append(
+            {
+                "covenant_type": ev.covenant_type.value,
+                "status": ev.status.value,
+                "severity": ev.severity.value,
+                "explanation": ev.explanation,
+                "trigger_rating": trigger.trigger_rating,
+                "trigger_rank": trigger.trigger_rank,
+            }
+        )
 
     # Financial covenants
     covenant_result = await session.execute(
-        select(Covenant)
-        .where(Covenant.instrument_id == instrument_id)
+        select(Covenant).where(Covenant.instrument_id == instrument_id)
     )
     for covenant in covenant_result.scalars().all():
         terms_or_none = _terms_from_row(covenant)
         if terms_or_none is None:
             continue
         ev = evaluate(terms_or_none, facts)
-        evaluations.append({
-            "covenant_type": ev.covenant_type.value,
-            "status": ev.status.value,
-            "severity": ev.severity.value,
-            "explanation": ev.explanation,
-            "threshold_amount": (
-                str(covenant.threshold_amount)
-                if covenant.threshold_amount
-                else None
-            ),
-            "threshold_currency": covenant.threshold_currency,
-        })
+        evaluations.append(
+            {
+                "covenant_type": ev.covenant_type.value,
+                "status": ev.status.value,
+                "severity": ev.severity.value,
+                "explanation": ev.explanation,
+                "threshold_amount": (
+                    str(covenant.threshold_amount) if covenant.threshold_amount else None
+                ),
+                "threshold_currency": covenant.threshold_currency,
+            }
+        )
 
     breaching = sum(1 for e in evaluations if e["status"] == "breach")
     at_risk = sum(1 for e in evaluations if e["status"] == "at_risk")
@@ -441,31 +442,36 @@ async def cite_sources(
         for cid in clause_ids:
             clause = await session.get(Clause, cid)
             if clause is not None:
-                citations.append(Citation(
-                    document_id=str(clause.document_id),
-                    chunk_id=str(clause.source_chunk_id) if clause.source_chunk_id else None,
-                    clause_id=str(clause.id),
-                    page_number=clause.page_number,
-                    quote=clause.source_quote[:600],
-                    char_start=clause.char_start,
-                    char_end=clause.char_end,
-                    section_title=clause.section_title,
-                ))
+                citations.append(
+                    Citation(
+                        document_id=str(clause.document_id),
+                        chunk_id=str(clause.source_chunk_id) if clause.source_chunk_id else None,
+                        clause_id=str(clause.id),
+                        page_number=clause.page_number,
+                        quote=clause.source_quote[:600],
+                        char_start=clause.char_start,
+                        char_end=clause.char_end,
+                        section_title=clause.section_title,
+                    )
+                )
 
     if chunk_ids:
         from app.db.models.documents import DocumentChunk
+
         for cid in chunk_ids:
             chunk = await session.get(DocumentChunk, cid)
             if chunk is not None:
-                citations.append(Citation(
-                    document_id=str(chunk.document_id),
-                    chunk_id=str(chunk.id),
-                    page_number=chunk.page_number,
-                    quote=chunk.chunk_text[:600],
-                    char_start=chunk.char_start,
-                    char_end=chunk.char_end,
-                    section_title=chunk.section_title,
-                ))
+                citations.append(
+                    Citation(
+                        document_id=str(chunk.document_id),
+                        chunk_id=str(chunk.id),
+                        page_number=chunk.page_number,
+                        quote=chunk.chunk_text[:600],
+                        char_start=chunk.char_start,
+                        char_end=chunk.char_end,
+                        section_title=chunk.section_title,
+                    )
+                )
 
     return ToolResult(
         tool_name="cite_sources",

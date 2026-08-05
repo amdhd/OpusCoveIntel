@@ -34,9 +34,7 @@ def service(session: AsyncSession) -> AgentQueryService:
 def passes(answer: AgentAnswer, case: GoldenQuestion) -> bool:  # noqa: F821
 
     missing = [
-        needle
-        for needle in case.must_contain
-        if needle.lower() not in answer.answer.lower()
+        needle for needle in case.must_contain if needle.lower() not in answer.answer.lower()
     ]
     return (
         answer.intent is case.expected_intent
@@ -61,14 +59,9 @@ async def test_the_agent_meets_the_phase_7_golden_target(
         if passes(answer, case):
             answered += 1
         else:
-            failures.append(
-                f"{case.id}: intent={answer.intent.value} "
-                f"text={answer.answer[:80]!r}"
-            )
+            failures.append(f"{case.id}: intent={answer.intent.value} text={answer.answer[:80]!r}")
 
-    assert answered >= PHASE_7_TARGET, (
-        f"{answered}/{len(GOLDEN_QUESTIONS)}; failures: {failures}"
-    )
+    assert answered >= PHASE_7_TARGET, f"{answered}/{len(GOLDEN_QUESTIONS)}; failures: {failures}"
 
 
 @pytest.mark.parametrize("case", GOLDEN_QUESTIONS, ids=lambda case: case.id)
@@ -94,9 +87,7 @@ async def test_each_golden_question_individually(
 async def test_the_agent_refuses_investment_advice(
     db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
 ) -> None:
-    answer = await service(db_session).answer(
-        "Should we buy more Malaysian sukuk next quarter?"
-    )
+    answer = await service(db_session).answer("Should we buy more Malaysian sukuk next quarter?")
     assert answer.refused
     assert answer.confidence == 0.0
     assert answer.intent is QueryIntent.UNSUPPORTED
@@ -106,9 +97,7 @@ async def test_the_agent_refuses_when_no_evidence_exists(
     db_session: AsyncSession, seeded_universe: None
 ) -> None:
     """An empty corpus: nothing ingested, so nothing can be cited."""
-    answer = await service(db_session).answer(
-        "What does the trust deed say about insurance?"
-    )
+    answer = await service(db_session).answer("What does the trust deed say about insurance?")
     assert answer.refused
     assert answer.confidence == 0.0
 

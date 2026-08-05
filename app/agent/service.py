@@ -55,9 +55,7 @@ class AgentQueryService:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self._graph: CompiledStateGraph[AgentState, None, AgentState, AgentState] = (
-            build_graph()
-        )
+        self._graph: CompiledStateGraph[AgentState, None, AgentState, AgentState] = build_graph()
 
     async def answer(
         self,

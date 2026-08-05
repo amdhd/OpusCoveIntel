@@ -85,9 +85,7 @@ async def test_mock_extraction_is_deterministic(
     assert first.output.clause_type == second.output.clause_type
 
 
-async def test_extraction_includes_cost(
-    extractor: LLMExtractor, candidate: Candidate
-) -> None:
+async def test_extraction_includes_cost(extractor: LLMExtractor, candidate: Candidate) -> None:
     result = await extractor.extract(candidate)
 
     # Even the mock records a non-zero estimated cost for the prompt.
@@ -186,9 +184,7 @@ async def test_fuzzy_citation_catches_dropped_footnote() -> None:
 # -- cost tracking ------------------------------------------------------------
 
 
-async def test_cache_hit_records_zero_cost(
-    extractor: LLMExtractor, candidate: Candidate
-) -> None:
+async def test_cache_hit_records_zero_cost(extractor: LLMExtractor, candidate: Candidate) -> None:
     """Cost is always tracked, even with the mock provider."""
     first = await extractor.extract(candidate)
 

@@ -41,9 +41,7 @@ async def _create_pending_review(
 
 @pytest.mark.usefixtures("storage_root")
 class TestListPending:
-    async def test_empty_queue_returns_nothing(
-        self, api_client: AsyncClient
-    ) -> None:
+    async def test_empty_queue_returns_nothing(self, api_client: AsyncClient) -> None:
         response = await api_client.get("/review/pending")
         assert response.status_code == 200
         data = response.json()
@@ -100,9 +98,7 @@ class TestApproveReview:
             review.entity_type, review.entity_id
         )
         assert len(entries) >= 1
-        approved_entry = next(
-            (e for e in entries if e.action == "review_approved"), None
-        )
+        approved_entry = next((e for e in entries if e.action == "review_approved"), None)
         assert approved_entry is not None
         assert approved_entry.actor_id == "analyst-1"
 
@@ -110,6 +106,7 @@ class TestApproveReview:
         self, api_client: AsyncClient, db_session: AsyncSession
     ) -> None:
         import datetime as dt
+
         review = await _create_pending_review(db_session)
         review.status = ReviewStatus.APPROVED
         review.reviewer_id = "previous-reviewer"
@@ -122,9 +119,7 @@ class TestApproveReview:
         )
         assert response.status_code == 409
 
-    async def test_approve_fails_for_non_existent_review(
-        self, api_client: AsyncClient
-    ) -> None:
+    async def test_approve_fails_for_non_existent_review(self, api_client: AsyncClient) -> None:
         fake_id = uuid.uuid4()
         response = await api_client.post(
             f"/review/{fake_id}/approve",
@@ -138,9 +133,7 @@ class TestCorrectReview:
     async def test_correct_preserves_old_value(
         self, api_client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        review = await _create_pending_review(
-            db_session, old_value="RM30,000,000"
-        )
+        review = await _create_pending_review(db_session, old_value="RM30,000,000")
 
         response = await api_client.post(
             f"/review/{review.id}/correct",
@@ -164,9 +157,7 @@ class TestCorrectReview:
     async def test_correct_writes_audit_log_with_full_history(
         self, api_client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        review = await _create_pending_review(
-            db_session, old_value="RM30,000,000"
-        )
+        review = await _create_pending_review(db_session, old_value="RM30,000,000")
 
         await api_client.post(
             f"/review/{review.id}/correct",
@@ -180,9 +171,7 @@ class TestCorrectReview:
         entries = await AuditLogRepository(db_session).list_for_entity(
             review.entity_type, review.entity_id
         )
-        corrected = next(
-            (e for e in entries if e.action == "review_corrected"), None
-        )
+        corrected = next((e for e in entries if e.action == "review_corrected"), None)
         assert corrected is not None
         payload = corrected.payload_json
         assert payload["old_value"] == "RM30,000,000"
@@ -236,9 +225,7 @@ class TestRejectReview:
         entries = await AuditLogRepository(db_session).list_for_entity(
             review.entity_type, review.entity_id
         )
-        rejected = next(
-            (e for e in entries if e.action == "review_rejected"), None
-        )
+        rejected = next((e for e in entries if e.action == "review_rejected"), None)
         assert rejected is not None
         assert "Boilerplate" in rejected.payload_json["rejection_reason"]
 

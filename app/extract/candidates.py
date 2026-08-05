@@ -38,6 +38,7 @@ class _HasChunkText(Protocol):
     page_number: int
     section_title: str | None
 
+
 logger = get_logger(__name__)
 
 # How many characters of context to include on each side of a regex hit.
@@ -150,20 +151,13 @@ def _widen_and_deduplicate(
         wide_end = min(len(chunk.chunk_text), end + CONTEXT_CHARS)
 
         # Merge with the previous span if they overlap and share a chunk.
-        if (
-            spans
-            and spans[-1][2].id == chunk.id
-            and wide_start <= spans[-1][1]
-        ):
+        if spans and spans[-1][2].id == chunk.id and wide_start <= spans[-1][1]:
             prev = spans[-1]
             spans[-1] = (prev[0], max(prev[1], wide_end), prev[2], prev[3] | {clause_type})
         else:
             spans.append((wide_start, wide_end, chunk, {clause_type}))
 
-    return [
-        (s[0], s[1], s[2], frozenset(s[3]))
-        for s in spans
-    ]
+    return [(s[0], s[1], s[2], frozenset(s[3])) for s in spans]
 
 
 def _build_candidates(

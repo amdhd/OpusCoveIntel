@@ -51,9 +51,7 @@ class TestSelectAllowed:
         assert result.allowed
 
     def test_a_select_with_order_by_passes(self) -> None:
-        result = validate_sql(
-            "SELECT * FROM instruments ORDER BY current_rating_rank"
-        )
+        result = validate_sql("SELECT * FROM instruments ORDER BY current_rating_rank")
         assert result.allowed
 
 

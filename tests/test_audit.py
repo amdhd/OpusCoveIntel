@@ -19,12 +19,8 @@ from app.domain.enums import ActorType
 
 @pytest.mark.usefixtures("storage_root")
 class TestAuditTrailEndpoint:
-    async def test_empty_trail_returns_nothing(
-        self, api_client: AsyncClient
-    ) -> None:
-        response = await api_client.get(
-            f"/audit/clause/{uuid.uuid4()}"
-        )
+    async def test_empty_trail_returns_nothing(self, api_client: AsyncClient) -> None:
+        response = await api_client.get(f"/audit/clause/{uuid.uuid4()}")
         assert response.status_code == 200
         data = response.json()
         assert data["count"] == 0
@@ -49,9 +45,7 @@ class TestAuditTrailEndpoint:
             db_session.add(audit)
         await db_session.flush()
 
-        response = await api_client.get(
-            f"/audit/{entity_type}/{entity_id}"
-        )
+        response = await api_client.get(f"/audit/{entity_type}/{entity_id}")
         assert response.status_code == 200
         data = response.json()
         assert data["count"] == 3
@@ -61,6 +55,7 @@ class TestAuditTrailEndpoint:
         self, api_client: AsyncClient, db_session: AsyncSession
     ) -> None:
         import datetime as dt
+
         entity_type = "clause"
         entity_id = uuid.uuid4()
         base = dt.datetime(2024, 1, 1, 12, 0, 0, tzinfo=dt.UTC)
@@ -78,9 +73,7 @@ class TestAuditTrailEndpoint:
             db_session.add(audit)
         await db_session.flush()
 
-        response = await api_client.get(
-            f"/audit/{entity_type}/{entity_id}"
-        )
+        response = await api_client.get(f"/audit/{entity_type}/{entity_id}")
         assert response.status_code == 200
         data = response.json()
         entries = data["entries"]
@@ -106,9 +99,7 @@ class TestAuditTrailEndpoint:
             db_session.add(audit)
         await db_session.flush()
 
-        response = await api_client.get(
-            f"/audit/{entity_type}/{entity_id}?limit=5"
-        )
+        response = await api_client.get(f"/audit/{entity_type}/{entity_id}?limit=5")
         assert response.status_code == 200
         data = response.json()
         assert data["count"] == 5
