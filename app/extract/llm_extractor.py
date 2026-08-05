@@ -116,8 +116,7 @@ class LLMExtractor:
                 {
                     "role": "assistant",
                     "content": (
-                        result.content if isinstance(result.content, str)
-                        else str(result.content)
+                        result.content if isinstance(result.content, str) else str(result.content)
                     ),
                 },
                 {
