@@ -158,6 +158,13 @@ jobs:
           uv run alembic check 2>&1 | tee drift.txt
           grep -q "No new upgrade operations detected" drift.txt
 
+      - name: Check enum vocabularies against the database
+        # `alembic check` cannot see these. Alembic excludes type-bound CHECK
+        # constraints from autogenerate, so adding a value to a StrEnum without
+        # a migration passes the step above and then fails on an INSERT in
+        # production. This asks the migrated database directly.
+        run: uv run opuscovintel check-schema
+
   image:
     name: docker image
     runs-on: ubuntu-latest
