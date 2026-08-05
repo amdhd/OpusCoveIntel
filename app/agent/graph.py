@@ -21,14 +21,9 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Literal
 
-from typing import Any, Dict
-
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from sqlalchemy.ext.asyncio import AsyncSession
-
-# RunnableConfig is langgraph's config dict.
-RunnableConfig = Dict[str, Any]
 
 from app.agent.tools import (
     ToolResult,
@@ -46,6 +41,10 @@ from app.domain.enums import ActorType, QueryIntent
 from app.domain.rules import Citation
 from app.query.intent import classify
 from app.query.service import NO_EVIDENCE, UNSUPPORTED_MESSAGE
+
+# RunnableConfig is langgraph's config dict. Defined here to keep imports
+# clean — langgraph.types does not explicitly export it for mypy.
+RunnableConfig = dict[str, Any]
 
 logger = get_logger(__name__)
 
