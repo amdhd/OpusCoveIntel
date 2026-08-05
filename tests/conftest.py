@@ -8,6 +8,7 @@ RUN_LIVE_LLM_TESTS=1 is set explicitly.
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -215,6 +216,58 @@ def ingestion_service(db_session: AsyncSession, object_store: LocalFileStore) ->
     from app.ingest.service import IngestionService
 
     return IngestionService(db_session, object_store)
+
+
+@pytest_asyncio.fixture
+async def seeded_universe(db_session: AsyncSession) -> None:
+    """The synthetic instruments, portfolios and holdings from `make seed`.
+
+    Tests run in a rolled-back transaction against a dedicated database, so
+    they never see `make seed` data and must create their own.
+    """
+    from app.db.seed import seed
+
+    await seed(db_session)
+    await db_session.commit()
+
+
+@pytest_asyncio.fixture
+async def indexed_corpus(
+    db_session: AsyncSession, object_store: LocalFileStore, seeded_universe: None
+) -> list[uuid.UUID]:
+    """Three synthetic documents, ingested, indexed and rule-extracted.
+
+    All three, not one: on a single-document corpus every retrieval leg returns
+    nearly everything, so ranking differences are noise and an extractor cannot
+    be caught attaching one issuer's threshold to another.
+
+    Seeded first, deliberately. Rating triggers and call schedules carry a
+    non-null instrument FK, so a document ingested into a system that does not
+    yet know its instruments loses both -- which is also true in production.
+    """
+    from app.ingest.service import IngestionService
+    from app.retrieval.indexing import IndexingService
+    from tests.fixtures.synthetic_pdf import (
+        build_prospectus,
+        build_rating_report,
+        build_trust_deed,
+    )
+
+    ingestion = IngestionService(db_session, object_store)
+    indexing = IndexingService(db_session)
+
+    document_ids: list[uuid.UUID] = []
+    for filename, data in (
+        ("prospectus.pdf", build_prospectus()),
+        ("trust-deed.pdf", build_trust_deed()),
+        ("rating-report.pdf", build_rating_report()),
+    ):
+        outcome = await ingestion.upload(filename=filename, data=data)
+        await ingestion.process(outcome.document.id)
+        await indexing.index_document(outcome.document.id)
+        document_ids.append(outcome.document.id)
+
+    return document_ids
 
 
 @pytest_asyncio.fixture
