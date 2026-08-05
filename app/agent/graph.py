@@ -11,8 +11,10 @@ intents where prose is better than structured rows (document_search,
 covenant_lookup). Breach checks and portfolio queries stay fully deterministic
 (CLAUDE.md 1.1 — the LLM never computes a breach).
 
-Session access: nodes receive the AsyncSession via `config["configurable"]["session"]`.
-This keeps the graph provider-agnostic and the nodes testable.
+Session access: nodes receive their AsyncSession via `config["configurable"]`,
+which keeps the graph provider-agnostic and the nodes testable. There are two
+of them, under `READ_SESSION_KEY` and `WRITE_SESSION_KEY` — see the comment on
+those constants for why one session cannot serve both.
 """
 
 from __future__ import annotations
@@ -79,15 +81,48 @@ class AgentState:
     sql_generated: str | None = None
 
 
-def _session_from_config(config: RunnableConfig) -> AsyncSession | None:
-    """Extract the session from LangGraph's RunnableConfig."""
+# The graph runs against two sessions, because it has two jobs with opposite
+# privilege requirements (CLAUDE.md 1.6).
+#
+#   READ_SESSION_KEY  -- retrieval, tools, and every generated SQL statement.
+#                        Bound to the read-only role, so a stray write fails at
+#                        the database rather than at code review. This is the
+#                        session the invariant is about.
+#   WRITE_SESSION_KEY -- `query_logs` and `audit_logs`, and nothing else. These
+#                        are writes by definition, so they cannot go through the
+#                        read-only role.
+#
+# One session cannot be both. Running the whole graph read-write to make the log
+# work would silently drop the invariant; running it all read-only would make
+# the audit trail fail. Splitting them is the only option that keeps both.
+READ_SESSION_KEY = "session"
+WRITE_SESSION_KEY = "log_session"
+
+
+def _session_from_config(
+    config: RunnableConfig, key: str = READ_SESSION_KEY
+) -> AsyncSession | None:
+    """Extract a session from LangGraph's RunnableConfig."""
     configurable: dict[str, Any] = config.get("configurable", {})
-    result: object = configurable.get("session")
-    if result is None:
-        return None
+    result: object = configurable.get(key)
     if isinstance(result, AsyncSession):
         return result
     return None
+
+
+def _log_session_from_config(config: RunnableConfig) -> tuple[AsyncSession | None, bool]:
+    """The session the log node writes through, and whether it owns it.
+
+    Falls back to the read session when no separate one was supplied, which is
+    what a single-session caller (a test, or a deployment that has not split
+    the roles yet) gets. `owned` says whether this session exists solely for
+    logging: it decides whether the log node may commit, since committing a
+    session it shares with the caller would end the caller's transaction.
+    """
+    write = _session_from_config(config, WRITE_SESSION_KEY)
+    if write is not None:
+        return write, True
+    return _session_from_config(config, READ_SESSION_KEY), False
 
 
 # -- node implementations ----------------------------------------------------
@@ -290,8 +325,15 @@ async def _verify(state: AgentState) -> AgentState:
 
 
 async def _log(state: AgentState, config: RunnableConfig) -> AgentState:
-    """Write a QueryLog row and add an audit entry."""
-    session = _session_from_config(config)
+    """Write a QueryLog row and an audit entry through the read-write session.
+
+    This is the only node that writes, and the only one that may not use the
+    read-only session. When it owns a dedicated logging session it commits it
+    itself -- nothing else will, and an unflushed audit trail is the same as no
+    audit trail. When it is sharing the caller's session it only flushes, and
+    the caller's transaction boundary stands.
+    """
+    session, owned = _log_session_from_config(config)
     if session is None:
         return state
 
@@ -330,6 +372,9 @@ async def _log(state: AgentState, config: RunnableConfig) -> AgentState:
         session.add(audit)
         await session.flush()
 
+        if owned:
+            await session.commit()
+
         logger.info(
             "agent.query_logged",
             extra={
@@ -337,10 +382,18 @@ async def _log(state: AgentState, config: RunnableConfig) -> AgentState:
                 "refused": state.refused,
                 "confidence": state.confidence,
                 "citations": len(state.citations),
+                "committed": owned,
             },
         )
     except Exception as exc:  # noqa: BLE001
+        # A failed log must not lose the answer, but it must not leave a
+        # half-written transaction behind either.
         logger.error("agent.log_failed", extra={"error": str(exc)})
+        if owned:
+            try:
+                await session.rollback()
+            except Exception as rollback_exc:  # noqa: BLE001
+                logger.error("agent.log_rollback_failed", extra={"error": str(rollback_exc)})
 
     return state
 
