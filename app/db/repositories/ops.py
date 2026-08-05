@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
-from app.db.models.ops import AuditLog, ExtractionJob, HumanReview, LLMCache, LLMCall
+from app.db.models.ops import AuditLog, ExtractionJob, HumanReview, LLMCache, LLMCall, QueryLog
 from app.db.repositories.base import BaseRepository
 from app.domain.enums import JobStatus, JobType, ReviewStatus
 
@@ -153,6 +153,18 @@ class AuditLogRepository(BaseRepository[AuditLog]):
             select(AuditLog)
             .where(AuditLog.entity_type == entity_type, AuditLog.entity_id == entity_id)
             .order_by(AuditLog.created_at.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+
+class QueryLogRepository(BaseRepository[QueryLog]):
+    model = QueryLog
+
+    async def list_recent(self, *, limit: int = 50) -> Sequence[QueryLog]:
+        result = await self.session.execute(
+            select(QueryLog)
+            .order_by(QueryLog.created_at.desc())
             .limit(limit)
         )
         return result.scalars().all()
