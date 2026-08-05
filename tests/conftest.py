@@ -161,7 +161,13 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
     try:
         await _ensure_test_database(url)
     except Exception as exc:  # noqa: BLE001 -- fixture reports, never fails the suite
-        pytest.skip(f"postgres unavailable ({exc.__class__.__name__}); run `make up`")
+        # Skipping is right on a laptop with the stack down, and wrong in CI:
+        # it would turn most of the suite into silent skips and still report
+        # green. REQUIRE_POSTGRES=1 makes the absence a failure instead.
+        message = f"postgres unavailable ({exc.__class__.__name__}); run `make up`"
+        if os.getenv("REQUIRE_POSTGRES") == "1":
+            pytest.fail(f"{message} -- REQUIRE_POSTGRES=1 forbids skipping", pytrace=False)
+        pytest.skip(message)
 
     engine = create_async_engine(url.render_as_string(hide_password=False), poolclass=NullPool)
     yield engine

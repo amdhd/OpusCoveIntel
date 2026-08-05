@@ -1,5 +1,7 @@
 # OpusCovIntel
 
+[![CI](https://github.com/amdhd/OpusCoveIntel/actions/workflows/ci.yml/badge.svg)](https://github.com/amdhd/OpusCoveIntel/actions/workflows/ci.yml)
+
 Sukuk & bond **covenant intelligence** for a Malaysian fixed-income asset manager.
 
 Ingests prospectuses, trust deeds, rating reports and announcements; extracts covenants into
@@ -41,7 +43,14 @@ per-page parse confidence and, for a page that failed the text-layer checks, whi
 *detects* pages that will need the vision model but never calls one — ingestion costs $0.
 
 Tests run against a dedicated `opuscovintel_test` database, created on first use, so they never
-depend on — or disturb — your development data. Override with `TEST_DATABASE_URL`.
+depend on — or disturb — your development data. Override with `TEST_DATABASE_URL`. Database-backed
+tests skip when Postgres is unreachable, which is convenient locally and dangerous in CI, so CI
+sets `REQUIRE_POSTGRES=1` to turn that skip into a failure.
+
+CI runs `make check` plus a migration round-trip (`upgrade` → `downgrade base` → `upgrade`, then a
+drift check) and a container build that asserts `/health` answers 200 while `/ready` answers 503
+with no database reachable. No provider credentials are available to any job, and the workflow
+fails if one is ever added.
 
 Without Docker, run against your own Postgres:
 
