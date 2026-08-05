@@ -245,6 +245,7 @@ async def indexed_corpus(
     non-null instrument FK, so a document ingested into a system that does not
     yet know its instruments loses both -- which is also true in production.
     """
+    from app.extract.service import RuleExtractionService
     from app.ingest.service import IngestionService
     from app.retrieval.indexing import IndexingService
     from tests.fixtures.synthetic_pdf import (
@@ -255,6 +256,7 @@ async def indexed_corpus(
 
     ingestion = IngestionService(db_session, object_store)
     indexing = IndexingService(db_session)
+    extraction = RuleExtractionService(db_session)
 
     document_ids: list[uuid.UUID] = []
     for filename, data in (
@@ -265,6 +267,7 @@ async def indexed_corpus(
         outcome = await ingestion.upload(filename=filename, data=data)
         await ingestion.process(outcome.document.id)
         await indexing.index_document(outcome.document.id)
+        await extraction.extract_document(outcome.document.id)
         document_ids.append(outcome.document.id)
 
     return document_ids
