@@ -99,6 +99,22 @@ class Settings(BaseSettings):
     def _expand_storage_dir(cls, v: Path) -> Path:
         return v.expanduser()
 
+    @field_validator("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "QWEN_API_KEY", mode="after")
+    @classmethod
+    def _blank_key_means_absent(cls, v: SecretStr | None) -> SecretStr | None:
+        """`QWEN_API_KEY=` in `.env` means "I have no Qwen key", not "my key is ''".
+
+        Without this, an unset-but-present variable arrives as `SecretStr("")`,
+        which is not None -- so every `if settings.X_API_KEY is None` fallback
+        was skipped and the code went on to build a provider it had no
+        credentials for. `get_embedder()` did exactly that: it returned a
+        QwenEmbedder rather than the offline one, and indexing died on
+        "QWEN_API_KEY is not set" while a perfectly good $0 fallback sat unused.
+        """
+        if v is not None and not v.get_secret_value().strip():
+            return None
+        return v
+
     @field_validator(
         "MAX_COST_PER_DOCUMENT_USD",
         "MAX_TOTAL_COST_USD",
