@@ -199,3 +199,46 @@ async def test_the_verify_node_ensures_citations_are_traceable(
             assert citation.quote
             # Either a clause_id (structured) or a chunk_id (retrieval) must be set
             assert citation.clause_id is not None or citation.chunk_id is not None
+
+
+class TestCovenantLookupIsNarrowedToTheQuestion:
+    """The agent must not answer a question about one covenant with all of them.
+
+    `get_covenants` has always taken a `covenant_type` filter and the graph
+    never passed one, so "what is the cross-default threshold?" returned every
+    covenant in the corpus and never named the threshold -- a worse answer than
+    the Phase 4 service the agent wraps. Found by running the CLI, not by any
+    test: the golden set has no question that names a covenant type.
+    """
+
+    async def test_a_named_covenant_type_narrows_the_answer(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        answer = await service(db_session).answer("What is the cross-default threshold?")
+
+        assert answer.intent is QueryIntent.COVENANT_LOOKUP
+        assert "cross_default" in answer.answer
+        for unrelated in ("gearing_ratio", "shariah_non_compliance", "negative_pledge"):
+            assert unrelated not in answer.answer, f"{unrelated} is not what was asked about"
+
+    async def test_the_agent_matches_the_path_it_wraps(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """Phase 7 wraps Phase 4; it should not answer the same question worse."""
+        from app.query.service import DeterministicQueryService
+
+        question = "What is the cross-default threshold?"
+        agent = await service(db_session).answer(question)
+        deterministic = await DeterministicQueryService(db_session).answer(question)
+
+        assert agent.intent is deterministic.intent
+        assert ("RM30" in agent.answer) == ("RM30" in deterministic.text)
+
+    async def test_a_question_naming_no_covenant_type_still_returns_everything(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """Narrowing must not become a filter that hides covenants when none is named."""
+        answer = await service(db_session).answer("What covenants are there?")
+
+        assert answer.intent is QueryIntent.COVENANT_LOOKUP
+        assert answer.citations

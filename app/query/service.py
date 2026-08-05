@@ -223,7 +223,7 @@ class DeterministicQueryService:
     # -- covenant lookup ---------------------------------------------------
 
     async def _covenant_lookup(self, question: str) -> Answer:
-        wanted = _covenant_type_in(question)
+        wanted = covenant_type_in(question)
         instruments = await self._instruments_for(question)
         instrument_ids = [item.id for item in instruments] or None
 
@@ -536,7 +536,15 @@ def _terms_from_row(covenant: Covenant) -> CovenantTerms | None:
         return None
 
 
-def _covenant_type_in(question: str) -> CovenantType | None:
+def covenant_type_in(question: str) -> CovenantType | None:
+    """The covenant type a question names, if any.
+
+    Public because the Phase 7 agent needs the same reading of a question that
+    the Phase 4 service has. While this was private the agent retrieved *every*
+    covenant for a question that named one, so "what is the cross-default
+    threshold?" came back as a list of thirteen unrelated covenants that never
+    mentioned the threshold -- a worse answer than the path the agent wraps.
+    """
     text = question.lower()
     for keyword, covenant_type in _COVENANT_KEYWORDS.items():
         if keyword in text:

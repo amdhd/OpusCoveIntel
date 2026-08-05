@@ -42,7 +42,7 @@ from app.db.models.ops import AuditLog, QueryLog
 from app.domain.enums import ActorType, QueryIntent
 from app.domain.rules import Citation
 from app.query.intent import classify
-from app.query.service import NO_EVIDENCE, UNSUPPORTED_MESSAGE
+from app.query.service import NO_EVIDENCE, UNSUPPORTED_MESSAGE, covenant_type_in
 
 # RunnableConfig is langgraph's config dict. Defined here to keep imports
 # clean — langgraph.types does not explicitly export it for mypy.
@@ -189,7 +189,11 @@ async def _retrieve(state: AgentState, config: RunnableConfig) -> AgentState:
             state.tools_called.append("get_instrument")
 
         case QueryIntent.COVENANT_LOOKUP:
-            result = await get_covenants(session)
+            # Narrow to the covenant type the question names. Retrieving all of
+            # them and letting synthesis sort it out returns every covenant in
+            # the corpus for a question about one of them, which reads as an
+            # answer and is not one.
+            result = await get_covenants(session, covenant_type=covenant_type_in(state.question))
             state.tool_results.append(result)
             state.tools_called.append("get_covenants")
             state.citations.extend(result.citations)

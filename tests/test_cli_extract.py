@@ -148,3 +148,69 @@ class TestInstrumentLinking:
         assert all(c.instrument_id is not None for c in covenants), (
             "LLM covenants must carry an instrument or portfolio queries cannot find them"
         )
+
+
+class TestAskCommand:
+    """The agent's CLI entry point (`ask`).
+
+    Phase 7 had no caller outside tests until this command existed, so the
+    graph had never run against real engines -- which is where the two-session
+    split (CLAUDE.md 1.6) either works or silently does not.
+    """
+
+    def test_it_uses_the_two_role_factory(self) -> None:
+        """Constructing the service by hand would put the whole graph on one role.
+
+        Checked against the parsed call graph rather than the source text: a
+        comment explaining *why* not to call `AgentQueryService` directly would
+        fail a substring check, which is how the first version of this test
+        managed to fail on correct code.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from app import cli
+
+        tree = ast.parse(textwrap.dedent(inspect.getsource(cli.ask)))
+        called = {
+            node.func.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+
+        assert "open_agent_query_service" in called
+        assert "AgentQueryService" not in called
+
+    def test_it_reports_intent_confidence_and_answer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from collections.abc import AsyncIterator
+        from contextlib import asynccontextmanager
+
+        from app.agent.service import AgentAnswer
+        from app.domain.enums import QueryIntent
+
+        canned = AgentAnswer(
+            question="q",
+            intent=QueryIntent.COVENANT_LOOKUP,
+            answer="cross_default · threshold RM30 million",
+            confidence=0.85,
+            tools_used=["get_covenants"],
+        )
+
+        class _Service:
+            async def answer(self, question: str, **kwargs: object) -> AgentAnswer:
+                return canned
+
+        @asynccontextmanager
+        async def _fake() -> AsyncIterator[_Service]:
+            yield _Service()
+
+        monkeypatch.setattr("app.agent.service.open_agent_query_service", _fake)
+
+        result = runner.invoke(app, ["ask", "What is the cross-default threshold?", "--show-tools"])
+
+        assert result.exit_code == 0
+        assert "covenant_lookup" in result.output
+        assert "0.85" in result.output
+        assert "RM30 million" in result.output
+        assert "get_covenants" in result.output
