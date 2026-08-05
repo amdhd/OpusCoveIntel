@@ -2,7 +2,7 @@
 .PHONY: help install lint fmt type test test-live check run worker \
         up down down-volumes logs psql shell migrate migration migrate-down seed \
         sample-pdf ingest-sample index extract-sample extract-llm-dry-run extract-llm \
-        query-sample golden demo clean
+        query-sample ask-sample golden demo clean
 
 UV := uv
 
@@ -107,6 +107,9 @@ extract-llm:  ## Run LLM extraction over every document. **SPENDS MONEY** — pr
 
 query-sample:  ## Answer a sample question over the deterministic path. $0
 	$(UV) run opuscovintel query "Which holdings would breach their rating trigger at the current rating?"
+
+ask-sample:  ## Answer the same question through the LangGraph agent. Logged + audited. $0
+	$(UV) run opuscovintel ask "Which holdings would breach their rating trigger at the current rating?"
 
 golden:  ## Run the golden question set. Phase 4 target: 6/10 with zero LLM calls
 	$(UV) run opuscovintel golden

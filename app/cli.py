@@ -334,6 +334,51 @@ def query(question: str) -> None:
             typer.echo(f"  - page {citation.page_number}: {quote}...")
 
 
+@app.command()
+def ask(
+    question: str,
+    user_id: str | None = typer.Option(None, "--user-id", help="Recorded on the query log row."),
+    show_tools: bool = typer.Option(False, "--show-tools", help="List the tools the graph called."),
+) -> None:
+    """Answer a question through the LangGraph agent. Logged and audited.
+
+    The same contract as `query` -- an answer, citations, a confidence and a
+    refusal flag -- but routed through the Phase 7 graph, so the question and
+    its answer land in `query_logs` and `audit_logs`.
+
+    Free today: every node is deterministic, so nothing here reaches a paid
+    provider. That changes if synthesis is ever handed to a model.
+    """
+    from app.agent.service import AgentAnswer, open_agent_query_service
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    async def _run() -> AgentAnswer:
+        try:
+            # Two sessions, opened with the roles CLAUDE.md 1.6 requires: the
+            # read path as DATABASE_URL_RO, the query log as DATABASE_URL.
+            # Constructing AgentQueryService(session) by hand here would work
+            # and would quietly put the whole graph on one role.
+            async with open_agent_query_service() as service:
+                return await service.answer(question, user_id=user_id)
+        finally:
+            await dispose_engines()
+
+    answer = asyncio.run(_run())
+    typer.echo(f"intent:     {answer.intent.value}")
+    typer.echo(f"confidence: {answer.confidence:.2f}{'  (refused)' if answer.refused else ''}")
+    if show_tools and answer.tools_used:
+        typer.echo(f"tools:      {', '.join(answer.tools_used)}")
+    typer.echo("")
+    typer.echo(answer.answer)
+    if answer.citations:
+        typer.echo("\nsources:")
+        for citation in answer.citations:
+            quote = " ".join(citation.quote.split())[:110]
+            typer.echo(f"  - page {citation.page_number}: {quote}...")
+
+
 @app.command("golden")
 def golden() -> None:
     """Run the golden question set over the deterministic path.
