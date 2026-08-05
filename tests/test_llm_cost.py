@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from app.llm.cost import (
+    UnknownModelPricingError,
     count_tokens_estimate,
     estimate_cost,
     estimate_embedding_cost,
     estimate_vlm_page_cost,
+    is_priced,
 )
 
 
@@ -70,6 +74,11 @@ class TestCostEstimation:
         assert cost.total < Decimal("2.00")
 
     def test_cache_read_is_cheaper(self) -> None:
+        """The same 10k-token prompt costs less when 9k of it comes from cache.
+
+        The three input categories are disjoint (see `estimate_cost`), so the
+        cached call splits the same 10k tokens rather than adding to them.
+        """
         no_cache = estimate_cost(
             provider="anthropic",
             model_id="claude-opus-5",
@@ -79,7 +88,7 @@ class TestCostEstimation:
         with_cache = estimate_cost(
             provider="anthropic",
             model_id="claude-opus-5",
-            prompt_tokens=10_000,
+            prompt_tokens=1_000,
             max_output_tokens=1_000,
             cache_read_tokens=9_000,
         )
@@ -94,15 +103,34 @@ class TestCostEstimation:
         )
         assert cost.total == Decimal("0")
 
-    def test_unknown_model_is_free(self) -> None:
-        """An unrecognised model shouldn't silently charge the wrong rate."""
+    def test_unknown_model_raises_rather_than_pricing_at_zero(self) -> None:
+        """An unpriced model must fail closed, not cost $0.
+
+        A zero here would pass every budget ceiling in PLAN.md 2, so one typo
+        in `EXTRACTION_MODEL` would disable the guards entirely.
+        """
+        with pytest.raises(UnknownModelPricingError):
+            estimate_cost(
+                provider="anthropic",
+                model_id="nonexistent-model-v99",
+                prompt_tokens=1_000_000,
+                max_output_tokens=100_000,
+            )
+
+    def test_unknown_provider_raises(self) -> None:
+        with pytest.raises(UnknownModelPricingError):
+            estimate_cost(provider="acme", model_id="claude-opus-5", prompt_tokens=1_000)
+
+    def test_mock_provider_is_priced_at_zero(self) -> None:
+        """The CI provider is free because it makes no call, not by omission."""
         cost = estimate_cost(
-            provider="anthropic",
-            model_id="nonexistent-model-v99",
+            provider="mock",
+            model_id="mock-v1",
             prompt_tokens=1_000_000,
             max_output_tokens=100_000,
         )
         assert cost.total == Decimal("0")
+        assert is_priced("mock", "mock-v1")
 
 
 class TestVLMPageCost:

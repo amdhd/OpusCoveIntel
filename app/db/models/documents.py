@@ -106,6 +106,10 @@ class DocumentPage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     vlm_used: Mapped[bool] = mapped_column(default=False, nullable=False)
     # Which confidence check tripped. Null when the VLM was not invoked.
     vlm_reason: Mapped[str | None] = mapped_column(String(255))
+    # What the VLM actually transcribed. This is the entire product of the
+    # spend: without it the page is marked `vlm_used` and re-processing is
+    # excluded, so a discarded transcription is money paid for nothing.
+    ocr_text: Mapped[str | None] = mapped_column(Text)
     confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
 
     document: Mapped[Document] = relationship(back_populates="pages")
@@ -117,6 +121,13 @@ class DocumentPage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "NOT vlm_used OR vlm_reason IS NOT NULL",
             name="vlm_use_requires_reason",
+        ),
+        # A page cannot be marked VLM-processed with nothing to show for it.
+        # The flag excludes the page from re-processing, so an empty
+        # transcription would make the spend both wasted and unrepeatable.
+        CheckConstraint(
+            "NOT vlm_used OR (ocr_text IS NOT NULL AND length(ocr_text) > 0)",
+            name="vlm_use_requires_ocr_text",
         ),
     )
 

@@ -19,11 +19,12 @@ constructed with a MockLLMProvider for CI — same interface, zero spend.
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import uuid
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Protocol
+from typing import Any, Final, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +42,12 @@ class LLMProvider(Protocol):
     """The interface every provider (real or mock) must satisfy.
 
     Narrow by design: the router only needs chat, embed, and vision.
+
+    `chat` takes `**kwargs` because provider-specific knobs (Anthropic's
+    `effort` and `enable_prompt_caching`) are meaningless elsewhere. The router
+    forwards them; adapters that do not understand them ignore them. Dropping
+    them at the router -- which is what used to happen -- silently disabled
+    prompt caching, the second-largest cost lever in PLAN.md 2.
     """
 
     @property
@@ -54,6 +61,7 @@ class LLMProvider(Protocol):
         messages: list[dict[str, str]],
         max_tokens: int = 4096,
         response_schema: dict[str, Any] | None = None,
+        **provider_options: Any,
     ) -> Any: ...
 
     async def embed(self, texts: list[str], *, model_id: str) -> list[list[float]]: ...
@@ -106,17 +114,18 @@ class LLMRouter:
         session: AsyncSession,
         *,
         provider: LLMProvider | None = None,
-        settings: object | None = None,
+        settings: Any | None = None,
     ) -> None:
         self._session = session
         self._budget = BudgetGuard(session, settings=settings)
         self._cache = ResponseCache(session)
-        if settings is not None:
-            self._settings = settings
-        else:
-            self._settings = get_settings()
+        self._settings = settings if settings is not None else get_settings()
         # Provider is injected — real in prod, mock in CI.
         self._provider = provider
+        # Adapters own an httpx.AsyncClient with its own connection pool.
+        # Building one per call leaked a socket per call and defeated keep-alive,
+        # so they are constructed once and reused for the router's lifetime.
+        self._adapters: dict[str, LLMProvider] = {}
 
     async def chat(
         self,
@@ -131,10 +140,12 @@ class LLMRouter:
         prompt_version: str = "v0",
         document_id: uuid.UUID | None = None,
         enable_prompt_caching: bool = False,
+        effort: str | None = None,
     ) -> LLMCallResult:
         """Chat completion through the full guard → cache → adapter pipeline."""
 
-        # 1. Estimate cost
+        # 1. Estimate cost. An unpriced model raises rather than costing $0,
+        #    which would wave the call past every guard (CLAUDE.md 1.4).
         estimated_prompt_tokens = _estimate_prompt_tokens(system_prompt, messages)
         cost = estimate_cost(
             provider=provider_name,
@@ -177,7 +188,7 @@ class LLMRouter:
                 },
             )
             return LLMCallResult(
-                content=cached,
+                content=_unwrap_content(cached),
                 model_id=model_id,
                 provider=provider_name,
                 prompt_tokens=0,
@@ -189,14 +200,20 @@ class LLMRouter:
                 budget_decision=decision,
             )
 
-        # 4. Dispatch to provider
+        # 4. Dispatch to provider. Provider-specific options are forwarded
+        #    rather than dropped -- `enable_prompt_caching` is what makes the
+        #    system+schema+few-shot prefix bill at 0.1x on repeat calls.
         provider = await self._resolve_provider(provider_name)
+        options = _provider_options(
+            provider, enable_prompt_caching=enable_prompt_caching, effort=effort
+        )
         response = await provider.chat(
             model_id=model_id,
             system_prompt=system_prompt,
             messages=messages,
             max_tokens=max_tokens,
             response_schema=response_schema,
+            **options,
         )
 
         # 5. Record spend
@@ -220,18 +237,12 @@ class LLMRouter:
         )
 
         # 6. Store in cache
-        response_content: dict[str, Any]
-        if isinstance(response.content, dict):
-            response_content = response.content
-        else:
-            response_content = {"text": response.content}
-
         await self._cache.put(
             cache_key=cache_key,
             prompt_hash=content_hash,
             model_id=model_id,
             prompt_version=prompt_version,
-            response_json=response_content,
+            response_json=_wrap_content(response.content),
             estimated_cost_usd=actual_cost.total,
         )
 
@@ -258,8 +269,7 @@ class LLMRouter:
         document_id: uuid.UUID | None = None,
     ) -> list[list[float]]:
         """Embed texts through the guard → adapter pipeline."""
-        settings = get_settings()
-        model = model_id or settings.EMBEDDING_MODEL
+        model = model_id or self._settings.EMBEDDING_MODEL
 
         # Estimate token count and cost
         estimated_tokens = sum(len(t.split()) for t in texts) * 2  # rough: ~2 tokens/word
@@ -276,6 +286,13 @@ class LLMRouter:
             document_id=document_id,
         )
         if not decision.allowed:
+            self._record_rejected_call(
+                stage=LLMStage.EMBED,
+                provider_name=provider_name,
+                model_id=model,
+                document_id=document_id,
+                decision=decision,
+            )
             raise BudgetExceededError(decision)
 
         # Embeddings are not cached — they're deterministic for the same text
@@ -309,8 +326,7 @@ class LLMRouter:
         document_id: uuid.UUID | None = None,
     ) -> LLMCallResult:
         """Vision (VLM OCR) through the guard → cache → adapter pipeline."""
-        settings = get_settings()
-        model = model_id or settings.VLM_MODEL
+        model = model_id or self._settings.VLM_MODEL
 
         # Estimate cost — VLM is priced per image
         cost = estimate_cost(
@@ -353,7 +369,7 @@ class LLMRouter:
                 },
             )
             return LLMCallResult(
-                content=cached,
+                content=_unwrap_content(cached),
                 model_id=model,
                 provider="openai",
                 prompt_tokens=0,
@@ -393,18 +409,12 @@ class LLMRouter:
         )
 
         # Cache
-        response_content: dict[str, Any]
-        if isinstance(response.content, dict):
-            response_content = response.content
-        else:
-            response_content = {"text": response.content}
-
         await self._cache.put(
             cache_key=cache_key,
             prompt_hash=hashlib.sha256(image_bytes).hexdigest(),
             model_id=model,
             prompt_version=prompt_version,
-            response_json=response_content,
+            response_json=_wrap_content(response.content),
             estimated_cost_usd=actual_cost.total,
         )
 
@@ -425,25 +435,46 @@ class LLMRouter:
     # -- internals -----------------------------------------------------------
 
     async def _resolve_provider(self, provider_name: str) -> LLMProvider:
-        """Return the injected provider, or lazily construct a real one."""
+        """Return the injected provider, or the cached adapter for this name.
+
+        Adapters are memoised per router because each one owns an
+        `httpx.AsyncClient`: constructing one per call leaked a file descriptor
+        per call and threw away connection reuse and TLS session resumption.
+        """
         if self._provider is not None:
             return self._provider
 
+        cached = self._adapters.get(provider_name)
+        if cached is not None:
+            return cached
+
         # Lazy import so real adapter SDKs are only imported when used.
+        adapter: LLMProvider
         if provider_name == "anthropic":
             from app.llm.adapters.anthropic import AnthropicAdapter
 
-            return AnthropicAdapter()  # type: ignore[return-value]
+            adapter = AnthropicAdapter()  # type: ignore[assignment]
         elif provider_name == "openai":
             from app.llm.adapters.openai import OpenAIAdapter
 
-            return OpenAIAdapter()  # type: ignore[return-value]
+            adapter = OpenAIAdapter()  # type: ignore[assignment]
         elif provider_name == "qwen":
             from app.llm.adapters.qwen import QwenAdapter
 
-            return QwenAdapter()  # type: ignore[return-value]
+            adapter = QwenAdapter()  # type: ignore[assignment]
         else:
             raise ValueError(f"unknown provider: {provider_name}")
+
+        self._adapters[provider_name] = adapter
+        return adapter
+
+    async def aclose(self) -> None:
+        """Close every adapter this router built. Idempotent."""
+        for adapter in self._adapters.values():
+            close = getattr(adapter, "close", None)
+            if close is not None:
+                await close()
+        self._adapters.clear()
 
     async def _record_call(
         self,
@@ -497,6 +528,63 @@ class LLMRouter:
                 "reason": decision.reason,
             },
         )
+
+
+# The cache stores JSON, but a provider response is either a JSON object
+# (structured output) or a plain string. Wrapping both in a tagged envelope
+# keeps the round-trip lossless: without it, a cached *text* response came back
+# as `{"text": ...}` and callers that branch on `isinstance(content, str)` --
+# `LLMExtractor._validate` does -- took the wrong branch on a cache hit and
+# burned a paid retry that the cache existed to prevent.
+_ENVELOPE_KIND: Final[str] = "__content_kind__"
+_ENVELOPE_VALUE: Final[str] = "__content__"
+
+
+def _wrap_content(content: str | dict[str, Any]) -> dict[str, Any]:
+    kind = "json" if isinstance(content, dict) else "text"
+    return {_ENVELOPE_KIND: kind, _ENVELOPE_VALUE: content}
+
+
+def _unwrap_content(stored: dict[str, Any]) -> str | dict[str, Any]:
+    """Recover the original content from a cache row.
+
+    Rows written before the envelope existed have no kind marker; they are
+    returned as-is, which is exactly the old behaviour and no worse than it.
+    """
+    kind = stored.get(_ENVELOPE_KIND)
+    if kind not in ("json", "text"):
+        return stored
+    value = stored.get(_ENVELOPE_VALUE)
+    if kind == "text":
+        return value if isinstance(value, str) else str(value)
+    return value if isinstance(value, dict) else {}
+
+
+def _provider_options(
+    provider: LLMProvider,
+    *,
+    enable_prompt_caching: bool,
+    effort: str | None,
+) -> dict[str, Any]:
+    """Forward only the options this provider's `chat` actually accepts.
+
+    Adapters differ: `effort` and `enable_prompt_caching` are Anthropic
+    concepts. Passing them blindly would break OpenAI and Qwen, so the
+    signature decides.
+    """
+    accepted = inspect.signature(provider.chat).parameters
+    takes_kwargs = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in accepted.values())
+
+    options: dict[str, Any] = {}
+    for name, value in (
+        ("enable_prompt_caching", enable_prompt_caching),
+        ("effort", effort),
+    ):
+        if value is None:
+            continue
+        if name in accepted or takes_kwargs:
+            options[name] = value
+    return options
 
 
 def _estimate_prompt_tokens(

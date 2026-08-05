@@ -19,11 +19,13 @@ import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.clauses import Clause
+from app.db.models.clauses import Clause, Covenant
+from app.db.models.documents import Document, DocumentChunk
 from app.db.models.ops import HumanReview
 from app.domain.enums import (
     ClauseType,
     CovenantType,
+    DocumentStatus,
     ExtractionMethod,
     ReviewStatus,
 )
@@ -61,22 +63,35 @@ async def test_pipeline_extracts_from_seeded_corpus(
 
     assert isinstance(outcome, PipelineOutcome)
     assert outcome.document_id == document_id
-    # Rule extraction always runs and produces clauses.
-    assert outcome.rule_clauses > 0
+    # The rule extractor runs as the comparison baseline on every candidate.
+    assert outcome.rule_extractions > 0
     # LLM candidates are detected from the covenant-heavy fixture.
     assert outcome.llm_candidates >= 0
     # The pipeline should not error out.
     assert not outcome.errors or all("budget" not in str(e).lower() for e in outcome.errors)
 
 
-async def test_pipeline_rule_clauses_are_persisted(
+async def test_rule_clauses_come_from_the_rule_service_not_the_pipeline(
     pipeline: ExtractionPipeline,
     indexed_corpus: list[uuid.UUID],
     db_session: AsyncSession,
     seeded_universe: None,
 ) -> None:
+    """Rule-method clauses are `RuleExtractionService`'s output, not this pipeline's.
+
+    The `indexed_corpus` fixture runs that service, so the rows exist before
+    the pipeline is invoked at all. Naming this explicitly matters: the test
+    that used to stand here asserted the same rows and read as though the
+    pipeline had written them.
+    """
     document_id = indexed_corpus[1]  # trust deed
+
+    before = await _clause_count(db_session, document_id, ExtractionMethod.RULE)
     await pipeline.extract(document_id)
+    after = await _clause_count(db_session, document_id, ExtractionMethod.RULE)
+
+    assert before > 0
+    assert after == before
 
     result = await db_session.execute(
         select(Clause).where(
@@ -84,9 +99,89 @@ async def test_pipeline_rule_clauses_are_persisted(
             Clause.method == ExtractionMethod.RULE,
         )
     )
+    assert all(clause.citation_verified for clause in result.scalars().all())
+
+
+async def _clause_count(
+    session: AsyncSession, document_id: uuid.UUID, method: ExtractionMethod
+) -> int:
+    result = await session.execute(
+        select(Clause).where(Clause.document_id == document_id, Clause.method == method)
+    )
+    return len(list(result.scalars().all()))
+
+
+# -- idempotency (CLAUDE.md 1.7) ----------------------------------------------
+
+
+async def test_rerunning_the_pipeline_is_a_no_op(
+    pipeline: ExtractionPipeline,
+    indexed_corpus: list[uuid.UUID],
+    db_session: AsyncSession,
+    seeded_universe: None,
+) -> None:
+    """The same extraction identity must not be paid for twice."""
+    document_id = indexed_corpus[0]
+
+    first = await pipeline.extract(document_id)
+    assert not first.skipped
+
+    second = await pipeline.extract(document_id)
+
+    assert second.skipped
+    assert second.total_cost_usd == Decimal("0")
+    assert second.llm_candidates == 0
+
+
+async def test_forced_rerun_replaces_rather_than_duplicates(
+    pipeline: ExtractionPipeline,
+    indexed_corpus: list[uuid.UUID],
+    db_session: AsyncSession,
+    seeded_universe: None,
+) -> None:
+    """A forced re-run clears its own prior output first.
+
+    Without the clear, a second run appended a whole second set of LLM clauses
+    and covenants, so the document accumulated duplicates of every extraction.
+    """
+    document_id = indexed_corpus[0]
+
+    await pipeline.extract(document_id)
+    after_first = await _clause_count(db_session, document_id, ExtractionMethod.LLM)
+
+    await pipeline.extract(document_id, force=True)
+    after_second = await _clause_count(db_session, document_id, ExtractionMethod.LLM)
+
+    assert after_second == after_first
+
+
+async def test_human_reviewed_clauses_survive_a_forced_rerun(
+    pipeline: ExtractionPipeline,
+    indexed_corpus: list[uuid.UUID],
+    db_session: AsyncSession,
+    seeded_universe: None,
+) -> None:
+    """Machine output is disposable; a reviewer's verdict is not."""
+    document_id = indexed_corpus[0]
+    await pipeline.extract(document_id)
+
+    result = await db_session.execute(
+        select(Clause).where(
+            Clause.document_id == document_id,
+            Clause.method == ExtractionMethod.LLM,
+        )
+    )
     clauses = list(result.scalars().all())
-    assert len(clauses) > 0
-    assert all(c.citation_verified for c in clauses)
+    if not clauses:
+        pytest.skip("mock output produced no LLM clauses for this fixture")
+
+    corrected = clauses[0]
+    corrected.review_status = ReviewStatus.CORRECTED
+    await db_session.flush()
+
+    await pipeline.extract(document_id, force=True)
+
+    assert await db_session.get(Clause, corrected.id) is not None
 
 
 # -- disagreement detection ---------------------------------------------------
@@ -283,12 +378,53 @@ async def test_pipeline_budget_exceeded_is_reported(
         router=LLMRouter(db_session, provider=MockLLMProvider(), settings=tiny_budget),
     )
 
-    outcome = await pipeline_tiny.extract(indexed_corpus[0])
+    document_id = indexed_corpus[0]
+    outcome = await pipeline_tiny.extract(document_id)
 
-    # Either budget exceeded or the extraction completed — both are fine with mock.
-    # The key invariant: the pipeline returns a PipelineOutcome, never raises
-    # BudgetExceededError to the caller.
+    # The pipeline returns a PipelineOutcome, never raises BudgetExceededError
+    # to the caller.
     assert isinstance(outcome, PipelineOutcome)
+    assert outcome.budget_exceeded
+
+    # PLAN.md 2: abort the document and mark it `budget_exceeded`. Marking it
+    # EXTRACTED -- the previous behaviour -- told every downstream reader the
+    # document was fully processed when the candidates past the ceiling were
+    # never looked at.
+    document = await db_session.get(Document, document_id)
+    assert document is not None
+    assert document.status is DocumentStatus.BUDGET_EXCEEDED
+
+
+async def test_review_queue_entries_reference_a_real_entity(
+    pipeline: ExtractionPipeline,
+    indexed_corpus: list[uuid.UUID],
+    db_session: AsyncSession,
+    seeded_universe: None,
+) -> None:
+    """Every queued item must be openable.
+
+    Entries used to carry a freshly minted `uuid4()` as `entity_id`, which
+    resolved to no row in any table -- a reviewer had nothing to review.
+    """
+    document_id = indexed_corpus[0]
+    await pipeline.extract(document_id)
+
+    result = await db_session.execute(select(HumanReview))
+    reviews = list(result.scalars().all())
+    if not reviews:
+        pytest.skip("this fixture produced no review-queue entries")
+
+    lookup = {
+        "clause": Clause,
+        "covenant": Covenant,
+        "document_chunk": DocumentChunk,
+    }
+    for review in reviews:
+        model = lookup.get(review.entity_type)
+        assert model is not None, f"unknown entity_type {review.entity_type!r}"
+        assert await db_session.get(model, review.entity_id) is not None, (
+            f"{review.entity_type} {review.entity_id} does not exist"
+        )
 
 
 # -- LLM-only path (no rule match) --------------------------------------------

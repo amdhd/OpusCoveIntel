@@ -176,7 +176,11 @@ def extract_rules(
 @app.command()
 def query(question: str) -> None:
     """Answer a question over the deterministic path. No LLM, no spend."""
-    from app.db.session import get_sessionmaker
+    # CLAUDE.md 1.6: the query path uses the read-only role and nothing else.
+    # The read-write sessionmaker would have worked, which is exactly the
+    # problem -- the invariant is enforced by the database only if the query
+    # path actually connects as the role that lacks the grants.
+    from app.db.session import get_readonly_sessionmaker
     from app.query.service import Answer, DeterministicQueryService
 
     settings = get_settings()
@@ -184,7 +188,7 @@ def query(question: str) -> None:
 
     async def _run() -> Answer:
         try:
-            async with get_sessionmaker()() as session:
+            async with get_readonly_sessionmaker()() as session:
                 return await DeterministicQueryService(session).answer(question)
         finally:
             await dispose_engines()
@@ -207,7 +211,8 @@ def golden() -> None:
 
     PLAN.md, Phase 4 acceptance: at least 6 of 10 answered with zero LLM calls.
     """
-    from app.db.session import get_sessionmaker
+    # Read-only, for the same reason as `query` above (CLAUDE.md 1.6).
+    from app.db.session import get_readonly_sessionmaker
     from app.evals.golden import GOLDEN_QUESTIONS, PHASE_4_TARGET
     from app.query.service import DeterministicQueryService
 
@@ -217,7 +222,7 @@ def golden() -> None:
     async def _run() -> list[tuple[str, bool, str]]:
         results: list[tuple[str, bool, str]] = []
         try:
-            async with get_sessionmaker()() as session:
+            async with get_readonly_sessionmaker()() as session:
                 service = DeterministicQueryService(session)
                 for case in GOLDEN_QUESTIONS:
                     answer = await service.answer(case.question)

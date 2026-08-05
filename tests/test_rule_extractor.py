@@ -227,7 +227,34 @@ def test_a_quote_with_a_dropped_footnote_verifies_fuzzy() -> None:
     assert check.verified
     assert check.method == "fuzzy"
     assert check.score >= 0.92
-    assert check.char_start is None  # fuzzy cannot determine exact offsets
+    # A fuzzy match still has to name a span: a clause persisted without one
+    # cannot be traced back to characters in the chunk (CLAUDE.md 1.2).
+    assert check.char_start is not None
+    assert check.char_end is not None
+    matched = chunk[check.char_start : check.char_end]
+    # The span covers the clause including the marker the model dropped. It is
+    # the alignment's best window, so it need not land on the exact quote
+    # boundary -- but it must be the right region, not a token of it.
+    assert matched.startswith("The Issuer shall not create")
+    assert "security interest[1]" in matched
+    assert len(matched) >= len(quote) * 0.9
+
+
+def test_a_short_quote_does_not_verify_fuzzily() -> None:
+    """`partial_ratio` scores a short quote ~1.0 against almost any text.
+
+    Without a length floor, a hallucinated fragment would clear the 0.92 gate
+    against an unrelated chunk and be persisted as a verified citation.
+    """
+    chunk = (
+        "The Issuer shall maintain a consolidated gearing ratio of not more "
+        "than 1.75 times, tested semi-annually."
+    )
+
+    check = verify_quote("the Issuer", chunk[40:])
+
+    assert not check.verified
+    assert check.method == "not_found"
 
 
 def test_normalisation_folds_smart_quotes_and_dashes() -> None:

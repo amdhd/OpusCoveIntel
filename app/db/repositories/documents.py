@@ -95,6 +95,16 @@ def _tsquery_terms(query: str) -> str:
     return " | ".join(tokens)
 
 
+# Both retrieval legs order by a score that ties freely: `ts_rank_cd` returns
+# the same rank for chunks matching the same terms, and a lexical embedder
+# returns identical cosine distances for near-identical text. Without a
+# deterministic tiebreak Postgres is free to return tied rows in any order, and
+# since RRF fuses *ranks*, a reshuffle inside a tie changes the fused result --
+# which made the Phase 4 acceptance test fail roughly one run in three. The
+# hybrid module already sorts its own output stably; this is the other half.
+_TIE_BREAK = (DocumentChunk.page_number, DocumentChunk.ordinal, DocumentChunk.id)
+
+
 class DocumentChunkRepository(BaseRepository[DocumentChunk]):
     model = DocumentChunk
 
@@ -179,7 +189,7 @@ class DocumentChunkRepository(BaseRepository[DocumentChunk]):
         stmt = (
             select(DocumentChunk, score.label("score"))
             .where(DocumentChunk.fts.is_not(None), DocumentChunk.fts.op("@@")(tsquery))
-            .order_by(score.desc())
+            .order_by(score.desc(), *_TIE_BREAK)
             .limit(limit)
         )
         if document_id is not None:
@@ -206,7 +216,7 @@ class DocumentChunkRepository(BaseRepository[DocumentChunk]):
         stmt = (
             select(DocumentChunk, distance.label("distance"))
             .where(DocumentChunk.embedding.is_not(None))
-            .order_by(distance)
+            .order_by(distance, *_TIE_BREAK)
             .limit(limit)
         )
         if document_id is not None:

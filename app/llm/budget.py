@@ -54,8 +54,17 @@ class BudgetGuard:
     """Enforces spending limits before any LLM call is dispatched.
 
     The guard is stateless at the instance level: all state is in the database,
-    queried through the session. This means two workers checking the same
-    document's budget cannot both pass — the second one sees the first's spend.
+    queried through the session.
+
+    **Concurrency limit, stated rather than assumed.** There is no reservation:
+    spend becomes visible to another worker only when the transaction that
+    wrote its `llm_calls` row commits. Two workers starting at the same instant
+    therefore both see the pre-call total and both pass, so the ceilings are
+    accurate to within one in-flight call per concurrent worker. That is
+    acceptable while the worker pool is small and every per-call cost is capped
+    by `MAX_COST_PER_CALL_USD`; it is not a guarantee, and a reservation table
+    is the fix if the pool grows. Do not read this class as making concurrent
+    overspend impossible.
 
     Usage:
         guard = BudgetGuard(session)

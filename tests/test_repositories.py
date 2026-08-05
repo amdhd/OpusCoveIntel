@@ -172,6 +172,9 @@ class TestDocumentPageRepository:
                 confidence=0.1,
                 vlm_used=True,
                 vlm_reason="no_text_layer",
+                # A VLM-processed page must carry what the VLM read; the
+                # `vlm_use_requires_ocr_text` CHECK refuses the flag without it.
+                ocr_text="transcribed page text",
             )
         )
 
