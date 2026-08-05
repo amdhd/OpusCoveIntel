@@ -3,16 +3,17 @@
 CLAUDE.md 1.3: the model returns `source_quote`; we assert that quote actually
 occurs in the cited chunk. Never persist an unverified quote.
 
-Phase 4's extractor is regex-based, so its quotes are literal slices and always
-verify. Running them through this check anyway is the point: the verification
-path is exercised from the day it exists, rather than being written for the
-first time in Phase 6 against output that can be wrong.
+Three-leg verification, in order:
+1. **Exact match** — the quote appears verbatim in the chunk. Score 1.0.
+2. **Normalised match** — differs only in whitespace or lookalike characters
+   (smart quotes, dashes, non-breaking spaces). Score 0.99.
+3. **Fuzzy match** (Phase 6) — rapidfuzz partial_ratio ≥ 0.92. Handles a model
+   that drops a footnote marker, inserts a bracketed reference, or normalises
+   formatting the normalised leg cannot catch. Offset is None because the fuzzy
+   alignment may not map 1:1 to character positions.
 
-**The normalised-exact leg is here; the fuzzy leg is not.** CLAUDE.md specifies
-a ≥0.92 rapidfuzz ratio as the fallback for a model that paraphrases whitespace
-or drops a footnote marker. A regex extractor never does that, so adding
-rapidfuzz now would be a dependency carrying no weight. `verify_quote` returns
-a score, and Phase 6 adds the fuzzy branch behind the same signature.
+Phase 4's regex extractor never reaches leg 3 — its quotes are literal slices.
+Phase 6's LLM extractor exercises all three.
 """
 
 from __future__ import annotations
@@ -20,6 +21,10 @@ from __future__ import annotations
 import re
 import unicodedata
 from typing import Final, NamedTuple
+
+from rapidfuzz import fuzz
+
+from app.core.config import get_settings
 
 # Ligatures, non-breaking spaces and smart quotes differ between a PDF's text
 # layer and anything that has round-tripped through JSON. Normalising them is
@@ -67,6 +72,10 @@ def verify_quote(quote: str, chunk_text: str) -> CitationCheck:
     if span is not None:
         return CitationCheck(True, NORMALISED_SCORE, span[0], span[1], "normalised")
 
+    fuzzy = _find_fuzzy(quote, chunk_text)
+    if fuzzy is not None:
+        return fuzzy
+
     return CitationCheck(False, 0.0, None, None, "not_found")
 
 
@@ -84,3 +93,25 @@ def _find_normalised(quote: str, chunk_text: str) -> tuple[int, int] | None:
     pattern = re.compile(r"\s+".join(re.escape(token) for token in tokens))
     match = pattern.search(chunk_text)
     return (match.start(), match.end()) if match else None
+
+
+def _find_fuzzy(quote: str, chunk_text: str) -> CitationCheck | None:
+    """Verify via rapidfuzz when the model made a minor edit.
+
+    A model that drops a footnote marker ("shall not create any security
+    interest[1]") or adds a bracketed reference will fail both the exact and
+    normalised legs but pass this one. The score is the rapidfuzz
+    partial_ratio scaled to [0, 1].
+
+    Offsets are None for fuzzy matches — the alignment spans the best-matching
+    region but the character mapping may not be 1:1.
+    """
+    threshold = get_settings().CITATION_FUZZY_THRESHOLD
+    norm_quote = normalise(quote)
+    norm_chunk = normalise(chunk_text)
+
+    # rapidfuzz scores are 0-100.
+    score = fuzz.partial_ratio(norm_quote, norm_chunk) / 100.0
+    if score >= threshold:
+        return CitationCheck(True, score, None, None, "fuzzy")
+    return None

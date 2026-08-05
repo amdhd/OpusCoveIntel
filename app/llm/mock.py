@@ -164,9 +164,9 @@ def _minimal_valid_instance(schema: dict[str, Any]) -> Any:
 
     This is not a full schema validator — it handles the patterns our
     extraction schemas use: objects with string/number/boolean/array
-    properties, enum constraints, and $refs. It returns the first valid
-    value for each property so the pipeline can flow through Pydantic
-    validation.
+    properties, enum constraints, anyOf (for Optional fields), and $refs.
+    It returns the first valid value for each property so the pipeline can
+    flow through Pydantic validation.
 
     The returned object is deliberately minimal — the point is structural
     validity, not correctness. The rules extractor provides the correctness
@@ -184,7 +184,19 @@ def _minimal_valid_instance(schema: dict[str, Any]) -> Any:
     if "enum" in schema:
         return schema["enum"][0]
 
+    if "anyOf" in schema:
+        # anyOf [T, {"type": "null"}] → Optional[T] → return None.
+        non_null = [s for s in schema["anyOf"] if s.get("type") != "null"]
+        if non_null and len(non_null) < len(schema["anyOf"]):
+            return None  # It's optional — None is valid.
+        if non_null:
+            return _mock_value(non_null[0])
+
     if "type" in schema:
+        type_name = schema["type"]
+        if isinstance(type_name, list):
+            # e.g. ["number", "null"] → return 0.0
+            type_name = next((t for t in type_name if t != "null"), "string")
         type_map = {
             "string": "[MOCK]",
             "number": 0.0,
@@ -193,19 +205,29 @@ def _minimal_valid_instance(schema: dict[str, Any]) -> Any:
             "array": [],
             "object": {},
         }
-        return type_map.get(schema["type"], "[MOCK]")
+        return type_map.get(type_name, "[MOCK]")
 
     return "[MOCK]"
 
 
 def _mock_value(prop: dict[str, Any]) -> Any:
     """Return a type-appropriate mock value for a single schema property."""
+    if "anyOf" in prop:
+        # Optional[T] represented as anyOf: [T, {type: "null"}]
+        non_null = [s for s in prop["anyOf"] if s.get("type") != "null"]
+        if non_null and len(non_null) < len(prop["anyOf"]):
+            return None  # Optional — return None for structural validity.
+        if non_null:
+            return _mock_value(non_null[0])
+
     if "enum" in prop:
         return prop["enum"][0]
     if "const" in prop:
         return prop["const"]
 
     type_name = prop.get("type", "string")
+    if isinstance(type_name, list):
+        type_name = next((t for t in type_name if t != "null"), "string")
 
     if type_name == "string":
         if "format" in prop:
@@ -217,6 +239,9 @@ def _mock_value(prop: dict[str, Any]) -> Any:
                 "uri": "https://example.com",
             }
             return format_map.get(prop["format"], "[MOCK]")
+        # String with minLength=1 — use a meaningful mock value.
+        if prop.get("minLength", 0) >= 1:
+            return "[MOCK TEXT]"
         return "[MOCK]"
 
     if type_name == "number":
