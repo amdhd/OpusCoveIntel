@@ -118,6 +118,77 @@ _CALL_SCHEDULE: list[list[str]] = [
 ]
 
 
+TRUSTEE_ISSUER = "Synthetic Infrastructure Holdings Berhad"
+REIT_ISSUER = "Synthetic Retail REIT Berhad"
+
+# A second issuer with *different* thresholds, so retrieval and extraction have
+# to discriminate rather than pattern-match one document. Every covenant here
+# differs numerically from the prospectus above -- an extractor that attaches
+# RM30m to this issuer is wrong in a way a single-document corpus hides.
+_TRUST_DEED_BLOCKS: list[tuple[str, str]] = [
+    (BOLD_FONT, "TRUST DEED: PRINCIPAL COVENANTS"),
+    (
+        BODY_FONT,
+        f"This trust deed is made between {TRUSTEE_ISSUER} (the Issuer) and "
+        "Synthetic Trustees Berhad in respect of the RM500,000,000 Wakalah "
+        "sukuk programme rated AA3 by RAM Rating Services Berhad.",
+    ),
+    (BOLD_FONT, "NEGATIVE PLEDGE"),
+    (
+        BODY_FONT,
+        "The Issuer shall not create or permit to subsist any security interest "
+        "over its concession assets save for security interests existing at the "
+        "date of this deed and disclosed in schedule 3.",
+    ),
+    (BOLD_FONT, "CROSS DEFAULT"),
+    (
+        BODY_FONT,
+        "It shall be an event of default if any financial indebtedness of the "
+        "Issuer exceeding RM50,000,000 in aggregate is declared due and payable "
+        "prior to its stated maturity by reason of an event of default.",
+    ),
+    (BOLD_FONT, "FINANCIAL COVENANTS"),
+    (
+        BODY_FONT,
+        "The Issuer shall maintain an interest cover ratio of not less than 3.00 "
+        "times measured on each testing date, and a consolidated gearing ratio "
+        "of not more than 2.25 times. The Issuer shall further maintain a "
+        "consolidated net worth of not less than RM500,000,000 at all times.",
+    ),
+    (BOLD_FONT, "CHANGE OF CONTROL"),
+    (
+        BODY_FONT,
+        "A change in control of the Issuer without the prior written consent of "
+        "the Trustee shall entitle the holders to require early redemption at "
+        "par together with accrued but unpaid profit.",
+    ),
+]
+
+_RATING_REPORT_BLOCKS: list[tuple[str, str]] = [
+    (BOLD_FONT, "RATING RATIONALE"),
+    (
+        BODY_FONT,
+        f"MARC has affirmed its BBB+ rating on the RM250,000,000 Musharakah sukuk "
+        f"issued by {REIT_ISSUER}. The outlook is stable, reflecting the "
+        "resilience of the trust's retail portfolio and its refinancing profile.",
+    ),
+    (BOLD_FONT, "RATING TRIGGER"),
+    (
+        BODY_FONT,
+        "The transaction documents provide that where the rating is downgraded "
+        "below BBB-, the Issuer shall procure additional security or, failing "
+        "which, the trustee may declare the sukuk immediately due and payable.",
+    ),
+    (BOLD_FONT, "COVENANT HEADROOM"),
+    (
+        BODY_FONT,
+        "The issuer is required to maintain a consolidated gearing ratio of not "
+        "more than 2.50 times. MARC notes that headroom against this covenant "
+        "narrowed following the acquisition completed in the period under review.",
+    ),
+]
+
+
 def build_prospectus() -> bytes:
     """A four-page text-layer document: cover, covenants, table, Bahasa Malaysia."""
     document = pymupdf.open()
@@ -126,6 +197,27 @@ def build_prospectus() -> bytes:
     _table_page(document)
     _text_page(document, _MALAY_BLOCKS)
     return _to_bytes(document)
+
+
+def build_trust_deed() -> bytes:
+    """A second issuer's trust deed, with thresholds that differ from every other."""
+    document = pymupdf.open()
+    _text_page(document, _TRUST_DEED_BLOCKS)
+    return _to_bytes(document)
+
+
+def build_rating_report() -> bytes:
+    """A third issuer's rating report -- shorter, and rating-trigger heavy."""
+    document = pymupdf.open()
+    _text_page(document, _RATING_REPORT_BLOCKS)
+    return _to_bytes(document)
+
+
+CORPUS_BUILDERS: dict[str, object] = {
+    "prospectus.pdf": build_prospectus,
+    "trust-deed.pdf": build_trust_deed,
+    "rating-report.pdf": build_rating_report,
+}
 
 
 def build_scanned_document() -> bytes:

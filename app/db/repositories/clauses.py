@@ -7,7 +7,7 @@ import uuid
 from collections.abc import Sequence
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.models.clauses import CallSchedule, Clause, Covenant, RatingTrigger
 from app.db.repositories.base import BaseRepository
@@ -52,6 +52,26 @@ class ClauseRepository(BaseRepository[Clause]):
 
 class CovenantRepository(BaseRepository[Covenant]):
     model = Covenant
+
+    async def list_for_document(self, document_id: uuid.UUID) -> Sequence[Covenant]:
+        """Covenants reached through their clause -- a covenant has no document
+        of its own, because it exists only as a consequence of cited text."""
+        result = await self.session.execute(
+            select(Covenant)
+            .join(Clause, Covenant.clause_id == Clause.id)
+            .where(Clause.document_id == document_id)
+            .order_by(Clause.page_number)
+        )
+        return result.scalars().all()
+
+    async def count_for_document(self, document_id: uuid.UUID) -> int:
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(Covenant)
+            .join(Clause, Covenant.clause_id == Clause.id)
+            .where(Clause.document_id == document_id)
+        )
+        return int(result.scalar_one())
 
     async def list_for_instrument(
         self, instrument_id: uuid.UUID, *, covenant_type: CovenantType | None = None

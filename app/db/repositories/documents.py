@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import re
+import typing
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, cast, func, select, update
+from sqlalchemy.dialects.postgresql import REGCONFIG
 
 from app.db.models.documents import Document, DocumentChunk, DocumentPage
 from app.db.repositories.base import BaseRepository
@@ -78,6 +82,19 @@ class DocumentPageRepository(BaseRepository[DocumentPage]):
         return int(result.scalar_one())
 
 
+def _tsquery_terms(query: str) -> str:
+    """Build a safe OR-ed tsquery string from free text.
+
+    Tokens are reduced to `[0-9A-Za-z]+` before being joined, so no `to_tsquery`
+    operator (`&`, `|`, `!`, `:`, parentheses) can survive from user input --
+    the value is still bound as a parameter, but a syntactically invalid
+    tsquery would raise rather than return nothing, and that is a worse failure
+    than dropping punctuation.
+    """
+    tokens = re.findall(r"[0-9A-Za-z]+", query)
+    return " | ".join(tokens)
+
+
 class DocumentChunkRepository(BaseRepository[DocumentChunk]):
     model = DocumentChunk
 
@@ -100,6 +117,105 @@ class DocumentChunkRepository(BaseRepository[DocumentChunk]):
             )
         )
         return result.scalar_one_or_none()
+
+    async def list_unembedded(self, *, limit: int = 500) -> Sequence[DocumentChunk]:
+        """Chunks with no vector yet -- the indexer's work queue."""
+        result = await self.session.execute(
+            select(DocumentChunk)
+            .where(DocumentChunk.embedding.is_(None))
+            .order_by(DocumentChunk.document_id, DocumentChunk.ordinal)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def refresh_fts(self, document_id: uuid.UUID) -> int:
+        """Rebuild the tsvector column for one document's chunks.
+
+        The configuration is read *per row* from `chunks.fts_config`: a single
+        Malaysian prospectus mixes English and Bahasa Malaysia, and Postgres
+        ships no Malay stemmer, so BM rows index under `simple` while English
+        rows use `english` (CLAUDE.md 6). One document-wide config would stem
+        Malay with English rules and quietly lose the clause.
+        """
+        statement = (
+            update(DocumentChunk)
+            .where(DocumentChunk.document_id == document_id)
+            .values(
+                fts=func.to_tsvector(
+                    cast(DocumentChunk.fts_config, REGCONFIG), DocumentChunk.chunk_text
+                )
+            )
+        )
+        # An UPDATE always yields a CursorResult, but `execute()` is typed as
+        # returning the base Result, which does not declare `rowcount`.
+        result = typing.cast("CursorResult[Any]", await self.session.execute(statement))
+        await self.session.flush()
+        return int(result.rowcount or 0)
+
+    async def search_by_fts(
+        self,
+        query: str,
+        *,
+        limit: int = 20,
+        document_id: uuid.UUID | None = None,
+    ) -> Sequence[tuple[DocumentChunk, float]]:
+        """Keyword leg of hybrid retrieval, ranked by `ts_rank_cd`.
+
+        Matches each row against a tsquery built with that row's own
+        configuration, so a Malay chunk is queried the way it was indexed.
+
+        Terms are OR-ed, not AND-ed. `plainto_tsquery` requires *every* term to
+        be present, which for a natural-language question is close to useless:
+        "cross default threshold above RM30 million" returns nothing against a
+        clause that says exactly that, because the clause never uses the word
+        "threshold". OR plus `ts_rank_cd` is the search-engine behaviour --
+        chunks matching more of the query, more densely, rank higher.
+        """
+        terms = _tsquery_terms(query)
+        if not terms:
+            return []
+        tsquery = func.to_tsquery(cast(DocumentChunk.fts_config, REGCONFIG), terms)
+        score = func.ts_rank_cd(DocumentChunk.fts, tsquery)
+        stmt = (
+            select(DocumentChunk, score.label("score"))
+            .where(DocumentChunk.fts.is_not(None), DocumentChunk.fts.op("@@")(tsquery))
+            .order_by(score.desc())
+            .limit(limit)
+        )
+        if document_id is not None:
+            stmt = stmt.where(DocumentChunk.document_id == document_id)
+        result = await self.session.execute(stmt)
+        return [(row[0], float(row[1])) for row in result.all()]
+
+    async def search_by_vector(
+        self,
+        embedding: list[float],
+        *,
+        limit: int = 20,
+        document_id: uuid.UUID | None = None,
+        embedding_model: str | None = None,
+    ) -> Sequence[tuple[DocumentChunk, float]]:
+        """Vector leg of hybrid retrieval, ranked by cosine similarity.
+
+        `embedding_model` filters to chunks embedded by the same model.
+        Comparing vectors from two different models is meaningless, and the
+        filter is what stops a half-migrated corpus from returning nonsense
+        instead of an error.
+        """
+        distance = DocumentChunk.embedding.cosine_distance(embedding)
+        stmt = (
+            select(DocumentChunk, distance.label("distance"))
+            .where(DocumentChunk.embedding.is_not(None))
+            .order_by(distance)
+            .limit(limit)
+        )
+        if document_id is not None:
+            stmt = stmt.where(DocumentChunk.document_id == document_id)
+        if embedding_model is not None:
+            stmt = stmt.where(DocumentChunk.embedding_model == embedding_model)
+        result = await self.session.execute(stmt)
+        # Cosine distance is 1 - similarity; callers rank, so hand back similarity.
+        return [(row[0], 1.0 - float(row[1])) for row in result.all()]
 
     async def count_embedded(self, document_id: uuid.UUID) -> int:
         result = await self.session.execute(

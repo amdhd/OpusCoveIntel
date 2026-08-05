@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help install lint fmt type test test-live check run worker \
         up down down-volumes logs psql shell migrate migration migrate-down seed \
-        sample-pdf ingest-sample clean
+        sample-pdf ingest-sample index extract-sample query-sample golden demo clean
 
 UV := uv
 
@@ -86,6 +86,22 @@ sample-pdf:  ## Generate the synthetic prospectus fixture
 
 ingest-sample: sample-pdf  ## Ingest the synthetic prospectus (parse, score, chunk). $0
 	$(UV) run opuscovintel ingest $(SAMPLE_PDF)
+
+# -- search, rules and query ---------------------------------------------
+
+index:  ## Embed + full-text index every document. $0 (offline embedder)
+	$(UV) run opuscovintel index
+
+extract-sample:  ## Run the deterministic extractor over every document. $0
+	$(UV) run opuscovintel extract-rules
+
+query-sample:  ## Answer a sample question over the deterministic path. $0
+	$(UV) run opuscovintel query "Which holdings would breach their rating trigger at the current rating?"
+
+golden:  ## Run the golden question set. Phase 4 target: 6/10 with zero LLM calls
+	$(UV) run opuscovintel golden
+
+demo: migrate seed ingest-sample index extract-sample golden  ## Full $0 pipeline, end to end
 
 # -- housekeeping --------------------------------------------------------
 
