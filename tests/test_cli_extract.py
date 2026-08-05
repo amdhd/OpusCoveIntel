@@ -214,3 +214,53 @@ class TestAskCommand:
         assert "0.85" in result.output
         assert "RM30 million" in result.output
         assert "get_covenants" in result.output
+
+
+class TestOcrCommand:
+    """`ocr` — the second billable command. Same refusals as `extract`."""
+
+    @pytest.fixture
+    def no_openai_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.core.config import Settings
+
+        keyless = Settings(ENVIRONMENT="test", OPENAI_API_KEY=None)
+        monkeypatch.setattr("app.cli.get_settings", lambda: keyless)
+
+    def test_no_target_is_an_error(self, no_openai_key: None) -> None:
+        result = runner.invoke(app, ["ocr"])
+
+        assert result.exit_code == 2
+        assert "Refusing to guess" in result.output
+
+    def test_a_missing_key_is_caught_before_dispatch(self, no_openai_key: None) -> None:
+        result = runner.invoke(app, ["ocr", str(uuid.uuid4())])
+
+        assert result.exit_code == 2
+        assert "OPENAI_API_KEY is not set" in result.output
+
+    def test_dry_run_needs_no_key(self, no_openai_key: None) -> None:
+        result = runner.invoke(app, ["ocr", str(uuid.uuid4()), "--dry-run"])
+
+        assert "OPENAI_API_KEY is not set" not in result.output
+
+    def test_it_runs_ocr_and_chunking_together(self) -> None:
+        """Splitting these is how the transcription ended up stored and unread.
+
+        Asserted against the parsed call graph so the coupling is structural
+        rather than a matter of whoever next edits the command remembering.
+        """
+        import ast
+        import inspect
+        import textwrap
+
+        from app import cli
+
+        tree = ast.parse(textwrap.dedent(inspect.getsource(cli.ocr)))
+        called = {
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        }
+
+        assert "process_document" in called
+        assert "rechunk_document" in called

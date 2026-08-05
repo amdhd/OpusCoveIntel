@@ -2,6 +2,7 @@
 .PHONY: help install lint fmt type test test-live check run worker \
         up down down-volumes logs psql shell migrate migration migrate-down seed \
         sample-pdf ingest-sample index extract-sample extract-llm-dry-run extract-llm \
+        ocr ocr-dry-run \
         query-sample ask-sample golden demo clean
 
 UV := uv
@@ -104,6 +105,12 @@ extract-llm-dry-run:  ## Price LLM extraction over every document without callin
 
 extract-llm:  ## Run LLM extraction over every document. **SPENDS MONEY** — prompts first
 	$(UV) run opuscovintel extract --all
+
+ocr-dry-run:  ## Report which pages would go to the vision model, and the cost. $0
+	$(UV) run opuscovintel ocr --all --dry-run
+
+ocr:  ## OCR flagged pages and chunk what was read. **SPENDS MONEY** — prompts first
+	$(UV) run opuscovintel ocr --all
 
 query-sample:  ## Answer a sample question over the deterministic path. $0
 	$(UV) run opuscovintel query "Which holdings would breach their rating trigger at the current rating?"

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.domain.enums import LLMStage, ParseMethod
+from app.llm.adapters._http import ProviderQuotaExhaustedError
 
 logger = get_logger(__name__)
 
@@ -140,6 +141,19 @@ class VlmService:
         for page in pages:
             try:
                 image_bytes = _render_page_image(pdf_bytes, page.page_number)
+            except Exception as exc:  # noqa: BLE001 — one unrenderable page is not the document
+                failed += 1
+                logger.error(
+                    "vlm.render_failed",
+                    extra={
+                        "document_id": str(document_id),
+                        "page": page.page_number,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
+                )
+                continue
+
+            try:
                 ocr_text, cache_hit, cost = await self._ocr_page(image_bytes, document_id)
 
                 if not ocr_text.strip():
@@ -173,6 +187,15 @@ class VlmService:
                         "ocr_chars": len(ocr_text),
                     },
                 )
+            except ProviderQuotaExhaustedError:
+                # Not a bad page — the account is out of money, so every
+                # remaining page fails the same way. Continuing would turn one
+                # billing problem into N identical log lines and hide the cause.
+                logger.error(
+                    "vlm.aborted_quota_exhausted",
+                    extra={"document_id": str(document_id), "page": page.page_number},
+                )
+                raise
             except Exception as exc:  # noqa: BLE001 — log and continue; one bad page shouldn't fail the doc
                 failed += 1
                 logger.error(

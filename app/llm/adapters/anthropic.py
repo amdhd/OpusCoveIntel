@@ -18,26 +18,19 @@ CLAUDE.md 1.4: this module is the ONLY place anthropic.* API calls originate.
 
 from __future__ import annotations
 
-import asyncio
 import json
-from typing import Any, Final
+from typing import Any
 
 import httpx
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.llm.adapters._http import post_with_retry
 
 logger = get_logger(__name__)
 
 ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
 ANTHROPIC_VERSION = "2023-06-01"
-
-# Transient statuses. 529 is Anthropic's "overloaded"; the rest are the usual
-# rate-limit and gateway failures.
-_RETRYABLE_STATUS: Final[frozenset[int]] = frozenset({429, 500, 502, 503, 529})
-_MAX_RETRIES: Final[int] = 3
-_BASE_RETRY_DELAY_SECONDS: Final[float] = 1.0
-_MAX_RETRY_DELAY_SECONDS: Final[float] = 30.0
 
 
 class AnthropicAdapter:
@@ -141,7 +134,7 @@ class AnthropicAdapter:
             },
         )
 
-        response = await self._post_with_retry("/messages", body)
+        response = await post_with_retry(self._client, "/messages", body, provider="anthropic")
         data = response.json()
 
         content = _extract_content(data, expects_json=response_schema is not None)
@@ -169,97 +162,6 @@ class AnthropicAdapter:
             model_id=data.get("model", model_id),
             usage=usage,
         )
-
-    async def _post_with_retry(self, path: str, body: dict[str, Any]) -> httpx.Response:
-        """POST with bounded backoff on the retryable statuses.
-
-        429 (rate limit), 500, 502, 503 and 529 (overloaded) are transient. A
-        single one of them aborting a document's extraction would send the
-        whole thing to the review queue for a reason that has nothing to do
-        with the document. Everything else raises immediately -- a 400 from a
-        rejected parameter must surface loudly, not be retried four times.
-        """
-        last_error: httpx.HTTPStatusError | None = None
-        for attempt in range(_MAX_RETRIES):
-            response = await self._client.post(path, json=body)
-            if response.status_code not in _RETRYABLE_STATUS:
-                _raise_with_body(response)
-                return response
-
-            last_error = httpx.HTTPStatusError(
-                f"anthropic returned {response.status_code}",
-                request=response.request,
-                response=response,
-            )
-            if attempt == _MAX_RETRIES - 1:
-                break
-            delay = _retry_delay(response, attempt)
-            logger.warning(
-                "anthropic.retrying",
-                extra={
-                    "status": response.status_code,
-                    "attempt": attempt + 1,
-                    "delay_seconds": delay,
-                },
-            )
-            await asyncio.sleep(delay)
-
-        assert last_error is not None
-        raise last_error
-
-
-def _raise_with_body(response: httpx.Response) -> None:
-    """`raise_for_status()`, but carrying the API's explanation.
-
-    Anthropic puts the actual fault in the response body -- "for 'object'
-    type, 'additionalProperties' must be explicitly set to false" -- and the
-    bare status line says only "400 Bad Request". Losing that turns a
-    one-line schema fix into a debugging session, which is exactly what it
-    cost the first time this pipeline met the real API.
-    """
-    if response.is_success:
-        return
-
-    detail = ""
-    try:
-        payload = response.json()
-        if isinstance(payload, dict):
-            error = payload.get("error")
-            if isinstance(error, dict):
-                detail = str(error.get("message", "")) or str(error)
-            elif error:
-                detail = str(error)
-    except ValueError:
-        detail = response.text[:500]
-
-    request_id = response.headers.get("request-id", "")
-    logger.error(
-        "anthropic.error_response",
-        extra={
-            "status": response.status_code,
-            "detail": detail[:500],
-            "request_id": request_id,
-        },
-    )
-
-    message = f"anthropic returned {response.status_code}"
-    if detail:
-        message += f": {detail}"
-    if request_id:
-        message += f" (request-id {request_id})"
-    raise httpx.HTTPStatusError(message, request=response.request, response=response)
-
-
-def _retry_delay(response: httpx.Response, attempt: int) -> float:
-    """Honour `retry-after` when the server sends one; otherwise exponential."""
-    header = response.headers.get("retry-after")
-    if header:
-        try:
-            return min(float(header), _MAX_RETRY_DELAY_SECONDS)
-        except ValueError:
-            pass
-    backoff: float = _BASE_RETRY_DELAY_SECONDS * (2**attempt)
-    return min(backoff, _MAX_RETRY_DELAY_SECONDS)
 
 
 class AnthropicResponse:
