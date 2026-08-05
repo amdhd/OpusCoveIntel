@@ -1,7 +1,8 @@
 .DEFAULT_GOAL := help
 .PHONY: help install lint fmt type test test-live check run worker \
         up down down-volumes logs psql shell migrate migration migrate-down seed \
-        sample-pdf ingest-sample index extract-sample query-sample golden demo clean
+        sample-pdf ingest-sample index extract-sample extract-llm-dry-run extract-llm \
+        query-sample golden demo clean
 
 UV := uv
 
@@ -94,6 +95,15 @@ index:  ## Embed + full-text index every document. $0 (offline embedder)
 
 extract-sample:  ## Run the deterministic extractor over every document. $0
 	$(UV) run opuscovintel extract-rules
+
+# The LLM extractor. These are the only targets in this file that can spend
+# money, so they are named apart from `extract-sample` rather than folded into
+# it -- `make demo` depends on that target and is documented as a $0 pipeline.
+extract-llm-dry-run:  ## Price LLM extraction over every document without calling it. $0
+	$(UV) run opuscovintel extract --all --dry-run
+
+extract-llm:  ## Run LLM extraction over every document. **SPENDS MONEY** — prompts first
+	$(UV) run opuscovintel extract --all
 
 query-sample:  ## Answer a sample question over the deterministic path. $0
 	$(UV) run opuscovintel query "Which holdings would breach their rating trigger at the current rating?"

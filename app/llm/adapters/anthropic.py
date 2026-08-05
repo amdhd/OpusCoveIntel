@@ -183,7 +183,7 @@ class AnthropicAdapter:
         for attempt in range(_MAX_RETRIES):
             response = await self._client.post(path, json=body)
             if response.status_code not in _RETRYABLE_STATUS:
-                response.raise_for_status()
+                _raise_with_body(response)
                 return response
 
             last_error = httpx.HTTPStatusError(
@@ -206,6 +206,48 @@ class AnthropicAdapter:
 
         assert last_error is not None
         raise last_error
+
+
+def _raise_with_body(response: httpx.Response) -> None:
+    """`raise_for_status()`, but carrying the API's explanation.
+
+    Anthropic puts the actual fault in the response body -- "for 'object'
+    type, 'additionalProperties' must be explicitly set to false" -- and the
+    bare status line says only "400 Bad Request". Losing that turns a
+    one-line schema fix into a debugging session, which is exactly what it
+    cost the first time this pipeline met the real API.
+    """
+    if response.is_success:
+        return
+
+    detail = ""
+    try:
+        payload = response.json()
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                detail = str(error.get("message", "")) or str(error)
+            elif error:
+                detail = str(error)
+    except ValueError:
+        detail = response.text[:500]
+
+    request_id = response.headers.get("request-id", "")
+    logger.error(
+        "anthropic.error_response",
+        extra={
+            "status": response.status_code,
+            "detail": detail[:500],
+            "request_id": request_id,
+        },
+    )
+
+    message = f"anthropic returned {response.status_code}"
+    if detail:
+        message += f": {detail}"
+    if request_id:
+        message += f" (request-id {request_id})"
+    raise httpx.HTTPStatusError(message, request=response.request, response=response)
 
 
 def _retry_delay(response: httpx.Response, attempt: int) -> float:

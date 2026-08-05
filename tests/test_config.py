@@ -8,7 +8,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from app.core.config import Settings, get_settings
 
@@ -65,3 +65,48 @@ def test_environment_rejects_unknown_values(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setenv("ENVIRONMENT", "prod")  # the valid literal is "production"
     with pytest.raises(ValidationError):
         Settings()
+
+
+class TestBlankApiKeysMeanAbsent:
+    """`QWEN_API_KEY=` in `.env` means "no key", not "the key is the empty string".
+
+    An unset-but-present variable arrives as `SecretStr("")`, which is not
+    None -- so every `if settings.X_API_KEY is None` fallback was skipped and
+    the code built a provider it had no credentials for. `get_embedder()` did
+    exactly that on a real machine: it returned a QwenEmbedder instead of the
+    offline one, and indexing died on "QWEN_API_KEY is not set" with a working
+    $0 fallback sitting unused.
+    """
+
+    def test_an_empty_key_normalises_to_none(self) -> None:
+        settings = Settings(
+            ENVIRONMENT="test",
+            ANTHROPIC_API_KEY=SecretStr(""),
+            OPENAI_API_KEY=SecretStr("   "),
+            QWEN_API_KEY=SecretStr(""),
+        )
+
+        assert settings.ANTHROPIC_API_KEY is None
+        assert settings.OPENAI_API_KEY is None
+        assert settings.QWEN_API_KEY is None
+
+    def test_a_real_key_survives(self) -> None:
+        settings = Settings(
+            ENVIRONMENT="test", ANTHROPIC_API_KEY=SecretStr("sk-ant-not-a-real-key")
+        )
+
+        assert settings.ANTHROPIC_API_KEY is not None
+        assert settings.ANTHROPIC_API_KEY.get_secret_value() == "sk-ant-not-a-real-key"
+
+    def test_the_offline_embedder_is_chosen_when_the_key_is_blank(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The failure this actually caused, pinned end to end."""
+        from app.llm.embeddings import HashingEmbedder, get_embedder
+
+        blank = Settings(
+            ENVIRONMENT="local", QWEN_API_KEY=SecretStr(""), EMBEDDING_MODEL="text-embedding-v4"
+        )
+        monkeypatch.setattr("app.llm.embeddings.get_settings", lambda: blank)
+
+        assert isinstance(get_embedder(), HashingEmbedder)

@@ -1,8 +1,18 @@
 """Operator CLI.
 
-Configuration, seeding, ingestion, indexing, rule extraction and the
-deterministic query path. Everything here runs at **$0** -- no command in this
-file can reach a paid provider, because none exists until Phase 5.
+Configuration, seeding, ingestion, indexing, extraction and the deterministic
+query path.
+
+**One command in this file spends money: `extract`.** Everything else is $0 and
+stays that way. Because `extract` is the exception, it behaves differently from
+its neighbours on purpose:
+
+* it refuses to run without an explicit target -- `extract-rules` defaults to
+  every document, and the same default here is the "$10 keystroke" CLAUDE.md
+  warns about;
+* `--dry-run` prices a document from its candidate spans without dispatching
+  anything;
+* it prints the ceilings and asks before spending, unless `--yes`.
 """
 
 from __future__ import annotations
@@ -171,6 +181,125 @@ def extract_rules(
 
     for line in asyncio.run(_run()):
         typer.echo(line)
+
+
+@app.command()
+def extract(
+    document_id: str | None = typer.Argument(None, help="The document to extract."),
+    all_documents: bool = typer.Option(
+        False, "--all", help="Every document. Prices the whole corpus; use with --dry-run first."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Price the work from candidate spans without calling the model."
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Re-run even if this extraction identity already succeeded."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the spend confirmation."),
+    instrument_id: str | None = typer.Option(
+        None, "--instrument-id", help="Link covenants to this instrument instead of resolving it."
+    ),
+) -> None:
+    """Run rule + LLM extraction over a document. **This spends money.**
+
+    The LLM half is billable and budget-guarded. `--dry-run` prices it first
+    from the candidate spans, which is free: candidate detection is regex over
+    text already in the database.
+    """
+    import uuid as _uuid
+
+    from app.db.repositories.documents import DocumentRepository
+    from app.db.session import get_sessionmaker
+    from app.extract.pipeline import ExtractionPipeline
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    if not document_id and not all_documents:
+        # `extract-rules` defaults to every document because it is free. Doing
+        # the same here would put the whole corpus through Opus on a bare
+        # command, which is exactly the keystroke CLAUDE.md 9 warns about.
+        typer.echo("Refusing to guess: pass a document id, or --all to mean it.", err=True)
+        raise typer.Exit(code=2)
+
+    if settings.ANTHROPIC_API_KEY is None and not dry_run:
+        typer.echo(
+            "ANTHROPIC_API_KEY is not set. Set it, or use --dry-run to price the work.", err=True
+        )
+        raise typer.Exit(code=2)
+
+    # One event loop for the whole command. asyncpg binds a connection to the
+    # loop that opened it and the engine pool is process-cached, so a second
+    # `asyncio.run` hands the new loop a connection belonging to the old one
+    # and fails with "attached to a different loop". The confirmation prompt
+    # therefore happens inside the coroutine; blocking the loop on stdin is
+    # harmless in a single-user CLI.
+    async def _run() -> None:
+        from app.extract.dry_run import estimate_document
+        from app.llm.router import LLMRouter
+
+        try:
+            async with get_sessionmaker()() as session:
+                targets = (
+                    [_uuid.UUID(document_id)]
+                    if document_id
+                    else [row.id for row in await DocumentRepository(session).list(limit=500)]
+                )
+                if not targets:
+                    typer.echo("No documents found.")
+                    return
+
+                for target in targets:
+                    estimate = await estimate_document(session, target, settings=settings)
+                    typer.echo(estimate.describe())
+
+                if dry_run:
+                    typer.echo("\nDry run: nothing was dispatched and nothing was charged.")
+                    return
+
+                typer.echo(
+                    f"\nCeilings: ${settings.MAX_COST_PER_CALL_USD}/call · "
+                    f"${settings.MAX_COST_PER_DOCUMENT_USD}/document · "
+                    f"${settings.MAX_TOTAL_COST_USD} total"
+                )
+                if not yes and not typer.confirm(
+                    f"Send {len(targets)} document(s) to {settings.EXTRACTION_MODEL}?"
+                ):
+                    typer.echo("Aborted; nothing was charged.")
+                    return
+
+                router = LLMRouter(session)
+                try:
+                    pipeline = ExtractionPipeline(session, router=router)
+                    for target in targets:
+                        outcome = await pipeline.extract(
+                            target,
+                            instrument_id=_uuid.UUID(instrument_id) if instrument_id else None,
+                            force=force,
+                        )
+                        if outcome.skipped:
+                            typer.echo(
+                                f"{target}: skipped; this extraction identity already ran ($0)"
+                            )
+                            continue
+                        typer.echo(
+                            f"{target}: {outcome.llm_clauses} LLM clauses, "
+                            f"{outcome.llm_covenants} covenants, "
+                            f"{outcome.llm_failed} failed, "
+                            f"{outcome.disagreements} rule/LLM disagreements, "
+                            f"{outcome.queued_for_review} queued for review, "
+                            f"${outcome.total_cost_usd:.4f}"
+                            + (" [BUDGET EXCEEDED]" if outcome.budget_exceeded else "")
+                        )
+                        for error in outcome.errors:
+                            typer.echo(f"  ! {error}")
+                finally:
+                    # Adapters hold an httpx client each; the router closes them.
+                    await router.aclose()
+        finally:
+            await dispose_engines()
+
+    asyncio.run(_run())
 
 
 @app.command()

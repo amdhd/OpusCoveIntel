@@ -85,6 +85,63 @@ class LLMCovenantExtraction(BaseModel):
         return self
 
 
+# JSON Schema validation keywords that Anthropic's `output_config.format`
+# rejects outright ("For 'number' type, properties maximum, minimum are not
+# supported"). Dropping them costs nothing real: the schema sent to the model
+# is a generation constraint, while `LLMCovenantExtraction.model_validate` is
+# the authoritative gate and still enforces every one of them on the way in.
+_UNSUPPORTED_SCHEMA_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+    }
+)
+
+
+def _strip_unsupported(node: Any) -> None:
+    """Remove validation keywords the structured-output endpoint refuses."""
+    if isinstance(node, dict):
+        for keyword in _UNSUPPORTED_SCHEMA_KEYWORDS:
+            node.pop(keyword, None)
+        for value in node.values():
+            _strip_unsupported(value)
+    elif isinstance(node, list):
+        for item in node:
+            _strip_unsupported(item)
+
+
+def _close_objects(node: Any) -> None:
+    """Set `additionalProperties: false` on every object in the schema.
+
+    Anthropic's structured-output endpoint rejects the request outright
+    without it:
+
+        output_config.format.schema: For 'object' type,
+        'additionalProperties' must be explicitly set to false
+
+    A 400 before inference, so it costs nothing but blocks everything -- every
+    extraction call failed this way the first time the pipeline met the real
+    API. Applied recursively because a nested object is checked too.
+    """
+    if isinstance(node, dict):
+        if node.get("type") == "object" or "properties" in node:
+            node["additionalProperties"] = False
+        for value in node.values():
+            _close_objects(value)
+    elif isinstance(node, list):
+        for item in node:
+            _close_objects(item)
+
+
 def _inline_refs(schema: dict[str, Any], defs: dict[str, Any]) -> None:
     """Recursively replace $ref nodes with their definitions."""
     if isinstance(schema, dict):
@@ -121,6 +178,8 @@ def extraction_jsonschema() -> dict[str, Any]:
     raw.pop("$defs", None)
 
     _inline_refs(raw, defs)
+    _strip_unsupported(raw)
+    _close_objects(raw)
 
     # Ensure the JSON is stable — sort_keys is what makes this cacheable.
     result: dict[str, Any] = json.loads(json.dumps(raw, sort_keys=True))
