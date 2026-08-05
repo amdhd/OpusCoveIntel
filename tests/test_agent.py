@@ -19,7 +19,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.service import AgentQueryService
+from app.agent.service import AgentAnswer, AgentQueryService
 from app.db.models.ops import QueryLog
 from app.domain.enums import QueryIntent
 from app.evals.golden import GOLDEN_QUESTIONS, PHASE_7_TARGET, GoldenQuestion
@@ -31,7 +31,7 @@ def service(session: AsyncSession) -> AgentQueryService:
     return AgentQueryService(session)
 
 
-def passes(answer: AgentAnswer, case: GoldenQuestion) -> bool:  # noqa: F821
+def passes(answer: AgentAnswer, case: GoldenQuestion) -> bool:
 
     missing = [
         needle for needle in case.must_contain if needle.lower() not in answer.answer.lower()

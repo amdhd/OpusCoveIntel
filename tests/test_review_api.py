@@ -227,7 +227,8 @@ class TestRejectReview:
         )
         rejected = next((e for e in entries if e.action == "review_rejected"), None)
         assert rejected is not None
-        assert "Boilerplate" in rejected.payload_json["rejection_reason"]
+        reason = str(rejected.payload_json.get("rejection_reason", ""))
+        assert "Boilerplate" in reason
 
     async def test_reject_requires_reason(
         self, api_client: AsyncClient, db_session: AsyncSession
