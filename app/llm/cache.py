@@ -21,6 +21,8 @@ from collections import OrderedDict
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from sqlalchemy.exc import IntegrityError
+
 from app.core.logging import get_logger
 
 if TYPE_CHECKING:
@@ -109,8 +111,11 @@ class ResponseCache:
         if len(self._lru) > self._lru_size:
             self._lru.popitem(last=False)
 
-        # Tier 2: database (idempotent — ON CONFLICT DO NOTHING in the unique
-        # constraint means two racing puts produce the same row).
+        # Tier 2: database. A SELECT-then-INSERT is not atomic, so two workers
+        # racing on the same key would have the loser raise IntegrityError --
+        # which in SQLAlchemy poisons the *whole* surrounding transaction, not
+        # just this write. The nested SAVEPOINT confines the failure: losing
+        # the race is a no-op, and the caller's extraction still commits.
         repo = LLMCacheRepository(self._session)
         existing = await repo.get_by_key(cache_key)
         if existing is not None:
@@ -125,7 +130,13 @@ class ResponseCache:
             estimated_cost_usd=estimated_cost_usd,
             hit_count=1,
         )
-        await repo.add(entry)
+        try:
+            async with self._session.begin_nested():
+                await repo.add(entry)
+        except IntegrityError:
+            logger.debug("cache.store_lost_race", extra={"cache_key": cache_key[:16]})
+            return
+
         logger.debug(
             "cache.store",
             extra={

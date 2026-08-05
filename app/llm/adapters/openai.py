@@ -46,6 +46,10 @@ class OpenAIAdapter:
             timeout=httpx.Timeout(120.0),
         )
 
+    @property
+    def provider_name(self) -> str:
+        return "openai"
+
     async def close(self) -> None:
         await self._client.aclose()
 

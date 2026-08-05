@@ -11,6 +11,7 @@ The router is the single chokepoint (CLAUDE.md 1.4). These tests prove that:
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -227,3 +228,116 @@ class TestRouterStructuredOutput:
         assert isinstance(result.content, dict)
         assert "threshold_amount" in result.content
         assert result.content["threshold_currency"] == "MYR"
+
+
+class TestRouterCacheRoundTrip:
+    """A cache hit must return what the provider returned, not a reshaped copy.
+
+    Text responses used to be stored as `{"text": ...}` and handed back as that
+    dict, so the same call returned `str` on a miss and `dict` on a hit. Callers
+    branching on `isinstance(content, str)` -- `LLMExtractor._validate` does --
+    took the wrong branch on a hit and burned a paid retry that the cache
+    existed to prevent.
+    """
+
+    async def test_text_response_is_a_string_on_hit_and_miss(
+        self, db_session: AsyncSession, clean_ledger: None
+    ) -> None:
+        router = LLMRouter(db_session, provider=MockLLMProvider())
+        call: dict[str, Any] = {
+            "stage": LLMStage.EXTRACT,
+            "provider_name": "anthropic",
+            "model_id": "claude-opus-5",
+            "system_prompt": "Summarise the clause.",
+            "messages": [{"role": "user", "content": "The Issuer shall not create security."}],
+        }
+
+        miss = await router.chat(**call)
+        hit = await router.chat(**call)
+
+        assert not miss.cache_hit
+        assert hit.cache_hit
+        assert isinstance(miss.content, str)
+        assert isinstance(hit.content, str)
+        assert hit.content == miss.content
+
+    async def test_structured_response_is_a_dict_on_hit_and_miss(
+        self, db_session: AsyncSession, clean_ledger: None
+    ) -> None:
+        schema = {
+            "type": "object",
+            "properties": {"threshold_amount": {"type": "number"}},
+            "required": ["threshold_amount"],
+        }
+        router = LLMRouter(db_session, provider=MockLLMProvider())
+        call: dict[str, Any] = {
+            "stage": LLMStage.EXTRACT,
+            "provider_name": "anthropic",
+            "model_id": "claude-opus-5",
+            "system_prompt": "Extract thresholds.",
+            "messages": [{"role": "user", "content": "RM30 million"}],
+            "response_schema": schema,
+        }
+
+        miss = await router.chat(**call)
+        hit = await router.chat(**call)
+
+        assert isinstance(miss.content, dict)
+        assert isinstance(hit.content, dict)
+        assert hit.content == miss.content
+
+
+class TestRouterProviderOptions:
+    async def test_prompt_caching_and_effort_reach_the_provider(
+        self, db_session: AsyncSession, clean_ledger: None
+    ) -> None:
+        """The router must forward them, not swallow them.
+
+        Prompt caching is PLAN.md 2's second-largest cost lever (reads bill at
+        0.1x). It was accepted as a parameter and dropped on the floor, so it
+        never once took effect.
+        """
+        seen: dict[str, object] = {}
+        provider = MockLLMProvider()
+        inner = provider.chat
+
+        async def recording_chat(**kwargs: object) -> object:
+            seen.update(kwargs)
+            return await inner(**kwargs)  # type: ignore[arg-type]
+
+        provider.chat = recording_chat  # type: ignore[method-assign, assignment]
+
+        await LLMRouter(db_session, provider=provider).chat(
+            stage=LLMStage.EXTRACT,
+            provider_name="anthropic",
+            model_id="claude-opus-5",
+            system_prompt="Extract covenants.",
+            messages=[{"role": "user", "content": "gearing ratio of not more than 1.75 times"}],
+            enable_prompt_caching=True,
+            effort="high",
+        )
+
+        assert seen.get("enable_prompt_caching") is True
+        assert seen.get("effort") == "high"
+
+    async def test_adapters_are_built_once_and_reused(self, db_session: AsyncSession) -> None:
+        """One adapter per provider, not one per call.
+
+        Each adapter owns an `httpx.AsyncClient`; building one per call leaked a
+        socket per call and threw away connection reuse.
+        """
+        router = LLMRouter(db_session)
+
+        class _Stub:
+            instances = 0
+
+            def __init__(self) -> None:
+                type(self).instances += 1
+
+        router._adapters.clear()
+        router._adapters["stub"] = _Stub()  # type: ignore[assignment]
+
+        first = await router._resolve_provider("stub")
+        second = await router._resolve_provider("stub")
+
+        assert first is second

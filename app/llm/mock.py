@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, Final
 
 from app.core.logging import get_logger
 from app.llm.embeddings import HashingEmbedder
@@ -52,17 +52,24 @@ class MockLLMProvider:
         messages: list[dict[str, str]],
         max_tokens: int = 1024,
         response_schema: dict[str, Any] | None = None,
+        **provider_options: Any,
     ) -> MockChatResponse:
         """Return a deterministic response keyed on the system prompt + messages.
 
         When a `response_schema` is provided, returns a minimal valid instance
         of that schema. Otherwise returns a plausible text response.
+
+        `provider_options` (Anthropic's `effort`, `enable_prompt_caching`) are
+        accepted and ignored: the mock has no cache and no thinking budget, but
+        refusing them would make the router's forwarding untestable in CI.
         """
         content_hash = _hash(system_prompt + json.dumps(messages, sort_keys=True))
 
         content: str | dict[str, Any]
         if response_schema is not None:
             content = _minimal_valid_instance(response_schema)
+            if isinstance(content, dict):
+                _ground_in_input(content, response_schema, messages)
         else:
             content = (
                 f"[MOCK RESPONSE — model={model_id}, hash={content_hash[:12]}]\n"
@@ -157,6 +164,66 @@ def _est_output_tokens(content: str | dict[str, Any]) -> int:
     if isinstance(content, dict):
         return len(json.dumps(content).split())
     return len(content.split())
+
+
+# Fields a mock response must take verbatim from its input rather than invent.
+# A citation is verified against the source chunk before anything is persisted
+# (CLAUDE.md 1.3), so a placeholder here fails that check every time -- which
+# meant the mock could never exercise the extraction *success* path, only the
+# review-queue path, and PLAN.md Phase 5's "mock provider drives the whole
+# pipeline in CI" was true only of its unhappy half.
+_QUOTE_FIELDS: Final[tuple[str, ...]] = ("source_quote",)
+
+# Long enough to clear the fuzzy leg's minimum-quote floor, short enough to be
+# a slice of any realistic candidate span.
+_MOCK_QUOTE_CHARS: Final[int] = 120
+
+
+def _ground_in_input(
+    instance: dict[str, Any],
+    schema: dict[str, Any],
+    messages: list[dict[str, str]],
+) -> None:
+    """Replace placeholder quote fields with a verbatim slice of the input.
+
+    Deterministic: always the first `_MOCK_QUOTE_CHARS` characters of the last
+    user message, trimmed to a whitespace boundary so the slice is a run of
+    whole words. That makes the mock's citation genuinely verifiable against
+    the chunk the candidate came from.
+    """
+    properties = schema.get("properties", {})
+    source = _last_user_content(messages)
+    if not source:
+        return
+
+    quote = _leading_slice(source, _MOCK_QUOTE_CHARS)
+    if not quote:
+        return
+
+    for field in _QUOTE_FIELDS:
+        if field in properties and field in instance:
+            instance[field] = quote
+
+
+def _last_user_content(messages: list[dict[str, str]]) -> str:
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            return message.get("content", "")
+    return ""
+
+
+def _leading_slice(text: str, limit: int) -> str:
+    """A whole-word prefix of `text`, at most `limit` characters.
+
+    The candidate text arrives inside a framing sentence from
+    `build_user_message`; the blank line separates it, so anything after the
+    first one is the document's own words and is what a citation should quote.
+    """
+    body = text.split("\n\n", 1)[-1].strip()
+    if len(body) <= limit:
+        return body
+    cut = body.rfind(" ", 0, limit)
+    return body[: cut if cut > 0 else limit].strip()
 
 
 def _minimal_valid_instance(schema: dict[str, Any]) -> Any:

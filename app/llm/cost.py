@@ -51,10 +51,18 @@ _QWEN_PRICING: Final[_ProviderPricing] = {
     },
 }
 
-# Provider-agnostic default when a model isn't in the price table.
-_FALLBACK_PRICING: Final[dict[str, Decimal]] = {
+# Priced at zero *on purpose*: these providers never bill, so a zero here is a
+# fact rather than a missing entry. Every other unknown model raises -- see
+# `_get_pricing`.
+_FREE_PRICING: Final[dict[str, Decimal]] = {
     "input": Decimal("0.00"),
     "output": Decimal("0.00"),
+}
+
+_MOCK_PRICING: Final[_ProviderPricing] = {
+    # The CI provider. Zero because it makes no network call, not because we
+    # failed to look up a price.
+    "mock-v1": _FREE_PRICING,
 }
 
 # USD per VLM page. GPT-4o images: ~$0.00213 per 512x512 tile at low-res;
@@ -64,6 +72,26 @@ _ESTIMATED_COST_PER_VLM_PAGE: Final[Decimal] = Decimal("0.02")
 
 # Dimension of embedding vectors — needed for Qwen pricing estimates.
 _QWEN_EMBEDDING_PRICE_PER_1K_TOKENS: Final[Decimal] = Decimal("0.00007")
+
+
+class UnknownModelPricingError(LookupError):
+    """Raised when a provider/model pair has no entry in the price table.
+
+    Failing closed is the whole point. If an unpriced model returned $0, the
+    per-call, per-document and global guards would all pass it, and a single
+    typo in `EXTRACTION_MODEL` -- or a provider shipping a new model id --
+    would silently disable every ceiling in PLAN.md 2. CLAUDE.md 1.4 says
+    there is no silent LLM spend; an unknown price is the loudest possible
+    version of silent.
+    """
+
+    def __init__(self, provider: str, model_id: str) -> None:
+        self.provider = provider
+        self.model_id = model_id
+        super().__init__(
+            f"no pricing for provider={provider!r} model={model_id!r}; "
+            f"add it to app/llm/cost.py before routing spend through it"
+        )
 
 
 @dataclass(frozen=True)
@@ -103,23 +131,31 @@ def estimate_cost(
 ) -> TokenCost:
     """Price a call before it happens. Returns USD as Decimal.
 
+    The three input categories are **disjoint**, matching how every provider
+    reports usage: Anthropic's `input_tokens` already excludes
+    `cache_read_input_tokens` and `cache_creation_input_tokens`. Subtracting
+    cache reads from `prompt_tokens` here would double-discount them and
+    understate real spend, so nothing is subtracted.
+
     Args:
-        provider: One of "anthropic", "openai", "qwen".
+        provider: One of "anthropic", "openai", "qwen", "mock".
         model_id: The exact model string (e.g. "claude-opus-5").
-        prompt_tokens: Input tokens charged at the input rate.
+        prompt_tokens: Input tokens billed at the full input rate — i.e. those
+            *not* served from or written to the prompt cache.
         max_output_tokens: The completion budget — we charge for the max, not
             the actual, because the guard stops *before* dispatch.
-        cache_read_tokens: Tokens read from prompt cache (charged at cache rate).
-        cache_write_tokens: Tokens written to prompt cache.
+        cache_read_tokens: Tokens read from prompt cache (charged at 0.1x).
+        cache_write_tokens: Tokens written to prompt cache (charged at 1.25x).
+
+    Raises:
+        UnknownModelPricingError: when the provider/model has no price entry.
     """
     pricing = _get_pricing(provider, model_id)
 
     def _mtok(tokens: int) -> Decimal:
-        return Decimal(tokens) / Decimal(1_000_000)
+        return Decimal(max(0, tokens)) / Decimal(1_000_000)
 
-    # Uncached input tokens = total prompt minus what was already cached.
-    uncached_input = max(0, prompt_tokens - cache_read_tokens)
-    input_cost = _mtok(uncached_input) * pricing.get("input", Decimal("0"))
+    input_cost = _mtok(prompt_tokens) * pricing.get("input", Decimal("0"))
     output_cost = _mtok(max_output_tokens) * pricing.get("output", Decimal("0"))
     cache_read_cost = _mtok(cache_read_tokens) * pricing.get("cache_read", Decimal("0"))
     cache_write_cost = _mtok(cache_write_tokens) * pricing.get("cache_write", Decimal("0"))
@@ -146,14 +182,32 @@ def estimate_embedding_cost(token_count: int) -> Decimal:
 
 
 def _get_pricing(provider: str, model_id: str) -> dict[str, Decimal]:
-    """Resolve pricing for a provider+model, falling back to zero."""
+    """Resolve pricing for a provider+model, or raise.
+
+    There is deliberately no zero-priced default: see `UnknownModelPricingError`.
+    """
     tables: dict[str, _ProviderPricing] = {
         "anthropic": _CLAUDE_PRICING,
         "openai": _OPENAI_PRICING,
         "qwen": _QWEN_PRICING,
+        "mock": _MOCK_PRICING,
     }
-    provider_table = tables.get(provider, {})
-    return provider_table.get(model_id, _FALLBACK_PRICING)
+    provider_table = tables.get(provider)
+    if provider_table is None:
+        raise UnknownModelPricingError(provider, model_id)
+    pricing = provider_table.get(model_id)
+    if pricing is None:
+        raise UnknownModelPricingError(provider, model_id)
+    return pricing
+
+
+def is_priced(provider: str, model_id: str) -> bool:
+    """Whether spend through this provider/model can be estimated at all."""
+    try:
+        _get_pricing(provider, model_id)
+    except UnknownModelPricingError:
+        return False
+    return True
 
 
 def count_tokens_estimate(text: str) -> int:

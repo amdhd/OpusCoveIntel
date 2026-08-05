@@ -30,6 +30,11 @@ VLM_OCR_PROMPT = (
     "descriptions of formatting, no markdown except for table markers."
 )
 
+# What a VLM-transcribed page is worth as evidence. Below 1.0 on purpose: OCR
+# of a scan is good, not authoritative, and CLAUDE.md 5 routes anything sourced
+# from a VLM page to human review regardless.
+VLM_PAGE_CONFIDENCE = 0.85
+
 
 @dataclass(frozen=True)
 class VlmOutcome:
@@ -38,6 +43,25 @@ class VlmOutcome:
     pages_skipped_cap: int
     pages_skipped_cached: int
     total_cost_usd: Decimal
+    pages_failed: int = 0
+
+
+class VlmPageCapExceededError(RuntimeError):
+    """A document needs more VLM pages than `MAX_VLM_PAGES_PER_DOC` allows.
+
+    CLAUDE.md 4: a 400-page scan that trips every confidence check must fail
+    loudly rather than quietly spend $80 -- or, just as bad, quietly do nothing
+    and report success with zero pages processed.
+    """
+
+    def __init__(self, document_id: uuid.UUID, *, needed: int, cap: int) -> None:
+        self.document_id = document_id
+        self.needed = needed
+        self.cap = cap
+        super().__init__(
+            f"document {document_id} needs VLM on {needed} pages, "
+            f"which exceeds MAX_VLM_PAGES_PER_DOC={cap}"
+        )
 
 
 class VlmService:
@@ -66,6 +90,10 @@ class VlmService:
 
         cap = self._settings.MAX_VLM_PAGES_PER_DOC
         if len(pages) > cap:
+            # CLAUDE.md 4: "must fail loudly, not quietly spend $80". Returning
+            # a zero-page outcome was quiet -- a caller checking only
+            # `pages_processed` could not tell "nothing needed OCR" from "this
+            # document would have cost more than the cap allows".
             logger.error(
                 "vlm.page_cap_exceeded",
                 extra={
@@ -74,13 +102,7 @@ class VlmService:
                     "cap": cap,
                 },
             )
-            return VlmOutcome(
-                document_id=document_id,
-                pages_processed=0,
-                pages_skipped_cap=len(pages),
-                pages_skipped_cached=0,
-                total_cost_usd=Decimal("0"),
-            )
+            raise VlmPageCapExceededError(document_id, needed=len(pages), cap=cap)
 
         if not pages:
             logger.info(
@@ -95,54 +117,50 @@ class VlmService:
                 total_cost_usd=Decimal("0"),
             )
 
-        # Fetch the stored PDF to extract page images
+        # Fetch the stored PDF to extract page images.
         store = get_object_store()
         from app.db.repositories.documents import DocumentRepository
+        from app.ingest.service import storage_key
 
         document = await DocumentRepository(self._session).get(document_id)
         if document is None or document.storage_uri is None:
             raise LookupError(f"document {document_id} not found or has no stored bytes")
 
-        pdf_bytes = await store.get(document.storage_uri)
+        # `storage_uri` is a URI ("file:///..."); the store is keyed by
+        # content hash. Passing the URI made every call raise ObjectStoreError,
+        # so this service could not load a single document -- it had no test
+        # that reached this line. `IngestionService` derives the key the same way.
+        pdf_bytes = await store.get(storage_key(document.sha256))
 
         processed = 0
         skipped_cached = 0
+        failed = 0
         total_cost = Decimal("0")
 
         for page in pages:
             try:
-                # Extract the page as an image
                 image_bytes = _render_page_image(pdf_bytes, page.page_number)
+                ocr_text, cache_hit, cost = await self._ocr_page(image_bytes, document_id)
 
-                # Call the VLM via the router (or directly via mock in CI)
-                if self._router is not None:
-                    # Use the LLMRouter interface — `object` to avoid circular import
-                    router = self._router
-                    result = await router.vision(  # type: ignore[attr-defined]
-                        stage=LLMStage.VLM_OCR,
-                        image_bytes=image_bytes,
-                        prompt=VLM_OCR_PROMPT,
-                        document_id=document_id,
-                    )
-                else:
-                    # Direct path for environments without a router (e.g. tests
-                    # with a mock provider injected)
-                    result = await self._vision_direct(image_bytes)
+                if not ocr_text.strip():
+                    # An empty transcription is a failure, not a result. Marking
+                    # the page `vlm_used` would exclude it from every future
+                    # attempt while leaving the document no better off.
+                    raise ValueError("VLM returned no text for the page")
 
-                if result.cache_hit:
+                if cache_hit:
                     skipped_cached += 1
                 else:
-                    total_cost += result.estimated_cost_usd
+                    total_cost += cost
 
-                # Record the OCR result on the page row
-                _ocr_text = (
-                    result.content if isinstance(result.content, str) else str(result.content)
-                )
                 page.parse_method = ParseMethod.VLM
                 page.vlm_used = True
+                # This is the product of the spend. Dropping it -- which is what
+                # this loop used to do -- paid for an OCR pass and then binned it.
+                page.ocr_text = ocr_text
                 # vlm_reason is already set from the detection phase; the CHECK
                 # constraint NOT vlm_used OR vlm_reason IS NOT NULL is satisfied.
-                page.confidence = 0.85  # VLM output is trusted but not perfect
+                page.confidence = VLM_PAGE_CONFIDENCE
 
                 processed += 1
                 logger.info(
@@ -150,17 +168,19 @@ class VlmService:
                     extra={
                         "document_id": str(document_id),
                         "page": page.page_number,
-                        "cost": str(result.estimated_cost_usd),
-                        "cached": result.cache_hit,
+                        "cost": str(cost),
+                        "cached": cache_hit,
+                        "ocr_chars": len(ocr_text),
                     },
                 )
             except Exception as exc:  # noqa: BLE001 — log and continue; one bad page shouldn't fail the doc
+                failed += 1
                 logger.error(
                     "vlm.page_failed",
                     extra={
                         "document_id": str(document_id),
                         "page": page.page_number,
-                        "error": str(exc),
+                        "error": f"{type(exc).__name__}: {exc}",
                     },
                 )
 
@@ -171,18 +191,53 @@ class VlmService:
             pages_skipped_cap=0,
             pages_skipped_cached=skipped_cached,
             total_cost_usd=total_cost,
+            pages_failed=failed,
         )
 
-    async def _vision_direct(self, image_bytes: bytes) -> object:
-        """Direct vision call (no router). Used when mock is injected."""
+    async def _ocr_page(
+        self, image_bytes: bytes, document_id: uuid.UUID
+    ) -> tuple[str, bool, Decimal]:
+        """One page through the router, or through the mock when there is none.
+
+        Returns `(text, cache_hit, cost)`. The two paths return different
+        objects -- an `LLMCallResult` from the router, a bare provider response
+        from the mock -- so the difference is flattened here rather than left
+        for the caller to trip over. It used to reach `result.cache_hit` on the
+        mock's response, raise AttributeError, and be swallowed by the
+        page-level `except`: every page silently "failed" whenever no router
+        was passed.
+        """
+        if self._router is not None:
+            result = await self._router.vision(  # type: ignore[attr-defined]
+                stage=LLMStage.VLM_OCR,
+                image_bytes=image_bytes,
+                prompt=VLM_OCR_PROMPT,
+                document_id=document_id,
+            )
+            return _as_text(result.content), bool(result.cache_hit), result.estimated_cost_usd
+
         from app.llm.mock import MockLLMProvider
 
-        mock = MockLLMProvider()
-        return await mock.vision(
-            model_id=get_settings().VLM_MODEL,
+        response = await MockLLMProvider().vision(
+            model_id=self._settings.VLM_MODEL,
             image_bytes=image_bytes,
             prompt=VLM_OCR_PROMPT,
         )
+        # The mock never bills and never caches, so both are trivially known.
+        return _as_text(response.content), False, Decimal("0")
+
+
+def _as_text(content: object) -> str:
+    """Flatten a provider response body to the transcribed text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        # A structured response would carry the text under a single field.
+        for key in ("text", "content", "ocr_text"):
+            value = content.get(key)
+            if isinstance(value, str):
+                return value
+    return str(content)
 
 
 def _render_page_image(pdf_bytes: bytes, page_number: int) -> bytes:

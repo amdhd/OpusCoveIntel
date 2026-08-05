@@ -46,6 +46,10 @@ class QwenAdapter:
             timeout=httpx.Timeout(60.0),
         )
 
+    @property
+    def provider_name(self) -> str:
+        return "qwen"
+
     async def close(self) -> None:
         await self._client.aclose()
 

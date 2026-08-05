@@ -18,7 +18,9 @@ CLAUDE.md 1.4: this module is the ONLY place anthropic.* API calls originate.
 
 from __future__ import annotations
 
-from typing import Any
+import asyncio
+import json
+from typing import Any, Final
 
 import httpx
 
@@ -29,6 +31,13 @@ logger = get_logger(__name__)
 
 ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
 ANTHROPIC_VERSION = "2023-06-01"
+
+# Transient statuses. 529 is Anthropic's "overloaded"; the rest are the usual
+# rate-limit and gateway failures.
+_RETRYABLE_STATUS: Final[frozenset[int]] = frozenset({429, 500, 502, 503, 529})
+_MAX_RETRIES: Final[int] = 3
+_BASE_RETRY_DELAY_SECONDS: Final[float] = 1.0
+_MAX_RETRY_DELAY_SECONDS: Final[float] = 30.0
 
 
 class AnthropicAdapter:
@@ -46,6 +55,7 @@ class AnthropicAdapter:
         if not key:
             raise ValueError("ANTHROPIC_API_KEY is not set")
         self._api_key = key
+        self._provider_name = "anthropic"
         self._client = httpx.AsyncClient(
             base_url=ANTHROPIC_BASE_URL,
             headers={
@@ -55,6 +65,10 @@ class AnthropicAdapter:
             },
             timeout=httpx.Timeout(120.0),
         )
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider_name
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -127,11 +141,10 @@ class AnthropicAdapter:
             },
         )
 
-        response = await self._client.post("/messages", json=body)
-        response.raise_for_status()
+        response = await self._post_with_retry("/messages", body)
         data = response.json()
 
-        content = _extract_content(data)
+        content = _extract_content(data, expects_json=response_schema is not None)
 
         usage = AnthropicUsage(
             prompt_tokens=data.get("usage", {}).get("input_tokens", 0),
@@ -156,6 +169,55 @@ class AnthropicAdapter:
             model_id=data.get("model", model_id),
             usage=usage,
         )
+
+    async def _post_with_retry(self, path: str, body: dict[str, Any]) -> httpx.Response:
+        """POST with bounded backoff on the retryable statuses.
+
+        429 (rate limit), 500, 502, 503 and 529 (overloaded) are transient. A
+        single one of them aborting a document's extraction would send the
+        whole thing to the review queue for a reason that has nothing to do
+        with the document. Everything else raises immediately -- a 400 from a
+        rejected parameter must surface loudly, not be retried four times.
+        """
+        last_error: httpx.HTTPStatusError | None = None
+        for attempt in range(_MAX_RETRIES):
+            response = await self._client.post(path, json=body)
+            if response.status_code not in _RETRYABLE_STATUS:
+                response.raise_for_status()
+                return response
+
+            last_error = httpx.HTTPStatusError(
+                f"anthropic returned {response.status_code}",
+                request=response.request,
+                response=response,
+            )
+            if attempt == _MAX_RETRIES - 1:
+                break
+            delay = _retry_delay(response, attempt)
+            logger.warning(
+                "anthropic.retrying",
+                extra={
+                    "status": response.status_code,
+                    "attempt": attempt + 1,
+                    "delay_seconds": delay,
+                },
+            )
+            await asyncio.sleep(delay)
+
+        assert last_error is not None
+        raise last_error
+
+
+def _retry_delay(response: httpx.Response, attempt: int) -> float:
+    """Honour `retry-after` when the server sends one; otherwise exponential."""
+    header = response.headers.get("retry-after")
+    if header:
+        try:
+            return min(float(header), _MAX_RETRY_DELAY_SECONDS)
+        except ValueError:
+            pass
+    backoff: float = _BASE_RETRY_DELAY_SECONDS * (2**attempt)
+    return min(backoff, _MAX_RETRY_DELAY_SECONDS)
 
 
 class AnthropicResponse:
@@ -186,15 +248,40 @@ class AnthropicUsage:
         self.cache_write_tokens = cache_write_tokens
 
 
-def _extract_content(data: dict[str, Any]) -> str | dict[str, Any]:
-    """Pull text or structured JSON from the Messages response."""
+def _extract_content(data: dict[str, Any], *, expects_json: bool = False) -> str | dict[str, Any]:
+    """Pull text or structured JSON from the Messages response.
+
+    With `output_config.format` the model does *not* return a tool_use block --
+    it returns ordinary text blocks whose content is the constrained JSON. The
+    tool_use branch is kept because a tool-calling request still produces one,
+    but when a schema was requested the text is parsed. Skipping that parse is
+    what used to make every structured extraction look like "the model returned
+    prose", costing one wasted retry per candidate before landing in review.
+    """
     content_blocks = data.get("content", [])
 
-    # Structured output: the model returns a tool_use-like block
+    # Tool-calling shape: the arguments object is already parsed JSON.
     for block in content_blocks:
         if block.get("type") == "tool_use":
             return block.get("input", {})  # type: ignore[no-any-return]
 
-    # Plain text response
     text_blocks = [block.get("text", "") for block in content_blocks if block.get("type") == "text"]
-    return "\n".join(text_blocks)
+    text = "\n".join(text_blocks)
+
+    if expects_json and text.strip():
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            # Hand the raw text back so the caller's validation path reports
+            # "not valid JSON" with the actual response attached.
+            logger.warning("anthropic.structured_output_not_json", extra={"raw": text[:500]})
+            return text
+        if isinstance(parsed, dict):
+            return parsed
+        logger.warning(
+            "anthropic.structured_output_not_an_object",
+            extra={"json_type": type(parsed).__name__},
+        )
+        return text
+
+    return text
