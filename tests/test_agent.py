@@ -242,3 +242,55 @@ class TestCovenantLookupIsNarrowedToTheQuestion:
 
         assert answer.intent is QueryIntent.COVENANT_LOOKUP
         assert answer.citations
+
+
+class TestTheAgentMakesNoModelCalls:
+    """Pins the claim the docstrings now make.
+
+    Three docstrings and CLAUDE.md's routing table used to say the graph "adds
+    LLM synthesis". It never has: `_synthesize` formats tool results with
+    Python. Documentation drifted from the code because nothing checked, so
+    this checks.
+
+    If synthesis is later handed to a model, this test should be deleted in the
+    same commit that does it -- and the docs updated in that commit too.
+    """
+
+    def test_the_agent_package_imports_nothing_from_the_llm_layer(self) -> None:
+        import ast
+        import pathlib
+
+        agent_dir = pathlib.Path(__file__).parent.parent / "app" / "agent"
+        offenders: list[str] = []
+
+        for path in agent_dir.glob("*.py"):
+            tree = ast.parse(path.read_text())
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.llm"):
+                    offenders.append(f"{path.name}: from {node.module}")
+                elif isinstance(node, ast.Import):
+                    offenders.extend(
+                        f"{path.name}: import {alias.name}"
+                        for alias in node.names
+                        if alias.name.startswith("app.llm")
+                    )
+
+        assert not offenders, (
+            "app/agent/ reaches the LLM layer, so the docstrings claiming it is "
+            f"deterministic are now false: {offenders}"
+        )
+
+    async def test_answering_records_no_spend(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """The ledger is the other half of the claim: no calls, no cost."""
+        from sqlalchemy import func, select
+
+        from app.db.models.ops import LLMCall
+
+        before = (await db_session.execute(select(func.count()).select_from(LLMCall))).scalar_one()
+
+        await service(db_session).answer("What is the cross-default threshold?")
+
+        after = (await db_session.execute(select(func.count()).select_from(LLMCall))).scalar_one()
+        assert after == before

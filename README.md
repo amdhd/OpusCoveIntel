@@ -8,11 +8,21 @@ Ingests prospectuses, trust deeds, rating reports and announcements; extracts co
 structured, **cited** records; answers portfolio-level questions through a governed LangGraph agent
 that refuses to answer without evidence.
 
-> **Status: Phase 4 (search & rules) complete — the first demoable milestone.** Documents ingest,
-> index, extract into cited covenants, and answer questions through hybrid retrieval and a
-> deterministic rules engine. The golden set passes **10/10 with zero LLM calls**. The first LLM
-> spend is Phase 5. See [PLAN.md](PLAN.md) for the phase plan and [CLAUDE.md](CLAUDE.md) for
-> architectural invariants.
+> **Status: Phases 1–7 built; LLM extraction verified against the live API.** Documents ingest,
+> index, extract into cited covenants, and answer questions through hybrid retrieval, a
+> deterministic rules engine and the LangGraph agent. The golden set passes **10/10 with zero LLM
+> calls**.
+>
+> **One stage spends money: covenant extraction** (`opuscovintel extract`), confirmed live against
+> `claude-opus-5` — 7 calls, $0.069, prompt caching engaged. Everything else is $0, and
+> `--dry-run` prices a document before anything is dispatched.
+>
+> **The query agent makes no model calls.** `app/agent/` is fully deterministic and imports nothing
+> from `app/llm/`; CLAUDE.md's routing table reserves a model for answer synthesis, and that stage
+> is not built. The table's `Status` column says which stages are live.
+>
+> Not yet wired: the VLM fallback, and the eval harness. See [PLAN.md](PLAN.md) for the phase plan
+> and [CLAUDE.md](CLAUDE.md) for architectural invariants.
 
 ## Quick start
 
@@ -56,7 +66,33 @@ questions with no model involved. Individually:
 make index           # embed + full-text index every chunk
 make extract-sample  # deterministic extractor -> cited clauses and covenants
 make golden          # the golden question set
+make ask-sample      # the same question through the LangGraph agent, logged and audited
 ```
+
+The same question can be put to either path. `query` is the Phase 4 service; `ask` routes through
+the agent, which adds the plan, the verify node and a row in `query_logs` — and, today, no model:
+
+```bash
+uv run opuscovintel ask "What is the cross-default threshold?"
+```
+
+### The one command that spends money
+
+```bash
+make extract-llm-dry-run   # price it first — free
+uv run opuscovintel extract <document-id>
+```
+
+`extract` runs the LLM extractor over candidate spans. It refuses to run without an explicit
+target (`--all` if you mean the whole corpus), prints the ceilings, and asks before dispatching.
+`--dry-run` prices the work from the candidate spans without calling anything:
+
+```
+7 candidate span(s), ~22,565 prompt tokens, worst case $1.5128 (cap $2.00)
+```
+
+Worst case assumes every completion uses its full token budget, which is what the budget guard
+assumes. The run that produced that estimate actually cost **$0.069**.
 
 ```bash
 uv run opuscovintel query "Which holdings would breach their rating trigger at the current rating?"
@@ -110,13 +146,13 @@ make run         # uvicorn with autoreload on :8000
 | `app/domain/` | Pydantic schemas + enums. Pure leaf — imports nothing from `db/` or `llm/`. |
 | `app/db/` | SQLAlchemy models, repositories, dual (RW / RO) engines. |
 | `app/ingest/` | Object storage, PDF parsing, page confidence, chunking. |
-| `app/llm/` | Embedding seam today; budget-guarded provider adapters in *(Phase 5)*. |
-| `app/extract/` | Regex extractor and citation verification. Prompts in *(Phase 6)*. |
+| `app/llm/` | Budget-guarded provider adapters, response cache, cost ledger, VLM service. |
+| `app/extract/` | Regex + LLM extractors, prompts, citation verification, dry-run pricing. |
 | `app/rules/` | Deterministic covenant evaluation, money and dates. Pure functions. |
 | `app/retrieval/` | Hybrid retrieval: pgvector + tsvector, fused by reciprocal rank. |
 | `app/query/` | The deterministic query path — intent, evidence, refusal. |
 | `app/evals/` | Golden question set. Metrics harness lands in Phase 8. |
-| `app/agent/` | LangGraph query graph + SQL guardrail. *(Phase 7)* |
+| `app/agent/` | LangGraph query graph + SQL guardrail. Deterministic — no model calls. |
 
 ## The four things that make this auditable
 
@@ -126,7 +162,8 @@ make run         # uvicorn with autoreload on :8000
 3. **Citations are verified, not trusted.** A quote that isn't found in its cited chunk goes to
    human review instead of into the database.
 4. **The query agent holds a read-only database role.** Enforced by Postgres grants, not by
-   convention.
+   convention. It runs on two sessions: reads on the read-only role, and its own query log on the
+   read-write one, because a single session cannot both be denied writes and write an audit trail.
 
 ## Cost control
 

@@ -1,8 +1,15 @@
 """Phase 7 query agent — LangGraph graph + deterministic tools + SQL guardrail.
 
-The graph wraps the deterministic Phase 4 service and adds LLM synthesis
-for intents where prose is better than structured rows. The verify node
-is the structural guard: every factual claim must trace to a citation.
+**Every node is deterministic. This package makes no LLM calls at all**, and
+imports nothing from `app/llm/`. What the graph adds over the Phase 4 service
+is structure, not language: an intent-directed plan, tool orchestration, a
+verify node that strips any claim not traceable to a retrieved clause, and a
+logged, audited record of every question.
+
+CLAUDE.md's routing table reserves `claude-opus-5` for answer synthesis. That
+is a designed-for position, not the current one -- see `_synthesize` in
+`graph.py` for what actually runs and what changes if a model ever takes it
+over.
 """
 
 from __future__ import annotations

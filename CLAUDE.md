@@ -39,15 +39,21 @@ even if tests pass.
 Configured in `configs/models.yaml`, never hardcoded. Model IDs live in env vars — **verify current
 IDs against provider docs before changing defaults**.
 
-| Stage | Provider / default | Rationale |
-|---|---|---|
-| Document classification, section detection | Qwen (`qwen-plus`) | High volume, low stakes, cheap |
-| Candidate clause detection | rules + pgvector + FTS (no LLM) | Free; narrows 300pp → ~30 spans |
-| **Covenant / legal structured extraction** | **`claude-opus-5`**, `effort: high` | Highest stakes; long-context legal reasoning |
-| Scanned / low-confidence page OCR | GPT vision model (`OPENAI_VLM_MODEL`) | Only pages that fail the text-layer check |
-| Embeddings | Qwen `text-embedding-v4`, **1024 dims** | Strong multilingual (EN + Bahasa Malaysia) |
-| Answer synthesis | `claude-opus-5`, `effort: medium` | Citation discipline, refusal calibration |
-| Eval judge (faithfulness) | `claude-opus-5`, separate prompt version | Must not share prompt with generator |
+**The `Status` column is the point of this table.** It is a routing *design*,
+and most of it is not wired yet — an agent reading only the first two columns
+will assume a model is involved where none is, which has already produced
+docstrings that described a system nobody had built. Update the status when you
+change the wiring, in the same commit.
+
+| Stage | Provider / default | Status | Rationale |
+|---|---|---|---|
+| Document classification, section detection | Qwen (`qwen-plus`) | **not built** — nothing calls `CHEAP_MODEL` | High volume, low stakes, cheap |
+| Candidate clause detection | rules + pgvector + FTS (no LLM) | **live** — regex only; FTS/kNN reserved | Free; narrows 300pp → ~30 spans |
+| **Covenant / legal structured extraction** | **`claude-opus-5`**, `effort: high` | **live** — verified against the API | Highest stakes; long-context legal reasoning |
+| Scanned / low-confidence page OCR | GPT vision model (`VLM_MODEL`) | **built, unwired** — `VlmService` has no caller | Only pages that fail the text-layer check |
+| Embeddings | Qwen `text-embedding-v4`, **1024 dims** | **inactive** — falls back to `HashingEmbedder` without `QWEN_API_KEY` | Strong multilingual (EN + Bahasa Malaysia) |
+| Answer synthesis | `claude-opus-5`, `effort: medium` | **not built** — `app/agent/` is fully deterministic and imports nothing from `app/llm/` | Citation discipline, refusal calibration |
+| Eval judge (faithfulness) | `claude-opus-5`, separate prompt version | **not built** — no eval harness exists | Must not share prompt with generator |
 
 ### Anthropic API rules (verified against current API)
 
