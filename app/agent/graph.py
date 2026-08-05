@@ -6,10 +6,20 @@ PLAN.md 5:
                               │                                                │
                               └──── insufficient evidence ──→ refuse ──────────┘
 
-The graph wraps the deterministic Phase 4 service and adds LLM synthesis for
-intents where prose is better than structured rows (document_search,
-covenant_lookup). Breach checks and portfolio queries stay fully deterministic
-(CLAUDE.md 1.1 — the LLM never computes a breach).
+**No node in this graph calls a model.** `_synthesize` formats tool results
+into prose with Python; the module imports nothing from `app/llm/`. CLAUDE.md's
+routing table assigns answer synthesis to `claude-opus-5` at `effort: medium`,
+and that remains the intended design — but it is not what runs today, and this
+docstring used to say otherwise.
+
+What the graph adds over the Phase 4 service is therefore structure rather than
+language: an intent-directed plan, tool orchestration, the verify node, and a
+logged and audited record of every question.
+
+Two things stay deterministic even if synthesis is later handed to a model:
+breach checks and portfolio queries (CLAUDE.md 1.1 — the LLM never computes a
+breach), and the verify node, which is the guard against a fluent wrong answer
+and is worth more, not less, once prose is model-authored.
 
 Session access: nodes receive their AsyncSession via `config["configurable"]`,
 which keeps the graph provider-agnostic and the nodes testable. There are two
