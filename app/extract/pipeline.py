@@ -44,6 +44,7 @@ from app.domain.enums import (
 from app.domain.extraction import RuleExtraction
 from app.extract.candidates import Candidate, CandidateDetectionService
 from app.extract.citations import verify_quote
+from app.extract.linking import resolve_instrument
 from app.extract.llm_extractor import LLMExtraction, LLMExtractor
 from app.extract.prompts import PROMPT_VERSION
 from app.extract.rule_extractor import extract as rule_extract
@@ -177,8 +178,20 @@ class ExtractionPipeline:
         job.started_at = _now()
         await self._session.flush()
 
+        # A covenant with no instrument is invisible to every portfolio query,
+        # which is the whole point of extracting it. The rule extractor has
+        # always resolved this; the LLM path did not, so its covenants were
+        # persisted unlinked and silently absent from portfolio answers.
+        resolved = instrument_id or await resolve_instrument(self._session, document_id)
+        if resolved is None:
+            logger.warning(
+                "document is not linked to an instrument; "
+                "its covenants will not appear in portfolio queries",
+                extra={"document_id": str(document_id)},
+            )
+
         try:
-            return await self._run(document, job, outcome, instrument_id, llm_enabled)
+            return await self._run(document, job, outcome, resolved, llm_enabled)
         except Exception as exc:
             # Without this the job stays RUNNING for ever and the session is
             # left dirty, so the next run finds a job that is neither complete

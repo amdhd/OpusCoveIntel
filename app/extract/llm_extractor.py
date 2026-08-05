@@ -31,12 +31,12 @@ from app.llm.router import LLMCallResult, LLMRouter
 logger = get_logger(__name__)
 
 # Minimum max_tokens for extraction: thinking + structured response together.
-_EXTRACTION_MAX_TOKENS: int = 8000
+EXTRACTION_MAX_TOKENS: int = 8000
 
 # CLAUDE.md 2: covenant extraction is the highest-stakes call in the system and
 # runs at `effort: high`. Depth is steered here, not with `thinking.budget_tokens`
 # (a 400) and not with `temperature` (also a 400).
-_EXTRACTION_EFFORT: str = "high"
+EXTRACTION_EFFORT: str = "high"
 
 
 @dataclass
@@ -171,12 +171,12 @@ class LLMExtractor:
                 model_id=self._settings.EXTRACTION_MODEL,
                 system_prompt=system_prompt,
                 messages=messages,
-                max_tokens=_EXTRACTION_MAX_TOKENS,
+                max_tokens=EXTRACTION_MAX_TOKENS,
                 response_schema=EXTRACTION_JSON_SCHEMA,
                 prompt_version=PROMPT_VERSION,
                 document_id=document_id,
                 enable_prompt_caching=True,
-                effort=_EXTRACTION_EFFORT,
+                effort=EXTRACTION_EFFORT,
             )
         except Exception as exc:
             logger.error(

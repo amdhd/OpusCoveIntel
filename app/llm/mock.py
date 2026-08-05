@@ -178,6 +178,14 @@ _QUOTE_FIELDS: Final[tuple[str, ...]] = ("source_quote",)
 # a slice of any realistic candidate span.
 _MOCK_QUOTE_CHARS: Final[int] = 120
 
+# Optional fields that gate a whole branch of the pipeline, so leaving them
+# None (the correct default for anything `anyOf [T, null]`) makes that branch
+# unreachable in CI. `covenant_type` is the gate on covenant persistence: while
+# it was None, no mock run ever wrote a covenant, and everything downstream of
+# that -- instrument linking, threshold review triggers, the high-value cap --
+# went untested against the mock that supposedly drives the whole pipeline.
+_FORCED_ENUM_FIELDS: Final[tuple[str, ...]] = ("covenant_type",)
+
 
 def _ground_in_input(
     instance: dict[str, Any],
@@ -192,6 +200,13 @@ def _ground_in_input(
     the chunk the candidate came from.
     """
     properties = schema.get("properties", {})
+
+    for field in _FORCED_ENUM_FIELDS:
+        if field in properties and instance.get(field) is None:
+            choice = _first_enum_value(properties[field])
+            if choice is not None:
+                instance[field] = choice
+
     source = _last_user_content(messages)
     if not source:
         return
@@ -203,6 +218,16 @@ def _ground_in_input(
     for field in _QUOTE_FIELDS:
         if field in properties and field in instance:
             instance[field] = quote
+
+
+def _first_enum_value(prop: dict[str, Any]) -> Any:
+    """The first enum member of a property, looking through `anyOf`."""
+    if "enum" in prop:
+        return prop["enum"][0]
+    for branch in prop.get("anyOf", ()):
+        if "enum" in branch:
+            return branch["enum"][0]
+    return None
 
 
 def _last_user_content(messages: list[dict[str, str]]) -> str:

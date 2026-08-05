@@ -31,7 +31,6 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.db.models.clauses import CallSchedule, Clause, Covenant, RatingTrigger
 from app.db.models.documents import Document, DocumentChunk
-from app.db.models.instruments import Instrument
 from app.db.models.ops import ExtractionJob, HumanReview
 from app.db.repositories.clauses import (
     CallScheduleRepository,
@@ -52,6 +51,7 @@ from app.domain.enums import (
 )
 from app.domain.extraction import RuleExtraction
 from app.extract.citations import verify_quote
+from app.extract.linking import resolve_instrument
 from app.extract.rule_extractor import EXTRACTOR_VERSION, extract, extract_call_schedule
 from app.rules.ratings import UnknownRatingError, rank
 
@@ -114,7 +114,7 @@ class RuleExtractionService:
         await self._session.flush()
 
         try:
-            resolved = instrument_id or await self._resolve_instrument(document_id)
+            resolved = instrument_id or await resolve_instrument(self._session, document_id)
             await self._clear_previous(document_id)
 
             counts = _Counts()
@@ -357,41 +357,6 @@ class RuleExtractionService:
 
     # -- bookkeeping -------------------------------------------------------
 
-    async def _resolve_instrument(self, document_id: uuid.UUID) -> uuid.UUID | None:
-        """Link a document to an instrument by issuer name.
-
-        Deliberately literal: an issuer's registered name must appear verbatim
-        in the document text. Fuzzy matching here would attach covenants to the
-        wrong issuer, and a covenant on the wrong instrument is worse than a
-        covenant on none -- it produces a confident, wrong portfolio answer.
-        """
-        chunks = await self._chunks.list_for_document(document_id, limit=20)
-        # Whitespace is collapsed on both sides before matching. A PDF wraps
-        # "Synthetic Retail REIT\nBerhad" across a line, and a plain substring
-        # test then silently fails to link the document to its instrument --
-        # which looks like "no covenants found" rather than like a bug.
-        haystack = _collapse(" ".join(chunk.chunk_text for chunk in chunks))
-        if not haystack:
-            return None
-
-        result = await self._session.execute(select(Instrument))
-        matches = [
-            instrument
-            for instrument in result.scalars().all()
-            if _collapse(instrument.issuer_name) in haystack
-        ]
-        if len(matches) == 1:
-            return matches[0].id
-        if len(matches) > 1:
-            logger.warning(
-                "document names several issuers; leaving it unlinked",
-                extra={
-                    "document_id": str(document_id),
-                    "issuers": [item.issuer_name for item in matches],
-                },
-            )
-        return None
-
     async def _clear_previous(self, document_id: uuid.UUID) -> None:
         result = await self._session.execute(
             select(Clause).where(
@@ -489,11 +454,6 @@ def _review_value(extraction: RuleExtraction) -> str | None:
         if value is not None:
             return str(value)
     return None
-
-
-def _collapse(text: str) -> str:
-    """Lower-case with runs of whitespace collapsed, for line-wrap-safe matching."""
-    return " ".join(text.split()).lower()
 
 
 def _now() -> dt.datetime:
