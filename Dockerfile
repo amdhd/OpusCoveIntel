@@ -15,10 +15,17 @@ WORKDIR /app
 
 # Dependency layer, cached independently of source so a code edit does not
 # trigger a full reinstall.
-COPY pyproject.toml ./
+#
+# --locked installs exactly what uv.lock pins and fails the build if the lock
+# no longer matches pyproject.toml, so the image built from a commit today is
+# the image built from it in six months. (--frozen would install from the lock
+# but ignore pyproject.toml, quietly omitting a dependency someone added
+# without re-locking.) --no-install-project keeps this layer to third-party
+# dependencies; the application is copied into the runtime stage below, which
+# is what lets a code edit reuse this layer.
+COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv venv /app/.venv && \
-    uv pip install --python /app/.venv/bin/python -r pyproject.toml
+    uv sync --locked --no-dev --no-install-project
 
 
 FROM python:3.12-slim AS runtime
