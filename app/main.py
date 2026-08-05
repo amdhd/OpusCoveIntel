@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import documents, health
+from app.api.routes import audit, documents, health, review
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestIDMiddleware
@@ -50,6 +50,8 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIDMiddleware)
     app.include_router(health.router)
     app.include_router(documents.router)
+    app.include_router(review.router)
+    app.include_router(audit.router)
     return app
 
 
