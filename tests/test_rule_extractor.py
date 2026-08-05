@@ -202,7 +202,8 @@ def test_a_quote_differing_only_in_whitespace_still_verifies() -> None:
 
 
 def test_a_quote_that_is_not_in_the_chunk_fails() -> None:
-    check = verify_quote("gearing ratio of not more than 2.50", COVENANT_PAGE)
+    # A fabricated quote that shares no substantial text with the chunk.
+    check = verify_quote("the trustee may declare an event of default at any time", COVENANT_PAGE)
 
     # CLAUDE.md 1.3: this is what stops a fabricated citation being persisted.
     assert not check.verified
@@ -212,6 +213,25 @@ def test_a_quote_that_is_not_in_the_chunk_fails() -> None:
 
 def test_an_empty_quote_fails_rather_than_matching_everything() -> None:
     assert verify_quote("   ", COVENANT_PAGE).verified is False
+
+
+def test_a_quote_with_a_dropped_footnote_verifies_fuzzy() -> None:
+    """Phase 6: an LLM might omit a footnote marker that the PDF text includes."""
+    chunk = (
+        "The Issuer shall not create or permit to subsist any security "
+        "interest[1] over its assets."
+    )
+    quote = (
+        "The Issuer shall not create or permit to subsist any security "
+        "interest over its assets"
+    )
+
+    check = verify_quote(quote, chunk)
+
+    assert check.verified
+    assert check.method == "fuzzy"
+    assert check.score >= 0.92
+    assert check.char_start is None  # fuzzy cannot determine exact offsets
 
 
 def test_normalisation_folds_smart_quotes_and_dashes() -> None:
