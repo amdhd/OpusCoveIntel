@@ -250,6 +250,36 @@ def golden() -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("check-schema")
+def check_schema() -> None:
+    """Compare the database's enum CHECK constraints against the models.
+
+    `alembic check` cannot see these -- Alembic excludes type-bound
+    constraints from autogenerate -- so adding a value to a StrEnum without a
+    migration is invisible to it. This asks the database directly.
+    """
+    from app.db.schema_check import enum_constraint_drift
+    from app.db.session import get_sessionmaker
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    async def _run() -> list[str]:
+        try:
+            async with get_sessionmaker()() as session:
+                return [item.describe() for item in await enum_constraint_drift(session)]
+        finally:
+            await dispose_engines()
+
+    drift = asyncio.run(_run())
+    if not drift:
+        typer.echo("enum constraints match the models")
+        return
+    for line in drift:
+        typer.echo(f"DRIFT: {line}")
+    raise typer.Exit(code=1)
+
+
 @app.command()
 def check() -> None:
     """Verify external dependencies are reachable. Exit 1 if any check fails."""

@@ -14,10 +14,13 @@ without anything going red to say so.
 
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint
+from sqlalchemy import CheckConstraint, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import type_bound_check_constraint_names
 from app.db.models import Base
+from app.db.schema_check import enum_constraint_drift, model_enum_values
+from app.domain.enums import DocumentStatus
 
 TYPE_BOUND_CHECK_CONSTRAINTS = type_bound_check_constraint_names(Base.metadata)
 
@@ -99,3 +102,67 @@ def test_the_exclusion_covers_every_enum_column() -> None:
 
     assert TYPE_BOUND_CHECK_CONSTRAINTS == type_bound
     assert len(type_bound) >= 36
+
+
+# --------------------------------------------------------------------------
+# The gap the filter leaves open, and the check that closes it
+# --------------------------------------------------------------------------
+
+
+async def test_a_correct_database_reports_no_enum_drift(db_session: AsyncSession) -> None:
+    assert await enum_constraint_drift(db_session) == []
+
+
+async def test_a_narrowed_constraint_is_reported_as_drift(db_session: AsyncSession) -> None:
+    """The failure `alembic check` cannot see, on any version.
+
+    Adding a value to a StrEnum without a migration leaves the model accepting
+    a value the database rejects. Alembic excludes type-bound constraints from
+    autogenerate, so it reports nothing; the first symptom is an INSERT failing
+    in production.
+
+    Simulated from the database side -- dropping a value from the CHECK is
+    indistinguishable from adding one to the enum, and does not require
+    mutating the imported models mid-suite.
+    """
+    await db_session.execute(
+        text("ALTER TABLE documents DROP CONSTRAINT ck_documents_ck_documentstatus")
+    )
+    await db_session.execute(
+        text(
+            "ALTER TABLE documents ADD CONSTRAINT ck_documents_ck_documentstatus "
+            "CHECK (status::text = ANY (ARRAY['uploaded'::character varying]::text[]))"
+        )
+    )
+
+    drift = await enum_constraint_drift(db_session)
+
+    assert len(drift) == 1
+    assert drift[0].table == "documents"
+    assert drift[0].column == "status"
+    assert "parsed" in drift[0].missing_in_database
+    assert drift[0].missing_in_models == ()
+    assert "database rejects" in drift[0].describe()
+
+
+async def test_a_business_check_is_never_mistaken_for_a_vocabulary(
+    db_session: AsyncSession,
+) -> None:
+    """`human_reviews` has a CHECK that quotes two status values.
+
+    `status IN ('pending', 'not_required') OR reviewer_id IS NOT NULL` reads
+    exactly like a narrowed vocabulary to a regex. Reporting it would train
+    people to ignore this check, which is worse than not having it.
+    """
+    drift = await enum_constraint_drift(db_session)
+
+    assert [item.constraint for item in drift] == []
+
+
+def test_every_enum_column_is_covered() -> None:
+    values = model_enum_values()
+
+    assert ("documents", "status") in values
+    assert ("covenants", "covenant_type") in values
+    # One entry per enum-backed column, and the vocabulary matches the enum.
+    assert values[("documents", "status")] == {status.value for status in DocumentStatus}
