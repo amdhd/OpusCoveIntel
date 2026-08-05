@@ -20,7 +20,12 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
-uv.lock
+
+# uv.lock is deliberately NOT ignored. This is an application, not a library:
+# the lockfile is what makes a build reproducible, so CI, Docker and a new
+# laptop all resolve the same versions. Ignoring it means an upstream release
+# can turn CI red with no change on our side, and a green run cannot be
+# reproduced later.
 
 # -- runtime data --------------------------------------------------------
 var/
