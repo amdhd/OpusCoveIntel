@@ -11,7 +11,7 @@ or fail together -- e.g. writing a clause and its covenant atomically.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any, cast
 
 from sqlalchemy import CursorResult, delete, func, select
@@ -62,6 +62,22 @@ class BaseRepository[ModelT: Base]:
         for field, value in filters.items():
             stmt = stmt.where(getattr(self.model, field) == value)
         result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def list_by_ids(self, entity_ids: Iterable[uuid.UUID]) -> Sequence[ModelT]:
+        """Fetch many rows by primary key in one statement.
+
+        Exists so a read model that joins a list of children to their parents
+        does not issue one `get()` per row. Deduplicates, and returns only the
+        ids that exist -- a caller must not assume the result is the same length
+        as its input.
+        """
+        wanted = set(entity_ids)
+        if not wanted:
+            return []
+        result = await self.session.execute(
+            select(self.model).where(self.model.id.in_(wanted))  # type: ignore[attr-defined]
+        )
         return result.scalars().all()
 
     async def count(self, **filters: Any) -> int:
