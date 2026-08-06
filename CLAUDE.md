@@ -165,6 +165,27 @@ citation verification failed · value sourced from a VLM page · any monetary th
 - Synthetic documents only in fixtures. Real prospectuses are copyrighted — do not commit them.
 - Secrets from env only; `.env` is gitignored, `.env.example` is committed.
 
+### Verification discipline
+
+Two rules earned the hard way. Both have caught real defects more than once, and
+both look like overcaution right up until they don't.
+
+**Run it, do not only read it.** Every serious defect in this codebase so far was
+found by executing the path, never by review or by mock-backed unit tests: an
+`asyncio` loop bug in the `extract` CLI, a wrong storage key that made `VlmService`
+unable to load any document, two schema faults that 400'd every live Anthropic
+call, a blank `QWEN_API_KEY` read as "key present", `_inline_refs` not recursing
+into what it inlined, and a review queue silently accumulating orphaned rows.
+Lint, `mypy --strict` and a green suite were clean through all of them. Wiring
+something up is not finishing it; running it is.
+
+**Prove a regression test fails before trusting that it passes.** Disable the fix,
+watch the test go red, then restore. Do this by reading the diff of the disabled
+state, not by assuming the edit landed — a formatter once collapsed the statement
+a patch was targeting, so the "disabled" run silently exercised the fixed code and
+three tests passed against a bug they were written to catch. Assertions like
+`x >= 0` are true of everything and catch nothing.
+
 ## 8. Commands
 
 ```bash
