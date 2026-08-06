@@ -558,6 +558,130 @@ def golden() -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("eval")
+def eval_command(
+    output_dir: Path = typer.Option(
+        Path("evals/results"), "--output-dir", help="Where the JSON and Markdown land."
+    ),
+    skip_agent: bool = typer.Option(
+        False, "--skip-agent", help="Score only the deterministic path."
+    ),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Write the files, print a summary."),
+) -> None:
+    """Score extraction and answers against the golden set. $0, no model calls.
+
+    PLAN.md Phase 8 acceptance: metrics land in `evals/results/`. Exits 1 when a
+    read path misses its PLAN.md target -- 6/10 deterministic, 8/10 for the
+    agent. Extraction F1 is reported and never gated: PLAN.md sets no target for
+    it, and a threshold invented against a synthetic corpus would be a gate that
+    says nothing about production.
+    """
+    from app.agent.service import open_agent_query_service
+    from app.db.session import get_readonly_sessionmaker
+    from app.evals.harness import EvalReport, run_eval
+    from app.evals.report import render_markdown, write_report
+    from app.query.service import DeterministicQueryService
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    async def _run() -> EvalReport:
+        try:
+            # Read-only for the scoring path (CLAUDE.md 1.6). The agent opens
+            # its own pair of sessions, because its query log has to be written
+            # by a role that can write.
+            async with get_readonly_sessionmaker()() as session:
+                deterministic = DeterministicQueryService(session)
+                if skip_agent:
+                    return await run_eval(session, deterministic=deterministic, settings=settings)
+                async with open_agent_query_service() as agent:
+                    return await run_eval(
+                        session,
+                        deterministic=deterministic,
+                        agent=agent,
+                        settings=settings,
+                    )
+        finally:
+            await dispose_engines()
+
+    report = asyncio.run(_run())
+    json_path, markdown_path = write_report(report, directory=output_dir)
+
+    if not quiet:
+        typer.echo(render_markdown(report))
+    typer.echo(f"\nwrote {json_path}")
+    typer.echo(f"wrote {markdown_path}")
+
+    if not report.documents_scored:
+        typer.echo(
+            "\nNo labelled document is in the corpus; extraction scored nothing. "
+            "Run `make ingest-corpus index extract-sample`.",
+            err=True,
+        )
+    if not report.meets_targets:
+        raise typer.Exit(code=1)
+
+
+@app.command("cost-report")
+def cost_report() -> None:
+    """Report LLM spend by stage and by document. Reads `llm_calls`, $0.
+
+    The ledger is the only source. A cost figure computed anywhere else would
+    be an estimate of the number this table already holds (PLAN.md 2).
+    """
+    from app.db.session import get_readonly_sessionmaker
+    from app.evals.cost import CostEvaluator, CostReport
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    async def _run() -> CostReport:
+        try:
+            async with get_readonly_sessionmaker()() as session:
+                return await CostEvaluator(session, settings).report()
+        finally:
+            await dispose_engines()
+
+    report = asyncio.run(_run())
+    if not report.has_spend:
+        typer.echo("No provider call has been recorded against this database.")
+        typer.echo(
+            f"Ceilings: ${settings.MAX_COST_PER_CALL_USD}/call · "
+            f"${settings.MAX_COST_PER_DOCUMENT_USD}/document · "
+            f"${settings.MAX_TOTAL_COST_USD} total"
+        )
+        return
+
+    typer.echo(f"total:      ${report.total_usd} across {report.calls} call(s)")
+    typer.echo(
+        f"cache:      {report.cache_hits} hit(s), "
+        f"{report.cache_read_tokens:,} prompt-cache read token(s)"
+    )
+    if report.cache_read_tokens == 0:
+        # PLAN.md 2 treats this as a bug rather than a tuning issue, so it is
+        # said here rather than left for someone to notice in the totals.
+        typer.echo("  ! zero cache reads across repeated extractions means a cache invalidator")
+    if report.cost_per_document is not None:
+        typer.echo(f"per doc:    ${report.cost_per_document} (documents with spend)")
+    typer.echo(
+        f"budget:     ${report.budget_total_usd - report.total_usd} remaining "
+        f"of ${report.budget_total_usd}"
+    )
+
+    typer.echo("\nby stage:")
+    for stage, amount in sorted(report.by_stage.items()):
+        typer.echo(f"  {stage:<16} ${amount}")
+
+    typer.echo("\nby document:")
+    for item in report.by_document:
+        flag = (
+            " ** over the per-document ceiling **"
+            if item.cost_usd > (report.budget_per_document_usd)
+            else ""
+        )
+        typer.echo(f"  {item.filename:<48} {item.calls:>4} call(s)  ${item.cost_usd}{flag}")
+
+
 @app.command("check-schema")
 def check_schema() -> None:
     """Compare the database's enum CHECK constraints against the models.

@@ -8,10 +8,10 @@ Ingests prospectuses, trust deeds, rating reports and announcements; extracts co
 structured, **cited** records; answers portfolio-level questions through a governed LangGraph agent
 that refuses to answer without evidence.
 
-> **Status: Phases 1–7 built; LLM extraction verified against the live API.** Documents ingest,
+> **Status: Phases 1–8 built; LLM extraction verified against the live API.** Documents ingest,
 > index, extract into cited covenants, and answer questions through hybrid retrieval, a
 > deterministic rules engine and the LangGraph agent. The golden set passes **10/10 with zero LLM
-> calls**.
+> calls**, and `make eval` scores extraction against a labelled corpus for $0.
 >
 > **One stage spends money: covenant extraction** (`opuscovintel extract`), confirmed live against
 > `claude-opus-5` — 7 calls, $0.069, prompt caching engaged. Everything else is $0, and
@@ -21,8 +21,9 @@ that refuses to answer without evidence.
 > from `app/llm/`; CLAUDE.md's routing table reserves a model for answer synthesis, and that stage
 > is not built. The table's `Status` column says which stages are live.
 >
-> Not yet wired: the VLM fallback, and the eval harness. See [PLAN.md](PLAN.md) for the phase plan
-> and [CLAUDE.md](CLAUDE.md) for architectural invariants.
+> Deferred, deliberately: Celery/Redis, S3/MinIO, RBAC/OIDC and OTel/Prometheus — see
+> [docs/deploy.md §6](docs/deploy.md) for the order to add them in. See [PLAN.md](PLAN.md) for the
+> phase plan and [CLAUDE.md](CLAUDE.md) for architectural invariants.
 
 ## Quick start
 
@@ -121,6 +122,36 @@ Ask it something the corpus cannot evidence and it refuses:
 uv run opuscovintel query "Should we buy more Malaysian sukuk next quarter?"
 ```
 
+## Measuring it
+
+```bash
+make eval-demo       # corpus + eval from nothing: migrate, seed, ingest, index, extract, score
+make eval            # score what is already there -> evals/results/
+make cost-report     # LLM spend by stage and by document
+```
+
+`make eval` is $0 — no metric calls a model — and writes a JSON record and a Markdown summary. It
+scores each extractor **separately**, because the difference between them is the answer to "did the
+LLM actually help?", which is the question two extractors running in parallel exist to make
+answerable:
+
+| Field | rule P | rule R | llm P | llm R |
+|---|---|---|---|---|
+| covenant_type | 1.00 | 1.00 | 0.83 | 0.71 |
+| threshold_ratio | 1.00 | 1.00 | 0.67 | 0.67 |
+| operator | 1.00 | 1.00 | 1.00 | 0.67 |
+
+On documents written to be extractable, the regexes win — which is exactly what a $0 baseline is
+for, and exactly the claim that needs re-testing the day a real trust deed arrives. Every report
+says so on its first line.
+
+A metric with no data reports nothing rather than zero: a corpus nobody has run the LLM over has no
+rules-vs-LLM agreement rate, not a perfect one.
+
+Operating it day to day, including what each review-queue trigger means and what to do when a
+document is stuck, is in [docs/operate.md](docs/operate.md). Deployment is in
+[docs/deploy.md](docs/deploy.md).
+
 Tests run against a dedicated `opuscovintel_test` database, created on first use, so they never
 depend on — or disturb — your development data. Override with `TEST_DATABASE_URL`. Database-backed
 tests skip when Postgres is unreachable, which is convenient locally and dangerous in CI, so CI
@@ -151,7 +182,7 @@ make run         # uvicorn with autoreload on :8000
 | `app/rules/` | Deterministic covenant evaluation, money and dates. Pure functions. |
 | `app/retrieval/` | Hybrid retrieval: pgvector + tsvector, fused by reciprocal rank. |
 | `app/query/` | The deterministic query path — intent, evidence, refusal. |
-| `app/evals/` | Golden question set. Metrics harness lands in Phase 8. |
+| `app/evals/` | Golden questions, labelled ground truth, and the metrics harness behind `make eval`. |
 | `app/agent/` | LangGraph query graph + SQL guardrail. Deterministic — no model calls. |
 
 ## The four things that make this auditable

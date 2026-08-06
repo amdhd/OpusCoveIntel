@@ -53,7 +53,7 @@ change the wiring, in the same commit.
 | Scanned / low-confidence page OCR | GPT vision model (`VLM_MODEL`) | **built, unwired** — `VlmService` has no caller | Only pages that fail the text-layer check |
 | Embeddings | Qwen `text-embedding-v4`, **1024 dims** | **inactive** — falls back to `HashingEmbedder` without `QWEN_API_KEY` | Strong multilingual (EN + Bahasa Malaysia) |
 | Answer synthesis | `claude-opus-5`, `effort: medium` | **not built** — `app/agent/` is fully deterministic and imports nothing from `app/llm/` | Citation discipline, refusal calibration |
-| Eval judge (faithfulness) | `claude-opus-5`, separate prompt version | **not built** — no eval harness exists | Must not share prompt with generator |
+| Eval judge (faithfulness) | `claude-opus-5`, separate prompt version | **not built** — `app/evals/` scores faithfulness deterministically (citations re-verified against their chunks); no model is called | Must not share prompt with generator |
 
 ### Anthropic API rules (verified against current API)
 
@@ -172,9 +172,12 @@ make up          # docker compose: postgres+pgvector, api, worker
 make migrate     # alembic upgrade head
 make lint type test
 make ingest-sample && make extract-sample && make query-sample
-make eval        # golden-set metrics → evals/results/
-make cost-report # spend by document, stage, provider
+make ingest-corpus  # all three labelled fixtures — what `make eval` scores
+make eval        # extraction F1 + golden-set metrics → evals/results/. $0
+make cost-report # spend by document and stage, from the llm_calls ledger
 ```
+
+Operating and deploying: [docs/operate.md](docs/operate.md), [docs/deploy.md](docs/deploy.md).
 
 ---
 

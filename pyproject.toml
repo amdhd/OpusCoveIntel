@@ -109,7 +109,14 @@ disallow_untyped_defs = false
 # call. Confined to the two modules that touch the libraries directly -- the
 # parsed result crossing back into our code is a typed Pydantic model.
 [[tool.mypy.overrides]]
-module = ["app.ingest.pdf", "tests.fixtures.synthetic_pdf", "app.llm.vlm"]
+module = [
+    "app.ingest.pdf",
+    "tests.fixtures.synthetic_pdf",
+    "app.llm.vlm",
+    # Opens the fixture PDFs to check that every eval label quotes text the
+    # document actually contains.
+    "tests.test_evals_metrics",
+]
 disallow_untyped_calls = false
 
 # ---------------------------------------------------------------- pytest

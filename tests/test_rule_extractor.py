@@ -95,6 +95,35 @@ def test_a_rating_trigger_captures_the_notch_and_the_agency() -> None:
     assert trigger.terms.rating_agency is RatingAgency.MARC
 
 
+def test_the_agency_travels_with_the_notch_into_the_persisted_fields() -> None:
+    """`normalized` becomes `covenants.thresholds_json`, so the agency must be in it.
+
+    It was resolved and then dropped on the way to the row: the covenant named a
+    trigger rating with no scale to read it against, and MARC's A- is not RAM's
+    A- (CLAUDE.md 6). The agency survived only in `rating_triggers`, which a
+    covenant query never reads. Found by `make eval` reporting a rating_agency
+    recall of zero for the rule extractor.
+    """
+    trigger = by_type(COVENANT_PAGE, ClauseType.RATING_TRIGGER)[0]
+
+    assert trigger.normalized["trigger_rating"] == "BBB+"
+    assert trigger.normalized["rating_agency"] == "MARC"
+
+
+def test_an_unknown_agency_is_left_out_rather_than_written_as_unknown() -> None:
+    """A clause naming no agency must not claim one. "unknown" is not a scale."""
+    text = (
+        "It shall be an event of default if the rating is downgraded below BBB-, "
+        "whereupon the Issuer shall procure additional security."
+    )
+    trigger = by_type(text, ClauseType.RATING_TRIGGER)[0]
+
+    assert trigger.terms is not None
+    assert trigger.terms.rating_agency is RatingAgency.UNKNOWN
+    assert trigger.normalized["trigger_rating"] == "BBB-"
+    assert "rating_agency" not in trigger.normalized
+
+
 def test_a_negative_pledge_is_detected_without_being_quantified() -> None:
     pledge = by_type(COVENANT_PAGE, ClauseType.NEGATIVE_PLEDGE)
 
