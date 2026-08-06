@@ -74,9 +74,29 @@ def get_readonly_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
-    """FastAPI dependency yielding a read-write session."""
+    """FastAPI dependency yielding a read-write session, committed on success.
+
+    The commit belongs here rather than in each route. Without it a handler
+    that flushes -- which is what the review queue does, so that it can read
+    back the row it just changed -- returns 200 and then loses the write when
+    the session closes. That shipped: approvals reported success and the row
+    stayed `pending`.
+
+    Services that manage their own transactions (ingestion, extraction) are
+    unaffected; committing an already-committed session is a no-op.
+
+    FastAPI throws a handler's exception into this generator, so the rollback
+    covers the case a route raises after flushing -- a 409 on an already-decided
+    review must leave nothing behind.
+    """
     async with get_sessionmaker()() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        else:
+            await session.commit()
 
 
 async def get_readonly_session() -> AsyncIterator[AsyncSession]:

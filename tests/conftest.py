@@ -285,12 +285,18 @@ async def api_client(
     ways that look like flaky tests rather than a fixture bug.
     """
     from app.api.routes.documents import get_ingestion_service
-    from app.db.session import get_session
+    from app.db.session import get_readonly_session, get_session
     from app.ingest.service import IngestionService
     from app.main import create_app
 
     app = create_app()
     app.dependency_overrides[get_session] = lambda: db_session
+    # The query agent reads through the read-only role in production. A second
+    # role would need a second connection, and a second connection cannot see
+    # this test's uncommitted rows -- so both map to the one rolled-back
+    # session here. What that role is actually *denied* is covered by
+    # test_agent_sessions.py, which is where it belongs.
+    app.dependency_overrides[get_readonly_session] = lambda: db_session
     app.dependency_overrides[get_ingestion_service] = lambda: IngestionService(
         db_session, object_store
     )
