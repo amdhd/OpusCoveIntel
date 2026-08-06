@@ -64,6 +64,23 @@ class CovenantRepository(BaseRepository[Covenant]):
         )
         return result.scalars().all()
 
+    async def list_with_clause_for_document(
+        self, document_id: uuid.UUID
+    ) -> Sequence[tuple[Covenant, Clause]]:
+        """Covenants paired with the clause that evidences them.
+
+        The eval harness reads extraction output through this rather than
+        through raw SQL, so it sees the same rows every other reader does and
+        stays usable against the read-only role.
+        """
+        result = await self.session.execute(
+            select(Covenant, Clause)
+            .join(Clause, Covenant.clause_id == Clause.id)
+            .where(Clause.document_id == document_id)
+            .order_by(Clause.page_number)
+        )
+        return [(covenant, clause) for covenant, clause in result.all()]
+
     async def count_for_document(self, document_id: uuid.UUID) -> int:
         result = await self.session.execute(
             select(func.count())
@@ -111,6 +128,14 @@ class CovenantRepository(BaseRepository[Covenant]):
 
 class CallScheduleRepository(BaseRepository[CallSchedule]):
     model = CallSchedule
+
+    async def list_for_instrument(self, instrument_id: uuid.UUID) -> Sequence[CallSchedule]:
+        result = await self.session.execute(
+            select(CallSchedule)
+            .where(CallSchedule.instrument_id == instrument_id)
+            .order_by(CallSchedule.call_date)
+        )
+        return result.scalars().all()
 
     async def list_between(
         self, start: dt.date, end: dt.date, *, limit: int = 500
