@@ -251,6 +251,19 @@ def build_scanned_document() -> bytes:
     return _to_bytes(document)
 
 
+def build_prose_document(body: str, *, heading: str = "DOCUMENT") -> bytes:
+    """A one-page text document from arbitrary prose.
+
+    For the case the covenant fixtures cannot express: a document that reads
+    like a real financial announcement and contains no covenant language at
+    all. That is the input candidate detection must return *nothing* for, and
+    a fixture built from covenant blocks can never test it.
+    """
+    document = pymupdf.open()
+    _text_page(document, [(BOLD_FONT, heading), (BODY_FONT, body)])
+    return _to_bytes(document)
+
+
 def build_mixed_document() -> bytes:
     """A readable page followed by a scanned one -- the common real-world shape."""
     document = pymupdf.open()
