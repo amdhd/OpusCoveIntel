@@ -451,3 +451,115 @@ async def test_pipeline_handles_candidate_without_rule_match(
     assert ExtractionMethod.RULE in methods
     # LLM clauses may or may not appear depending on candidate detection +
     # mock output — both are acceptable.
+
+
+class TestRuleExtractionIsPersistedBeforeSpending:
+    """PLAN.md 3: the rules are the fallback when the budget guard trips.
+
+    That fallback did not exist. The pipeline ran the rule extractor purely as
+    an in-memory comparison baseline and persisted none of it, so a document
+    that exhausted its budget on the first candidate ended up with nothing at
+    all -- the deterministic half having been computed and discarded.
+    """
+
+    async def test_rule_clauses_are_written_by_the_pipeline(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        mock_router: LLMRouter,
+        seeded_universe: None,
+    ) -> None:
+        document_id = indexed_corpus[0]
+        # Clear what the fixture's own RuleExtractionService run persisted, so
+        # this asserts the pipeline wrote them rather than inheriting them.
+        await _delete_clauses(db_session, document_id, ExtractionMethod.RULE)
+        await _reset_rule_job(db_session, document_id)
+
+        outcome = await ExtractionPipeline(db_session, router=mock_router).extract(document_id)
+
+        assert outcome.rule_clauses > 0
+        assert await _clause_count(db_session, document_id, ExtractionMethod.RULE) > 0
+
+    async def test_a_budget_exhausted_document_still_keeps_the_rule_extraction(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        seeded_universe: None,
+    ) -> None:
+        """The whole point of the fallback, exercised at the moment it matters."""
+        from app.core.config import Settings
+
+        document_id = indexed_corpus[0]
+        await _delete_clauses(db_session, document_id, ExtractionMethod.RULE)
+        await _reset_rule_job(db_session, document_id)
+
+        broke = Settings(ENVIRONMENT="test", MAX_COST_PER_CALL_USD=Decimal("0.000001"))
+        pipeline = ExtractionPipeline(
+            db_session,
+            router=LLMRouter(db_session, provider=MockLLMProvider(), settings=broke),
+        )
+
+        outcome = await pipeline.extract(document_id)
+
+        assert outcome.budget_exceeded
+        assert outcome.llm_clauses == 0, "no LLM work should have completed"
+        assert outcome.rule_clauses > 0, (
+            "the deterministic extractor is the fallback; its rows must survive "
+            "a budget-exhausted run"
+        )
+        assert await _clause_count(db_session, document_id, ExtractionMethod.RULE) > 0
+
+    async def test_the_reported_row_count_matches_the_database(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        mock_router: LLMRouter,
+        seeded_universe: None,
+    ) -> None:
+        """`rule_clauses` must be rows, not an estimate.
+
+        The field it replaced counted in-memory extractions while reading like
+        a row count, which is how the missing persistence went unnoticed.
+        """
+        document_id = indexed_corpus[0]
+        await _delete_clauses(db_session, document_id, ExtractionMethod.RULE)
+        await _reset_rule_job(db_session, document_id)
+
+        outcome = await ExtractionPipeline(db_session, router=mock_router).extract(document_id)
+
+        assert outcome.rule_clauses == await _clause_count(
+            db_session, document_id, ExtractionMethod.RULE
+        )
+        assert outcome.rule_clauses > 0
+
+
+async def _delete_clauses(
+    session: AsyncSession, document_id: uuid.UUID, method: ExtractionMethod
+) -> None:
+    result = await session.execute(
+        select(Clause).where(Clause.document_id == document_id, Clause.method == method)
+    )
+    for clause in result.scalars().all():
+        await session.delete(clause)
+    await session.flush()
+
+
+async def _reset_rule_job(session: AsyncSession, document_id: uuid.UUID) -> None:
+    """Let the rule extractor run again for this document.
+
+    Its job identity makes a completed run a no-op, which is correct in
+    production and unhelpful in a test that wants to observe the run.
+    """
+    from app.db.models.ops import ExtractionJob
+    from app.domain.enums import JobType
+
+    result = await session.execute(
+        select(ExtractionJob).where(
+            ExtractionJob.document_id == document_id,
+            ExtractionJob.job_type == JobType.EXTRACT_COVENANT,
+            ExtractionJob.model_id == "none",
+        )
+    )
+    for job in result.scalars().all():
+        await session.delete(job)
+    await session.flush()
