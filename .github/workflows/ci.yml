@@ -165,6 +165,78 @@ jobs:
         # production. This asks the migrated database directly.
         run: uv run opuscovintel check-schema
 
+  eval:
+    name: eval harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # A fourth job for the same reason as the first three: it fails for its own
+    # reason. `check` says the code is wrong, `migrations` says the schema is,
+    # and this says the pipeline no longer extracts what it used to -- which the
+    # unit tests cannot tell you, because it is a measurement rather than an
+    # assertion about one function.
+    #
+    # $0 by construction: no metric calls a model, and the same "no provider
+    # credentials" step guards it as guards `check` (CLAUDE.md 7).
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: opuscovintel
+          POSTGRES_PASSWORD: opuscovintel
+          POSTGRES_DB: opuscovintel
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U opuscovintel -d opuscovintel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify no paid API calls are possible
+        run: |
+          for name in ANTHROPIC_API_KEY OPENAI_API_KEY QWEN_API_KEY; do
+            if [ -n "${!name:-}" ]; then
+              # No backticks in this string: inside double quotes the shell
+              # would run whatever they contain.
+              echo "::error::$name is set; the eval harness must cost nothing"
+              exit 1
+            fi
+          done
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - run: uv sync --all-groups --locked
+
+      - name: Prepare the database
+        env:
+          PGPASSWORD: opuscovintel
+        run: |
+          psql -h localhost -U opuscovintel -d opuscovintel -v ON_ERROR_STOP=1 \
+            -f docker/postgres/init/01-init.sql
+
+      - name: Ingest the corpus and score it
+        # `eval-demo` is migrate + seed + ingest + index + extract + eval, so
+        # this also proves the $0 pipeline still runs end to end from nothing.
+        # `opuscovintel eval` exits non-zero when a read path misses its
+        # PLAN.md target (6/10 deterministic, 8/10 agent).
+        run: make eval-demo
+
+      - name: Publish the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: evals/results/
+          if-no-files-found: warn
+
   image:
     name: docker image
     runs-on: ubuntu-latest

@@ -1,9 +1,10 @@
 .DEFAULT_GOAL := help
 .PHONY: help install lint fmt type test test-live check run worker \
         up down down-volumes logs psql shell migrate migration migrate-down seed \
-        sample-pdf ingest-sample index extract-sample extract-llm-dry-run extract-llm \
+        sample-pdf ingest-sample corpus ingest-corpus index extract-sample \
+        extract-llm-dry-run extract-llm \
         ocr ocr-dry-run \
-        query-sample ask-sample golden demo clean
+        query-sample ask-sample golden eval eval-demo cost-report demo clean
 
 UV := uv
 
@@ -89,6 +90,17 @@ sample-pdf:  ## Generate the synthetic prospectus fixture
 ingest-sample: sample-pdf  ## Ingest the synthetic prospectus (parse, score, chunk). $0
 	$(UV) run opuscovintel ingest $(SAMPLE_PDF)
 
+CORPUS_DIR := var/corpus
+
+corpus:  ## Generate all three synthetic fixtures (prospectus, trust deed, rating report)
+	$(UV) run python -m tests.fixtures.synthetic_pdf $(CORPUS_DIR)
+
+# `make eval` scores all three labelled documents. Ingesting only the
+# prospectus reports the other two as "never ingested" and computes extraction
+# metrics over a third of the corpus.
+ingest-corpus: corpus  ## Ingest the whole synthetic corpus. Idempotent by hash, $0
+	@for pdf in $(CORPUS_DIR)/*.pdf; do $(UV) run opuscovintel ingest "$$pdf"; done
+
 # -- search, rules and query ---------------------------------------------
 
 index:  ## Embed + full-text index every document. $0 (offline embedder)
@@ -120,6 +132,16 @@ ask-sample:  ## Answer the same question through the LangGraph agent. Logged + a
 
 golden:  ## Run the golden question set. Phase 4 target: 6/10 with zero LLM calls
 	$(UV) run opuscovintel golden
+
+# -- evaluation ----------------------------------------------------------
+
+eval:  ## Score extraction + answers -> evals/results/. $0, no model calls
+	$(UV) run opuscovintel eval
+
+eval-demo: migrate seed ingest-corpus index extract-sample eval  ## Corpus + eval from nothing
+
+cost-report:  ## LLM spend by stage and by document, from the llm_calls ledger. $0
+	$(UV) run opuscovintel cost-report
 
 demo: migrate seed ingest-sample index extract-sample golden  ## Full $0 pipeline, end to end
 
