@@ -32,7 +32,11 @@ from app.rules.ratings import normalise as normalise_rating
 
 logger = get_logger(__name__)
 
-EXTRACTOR_VERSION: Final[str] = "rules-v1"
+# Part of the extraction identity (CLAUDE.md 1.7). Bumped to v2 when the rating
+# agency started travelling with the trigger notch: the output of this module
+# changed, and without a bump every already-extracted document would be skipped
+# as "identity already satisfied" and keep the old, agency-less rows for ever.
+EXTRACTOR_VERSION: Final[str] = "rules-v2"
 
 # How far around a match to look for the number it refers to. A cross-default
 # clause names its threshold in the same sentence; widening this to the chunk
@@ -131,6 +135,15 @@ def _build(pattern: patterns.Pattern, match: re.Match[str], text: str) -> RuleEx
             normalized["threshold_currency"] = terms.threshold_currency or ""
         if terms.trigger_rating:
             normalized["trigger_rating"] = terms.trigger_rating
+            # The agency travels with the notch or the notch means nothing:
+            # MARC's A- and RAM's AA3 are different scales (CLAUDE.md 6). It was
+            # resolved here and then dropped on the way to `covenants`, so the
+            # covenant row named a trigger rating no reader could place --
+            # visible only in `rating_triggers`, which portfolio queries about
+            # covenants do not read. UNKNOWN is left out rather than written: an
+            # absent agency is a fact, "unknown" as a value is noise.
+            if terms.rating_agency is not RatingAgency.UNKNOWN:
+                normalized["rating_agency"] = terms.rating_agency.value
         if terms.operator:
             normalized["operator"] = terms.operator.value
 
