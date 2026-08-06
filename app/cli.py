@@ -3,16 +3,18 @@
 Configuration, seeding, ingestion, indexing, extraction and the deterministic
 query path.
 
-**One command in this file spends money: `extract`.** Everything else is $0 and
-stays that way. Because `extract` is the exception, it behaves differently from
-its neighbours on purpose:
+**Two commands in this file spend money: `extract` and `ocr`.** Everything else
+is $0 and stays that way. Because those two are the exception, they behave
+differently from their neighbours on purpose:
 
-* it refuses to run without an explicit target -- `extract-rules` defaults to
-  every document, and the same default here is the "$10 keystroke" CLAUDE.md
-  warns about;
-* `--dry-run` prices a document from its candidate spans without dispatching
-  anything;
-* it prints the ceilings and asks before spending, unless `--yes`.
+* they refuse to run without an explicit target -- `extract-rules` defaults to
+  every document, and the same default on a billable command is the "$10
+  keystroke" CLAUDE.md warns about;
+* `--dry-run` prices the work without dispatching anything;
+* they print the ceilings and ask before spending, unless `--yes`.
+
+`ocr` also chunks what the model read, in the same command. Separating the two
+is how a transcription came to be stored and never looked at.
 """
 
 from __future__ import annotations
@@ -295,6 +297,133 @@ def extract(
                             typer.echo(f"  ! {error}")
                 finally:
                     # Adapters hold an httpx client each; the router closes them.
+                    await router.aclose()
+        finally:
+            await dispose_engines()
+
+    asyncio.run(_run())
+
+
+@app.command()
+def ocr(
+    document_id: str | None = typer.Argument(None, help="The document to OCR."),
+    all_documents: bool = typer.Option(False, "--all", help="Every document with flagged pages."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Report which pages would be sent, and what they would cost."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the spend confirmation."),
+) -> None:
+    """OCR scanned pages with the vision model, then chunk what it read.
+
+    **This spends money.** Both halves run together on purpose: a transcription
+    nobody chunked is spend that bought nothing retrievable, which is what the
+    VLM did until this command existed.
+
+    A document needing more than `MAX_VLM_PAGES_PER_DOC` pages fails loudly
+    rather than processing the first N (CLAUDE.md 4).
+    """
+    import uuid as _uuid
+
+    from app.db.repositories.documents import DocumentPageRepository, DocumentRepository
+    from app.db.session import get_sessionmaker
+    from app.ingest.ocr_chunks import OcrChunkingService
+    from app.llm.adapters._http import ProviderQuotaExhaustedError
+    from app.llm.cost import estimate_vlm_page_cost
+    from app.llm.vlm import VlmPageCapExceededError, VlmService
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    if not document_id and not all_documents:
+        typer.echo("Refusing to guess: pass a document id, or --all to mean it.", err=True)
+        raise typer.Exit(code=2)
+
+    if settings.OPENAI_API_KEY is None and not dry_run:
+        typer.echo(
+            "OPENAI_API_KEY is not set. Set it, or use --dry-run to see what would be sent.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
+    async def _run() -> None:
+        from app.llm.router import LLMRouter
+
+        try:
+            async with get_sessionmaker()() as session:
+                targets = (
+                    [_uuid.UUID(document_id)]
+                    if document_id
+                    else [row.id for row in await DocumentRepository(session).list(limit=500)]
+                )
+
+                pages_repo = DocumentPageRepository(session)
+                flagged: dict[_uuid.UUID, int] = {}
+                for target in targets:
+                    pages = await pages_repo.list_needing_vlm(
+                        target, confidence_threshold=settings.DEFAULT_CONFIDENCE_THRESHOLD
+                    )
+                    if pages:
+                        flagged[target] = len(pages)
+
+                total_pages = sum(flagged.values())
+                if not total_pages:
+                    typer.echo("No pages are flagged for the vision model. Nothing to do, $0.")
+                    return
+
+                per_page = estimate_vlm_page_cost()
+                for target, count in flagged.items():
+                    over = count > settings.MAX_VLM_PAGES_PER_DOC
+                    note = (
+                        f"  ** exceeds MAX_VLM_PAGES_PER_DOC={settings.MAX_VLM_PAGES_PER_DOC}; "
+                        f"this document will be refused **"
+                        if over
+                        else ""
+                    )
+                    typer.echo(f"{target}: {count} page(s), ~${per_page * count:.4f}{note}")
+
+                if dry_run:
+                    typer.echo("\nDry run: nothing was dispatched and nothing was charged.")
+                    return
+
+                typer.echo(
+                    f"\nEstimated ~${per_page * total_pages:.4f} for {total_pages} page(s) "
+                    f"at ~${per_page}/page · ceilings ${settings.MAX_COST_PER_CALL_USD}/call · "
+                    f"${settings.MAX_COST_PER_DOCUMENT_USD}/document"
+                )
+                if not yes and not typer.confirm(
+                    f"Send {total_pages} page image(s) to {settings.VLM_MODEL}?"
+                ):
+                    typer.echo("Aborted; nothing was charged.")
+                    return
+
+                router = LLMRouter(session)
+                try:
+                    vlm = VlmService(session, router=router)
+                    rechunker = OcrChunkingService(session)
+                    for target in flagged:
+                        try:
+                            outcome = await vlm.process_document(target)
+                        except VlmPageCapExceededError as exc:
+                            typer.echo(f"{target}: refused — {exc}")
+                            continue
+                        except ProviderQuotaExhaustedError as exc:
+                            # Every remaining page would fail identically, and
+                            # backoff cannot fix a billing state. Say what to do.
+                            typer.echo(f"\n{exc.provider} is out of credit: {exc.detail}", err=True)
+                            raise typer.Exit(code=3) from exc
+                        # Chunk in the same breath. Splitting these into two
+                        # commands is how the transcription ended up stored and
+                        # unread in the first place.
+                        rechunked = await rechunker.rechunk_document(target)
+                        await session.commit()
+                        typer.echo(
+                            f"{target}: {outcome.pages_processed} page(s) OCR'd, "
+                            f"{outcome.pages_failed} failed, "
+                            f"{rechunked.chunks_created} chunk(s) created, "
+                            f"${outcome.total_cost_usd:.4f}"
+                        )
+                        typer.echo("    now run `index` to make the new chunks retrievable")
+                finally:
                     await router.aclose()
         finally:
             await dispose_engines()

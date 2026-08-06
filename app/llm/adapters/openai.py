@@ -17,6 +17,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.llm.adapters._http import post_with_retry
 
 logger = get_logger(__name__)
 
@@ -96,8 +97,7 @@ class OpenAIAdapter:
             },
         )
 
-        response = await self._client.post("/chat/completions", json=body)
-        response.raise_for_status()
+        response = await post_with_retry(self._client, "/chat/completions", body, provider="openai")
         data = response.json()
 
         choice = data.get("choices", [{}])[0]
@@ -163,8 +163,7 @@ class OpenAIAdapter:
             },
         )
 
-        response = await self._client.post("/chat/completions", json=body)
-        response.raise_for_status()
+        response = await post_with_retry(self._client, "/chat/completions", body, provider="openai")
         data = response.json()
 
         choice = data.get("choices", [{}])[0]
