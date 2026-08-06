@@ -35,6 +35,7 @@ from app.db.repositories.clauses import ClauseRepository, CovenantRepository
 from app.db.repositories.documents import DocumentChunkRepository, DocumentRepository
 from app.db.repositories.ops import ExtractionJobRepository, HumanReviewRepository
 from app.domain.enums import (
+    CovenantType,
     DocumentStatus,
     ExtractionMethod,
     ExtractionStatus,
@@ -65,7 +66,8 @@ logger = get_logger(__name__)
 # Part of the extraction identity (CLAUDE.md 1.7). Bump it when a change to
 # this pipeline should invalidate prior runs even though the prompt and model
 # are unchanged.
-LLM_EXTRACTOR_VERSION = "llm-pipeline-v1"
+# v2: multi-covenant spans, and rule matching paired by covenant type.
+LLM_EXTRACTOR_VERSION = "llm-pipeline-v2"
 
 # CLAUDE.md §5: monetary thresholds above this go to human review.
 HIGH_VALUE_THRESHOLD = Decimal("100000000")
@@ -106,6 +108,9 @@ class PipelineOutcome:
     llm_candidates: int = 0
     llm_extracted: int = 0
     llm_failed: int = 0
+    # Spans the model read and correctly found no covenant in. Not a failure --
+    # candidate detection is tuned for recall, so some spans genuinely hold none.
+    llm_empty_spans: int = 0
     llm_clauses: int = 0
     llm_covenants: int = 0
     disagreements: int = 0
@@ -302,7 +307,7 @@ class ExtractionPipeline:
 
         # --- Compare, persist, and route to review --------------------------
         for llm_result in llm_results:
-            if llm_result.output is not None:
+            if llm_result.succeeded:
                 await self._handle_llm_success(
                     document, llm_result, rule_results, instrument_id, outcome
                 )
@@ -342,10 +347,42 @@ class ExtractionPipeline:
         instrument_id: uuid.UUID | None,
         outcome: PipelineOutcome,
     ) -> None:
-        output = llm_result.output
-        assert output is not None
         candidate = llm_result.candidate
 
+        if not llm_result.outputs:
+            # A valid, useful answer: the span holds no covenant. Persisting a
+            # placeholder clause to record that would put a row in the citation
+            # chain asserting there is nothing to cite.
+            logger.info(
+                "candidate span held no covenant",
+                extra={
+                    "document_id": str(document.id),
+                    "candidate_chunk_id": str(candidate.chunk_id),
+                    "candidate_page": candidate.page_number,
+                },
+            )
+            outcome.llm_empty_spans += 1
+            return
+
+        # Every covenant in the span, each persisted as its own cited clause.
+        # A single sentence stating a gearing ratio *and* a finance service
+        # cover is two covenants with two quotes, and the previous shape could
+        # only ever record the first.
+        for output in llm_result.outputs:
+            await self._persist_one_llm_covenant(
+                document, candidate, output, rule_results, instrument_id, outcome
+            )
+
+    async def _persist_one_llm_covenant(
+        self,
+        document: Document,
+        candidate: Candidate,
+        output: LLMCovenantExtraction,
+        rule_results: _RuleIndex,
+        instrument_id: uuid.UUID | None,
+        outcome: PipelineOutcome,
+    ) -> None:
+        """Verify and persist one covenant from a span that may hold several."""
         # Full citation verification against the chunk text.
         chunk = await self._chunks.get(candidate.chunk_id)
         if chunk is None:
@@ -384,7 +421,7 @@ class ExtractionPipeline:
         # Find the rule extraction covering the same span, if any. Computed
         # once and passed down -- recomputing it in the review-trigger check
         # was both wasted work and a place for the two answers to drift.
-        rule_match = self._find_rule_match(candidate, rule_results)
+        rule_match = self._find_rule_match(candidate, rule_results, output.covenant_type)
         disagrees = rule_match is not None and _fields_disagree(output, rule_match[0])
         if disagrees:
             outcome.disagreements += 1
@@ -523,24 +560,40 @@ class ExtractionPipeline:
         self,
         candidate: Candidate,
         rule_results: _RuleIndex,
+        covenant_type: CovenantType | None = None,
     ) -> _RuleResult | None:
-        """The rule extraction overlapping the candidate, within its own chunk.
+        """The rule extraction to compare one LLM covenant against.
 
-        Where several rule extractions overlap the span -- a sentence carrying
-        two financial covenants does exactly that -- the one overlapping most
-        wins, so the comparison is against the closest rule reading rather than
-        whichever happened to be found first.
+        **Matched on covenant type first, overlap second.** Overlap alone was
+        right while the LLM returned one covenant per span: pick the closest
+        rule reading and compare. Once a span can yield several, that rule
+        paired every covenant in it with the *same* extraction — so in a
+        sentence stating a gearing ratio and a finance service cover, the second
+        covenant was compared against the first one's rule reading and disagreed
+        by construction. It sent the review queue thirteen disagreements where
+        there were four, on a run whose accuracy had just improved.
+
+        Falling back to best-overlap when no same-type extraction exists is
+        deliberate: that pairing is what a genuine type disagreement looks like,
+        and it is exactly the case PLAN.md 3 wants a human to see.
         """
-        best: _RuleResult | None = None
-        best_overlap = 0
+        candidates: list[tuple[int, _RuleResult]] = []
         for rule_extraction, chunk in rule_results.get(candidate.chunk_id, ()):
             overlap = min(rule_extraction.char_end, candidate.char_end) - max(
                 rule_extraction.char_start, candidate.char_start
             )
-            if overlap > best_overlap:
-                best_overlap = overlap
-                best = (rule_extraction, chunk)
-        return best
+            if overlap > 0:
+                candidates.append((overlap, (rule_extraction, chunk)))
+
+        if not candidates:
+            return None
+
+        if covenant_type is not None:
+            same_type = [item for item in candidates if item[1][0].covenant_type is covenant_type]
+            if same_type:
+                return max(same_type, key=lambda item: item[0])[1]
+
+        return max(candidates, key=lambda item: item[0])[1]
 
     def _covenant_review_trigger(
         self,
@@ -652,6 +705,7 @@ class ExtractionPipeline:
                 "llm_candidates": outcome.llm_candidates,
                 "llm_extracted": outcome.llm_extracted,
                 "llm_failed": outcome.llm_failed,
+                "llm_empty_spans": outcome.llm_empty_spans,
                 "llm_clauses": outcome.llm_clauses,
                 "llm_covenants": outcome.llm_covenants,
                 "disagreements": outcome.disagreements,
@@ -717,6 +771,15 @@ class ExtractionPipeline:
         cascade with their clause. This mirrors `RuleExtractionService`, which
         has always done it -- the LLM path did not, so a second run doubled
         every clause and covenant rather than replacing them.
+
+        **The queue entries go with them.** `human_reviews.entity_id` is a
+        polymorphic UUID with no foreign key, so nothing cascades: after four
+        re-runs of this corpus, 13 of 15 disagreement entries pointed at
+        covenants that no longer existed. A reviewer would open them to find
+        nothing, and the eval harness counted every one, reporting an agreement
+        rate of 0.12 for a run whose pipeline had found three disagreements.
+        Only still-pending entries are cleared -- a decided one is the human
+        judgement this method exists to preserve.
         """
         result = await self._session.execute(
             select(Clause).where(
@@ -725,7 +788,25 @@ class ExtractionPipeline:
                 Clause.review_status.not_in(_HUMAN_TOUCHED),
             )
         )
-        for clause in result.scalars().all():
+        clauses = list(result.scalars().all())
+        covenant_ids = [
+            covenant.id
+            for clause in clauses
+            for covenant in await self._covenants.list_for_clause(clause.id)
+        ]
+        doomed = {clause.id for clause in clauses} | set(covenant_ids)
+
+        if doomed:
+            pending = await self._session.execute(
+                select(HumanReview).where(
+                    HumanReview.entity_id.in_(doomed),
+                    HumanReview.status == ReviewStatus.PENDING,
+                )
+            )
+            for review in pending.scalars().all():
+                await self._session.delete(review)
+
+        for clause in clauses:
             await self._session.delete(clause)
         await self._session.flush()
 

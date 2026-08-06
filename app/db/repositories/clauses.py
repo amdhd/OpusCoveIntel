@@ -81,6 +81,16 @@ class CovenantRepository(BaseRepository[Covenant]):
         )
         return [(covenant, clause) for covenant, clause in result.all()]
 
+    async def list_for_clause(self, clause_id: uuid.UUID) -> Sequence[Covenant]:
+        """Covenants derived from one clause.
+
+        Needed to clear the review-queue entries that name them: those rows
+        carry a polymorphic `entity_id` with no foreign key, so deleting a
+        covenant leaves its queue entry behind pointing at nothing.
+        """
+        result = await self.session.execute(select(Covenant).where(Covenant.clause_id == clause_id))
+        return result.scalars().all()
+
     async def count_for_document(self, document_id: uuid.UUID) -> int:
         result = await self.session.execute(
             select(func.count())

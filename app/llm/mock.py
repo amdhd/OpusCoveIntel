@@ -201,6 +201,22 @@ def _ground_in_input(
     """
     properties = schema.get("properties", {})
 
+    # A response whose payload is a list of objects (the extraction schema is
+    # `{"covenants": [...]}`) is grounded element-wise. `_minimal_valid_instance`
+    # builds an empty list for an array, which validates but exercises nothing:
+    # the pipeline would see "no covenants here" for every span and CI would
+    # never reach covenant persistence at all.
+    for name, prop in properties.items():
+        if prop.get("type") != "array":
+            continue
+        item_schema = prop.get("items")
+        if not isinstance(item_schema, dict) or "properties" not in item_schema:
+            continue
+        element = _minimal_valid_instance(item_schema)
+        if isinstance(element, dict):
+            _ground_in_input(element, item_schema, messages)
+            instance[name] = [element]
+
     for field in _FORCED_ENUM_FIELDS:
         if field in properties and instance.get(field) is None:
             choice = _first_enum_value(properties[field])
