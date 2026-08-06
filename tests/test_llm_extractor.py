@@ -25,7 +25,11 @@ from app.domain.enums import (
 from app.domain.rules import ComparisonOperator
 from app.extract.candidates import Candidate
 from app.extract.llm_extractor import LLMExtractor
-from app.extract.schemas import EXTRACTION_JSON_SCHEMA, LLMCovenantExtraction
+from app.extract.schemas import (
+    EXTRACTION_JSON_SCHEMA,
+    LLMCovenantExtraction,
+    LLMExtractionResponse,
+)
 from app.llm.mock import MockLLMProvider
 from app.llm.router import LLMRouter
 
@@ -65,11 +69,12 @@ async def test_mock_extraction_produces_valid_output(
 ) -> None:
     result = await extractor.extract(candidate)
 
-    assert result.output is not None
+    assert result.succeeded
+    assert result.outputs
     assert result.extraction_status is ExtractionStatus.EXTRACTED
-    assert isinstance(result.output, LLMCovenantExtraction)
+    assert isinstance(result.outputs[0], LLMCovenantExtraction)
     # The mock returns minimal valid instances — clause_type defaults to the first enum.
-    assert isinstance(result.output.clause_type, ClauseType)
+    assert isinstance(result.outputs[0].clause_type, ClauseType)
     assert result.cost_usd >= Decimal("0")
     assert result.model_id != ""
 
@@ -81,10 +86,10 @@ async def test_mock_extraction_is_deterministic(
     first = await extractor.extract(candidate)
     second = await extractor.extract(candidate)
 
-    assert first.output is not None
-    assert second.output is not None
+    assert first.outputs
+    assert second.outputs
     # The mock returns the same content-hash-keyed result.
-    assert first.output.clause_type == second.output.clause_type
+    assert first.outputs[0].clause_type == second.outputs[0].clause_type
 
 
 async def test_extraction_includes_cost(extractor: LLMExtractor, candidate: Candidate) -> None:
@@ -122,7 +127,7 @@ async def test_validation_error_records_the_failure(
     )
 
     validation = extractor._validate(bad_result, candidate)
-    assert validation.output is None
+    assert not validation.succeeded
     assert validation.extraction_status is ExtractionStatus.VALIDATION_FAILED
     assert len(validation.validation_errors) > 0
     assert not validation.retry_attempted
@@ -149,7 +154,7 @@ async def test_text_instead_of_json_is_caught(
     )
 
     validation = extractor._validate(bad_result, candidate)
-    assert validation.output is None
+    assert not validation.succeeded
     assert validation.extraction_status is ExtractionStatus.VALIDATION_FAILED
     assert any("text" in err.lower() for err in validation.validation_errors)
 
@@ -291,3 +296,109 @@ class TestSchemaIsAcceptedByTheStructuredOutputEndpoint:
                 source_quote="x",
                 confidence=1.5,  # ge=0, le=1 — no longer in the wire schema
             )
+
+
+class TestMultipleCovenantsPerSpan:
+    """The recall bug the eval harness found, pinned.
+
+    A span routinely states more than one covenant. The schema returned exactly
+    one, so the rest were lost with no error anywhere — the harness saw it only
+    as LLM recall 0.70 against the rule extractor's 0.98.
+    """
+
+    def test_the_response_schema_accepts_several(self) -> None:
+        response = LLMExtractionResponse.model_validate(
+            {
+                "covenants": [
+                    {
+                        "clause_type": "financial_covenant",
+                        "covenant_type": "gearing_ratio",
+                        "source_quote": "gearing ratio of not more than 1.75 times",
+                        "confidence": 0.96,
+                        "threshold_ratio": "1.75",
+                        "operator": "lte",
+                    },
+                    {
+                        "clause_type": "financial_covenant",
+                        "covenant_type": "finance_service_cover",
+                        "source_quote": "finance service cover ratio of not less than 1.50 times",
+                        "confidence": 0.96,
+                        "threshold_ratio": "1.50",
+                        "operator": "gte",
+                    },
+                ]
+            }
+        )
+
+        assert len(response.covenants) == 2
+        assert {c.covenant_type for c in response.covenants} == {
+            CovenantType.GEARING_RATIO,
+            CovenantType.FINANCE_SERVICE_COVER,
+        }
+
+    def test_an_empty_list_is_a_valid_answer(self) -> None:
+        """A span holding no covenant is a real outcome, not a failure.
+
+        Candidate detection is tuned for recall, so some spans genuinely hold
+        none. The old convention was a placeholder covenant at confidence 0.0 —
+        a covenant record asserting there was no covenant.
+        """
+        assert LLMExtractionResponse.model_validate({"covenants": []}).covenants == []
+
+    def test_a_malformed_response_cannot_masquerade_as_empty(self) -> None:
+        """`covenants` defaults to empty, so unknown keys must be refused.
+
+        Without `extra="forbid"` the old single-covenant payload validates as
+        "no covenants found", turning a broken call into a silent nothing
+        instead of the retry-then-review it deserves.
+        """
+        with pytest.raises(ValidationError):
+            LLMExtractionResponse.model_validate(
+                {"clause_type": "financial_covenant", "source_quote": "x", "confidence": 0.9}
+            )
+
+    def test_each_covenant_is_citation_checked_independently(
+        self, db_session: AsyncSession, candidate: Candidate
+    ) -> None:
+        """One bad quote among several must not condemn the others."""
+        from app.llm.router import LLMCallResult
+
+        extractor = LLMExtractor(
+            db_session, router=LLMRouter(db_session, provider=MockLLMProvider())
+        )
+        real = candidate.text[:80]
+
+        result = LLMCallResult(
+            content={
+                "covenants": [
+                    {
+                        "clause_type": "financial_covenant",
+                        "covenant_type": "gearing_ratio",
+                        "source_quote": real,
+                        "confidence": 0.95,
+                    },
+                    {
+                        "clause_type": "financial_covenant",
+                        "covenant_type": "interest_cover",
+                        "source_quote": "a quote that appears nowhere in the span at all, invented",
+                        "confidence": 0.95,
+                    },
+                ]
+            },
+            model_id="mock-v1",
+            provider="mock",
+            prompt_tokens=10,
+            completion_tokens=5,
+            cache_read_tokens=0,
+            cache_write_tokens=0,
+            estimated_cost_usd=Decimal("0.001"),
+            cache_hit=False,
+        )
+
+        extraction = extractor._validate(result, candidate)
+
+        assert extraction.succeeded
+        assert len(extraction.outputs) == 2
+        assert len(extraction.citation_checks) == 2
+        assert extraction.citation_checks[0].verified
+        assert not extraction.citation_checks[1].verified

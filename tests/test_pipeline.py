@@ -22,11 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.clauses import Clause, Covenant
 from app.db.models.documents import Document, DocumentChunk
 from app.db.models.ops import HumanReview
+from app.db.repositories.documents import DocumentChunkRepository
 from app.domain.enums import (
     ClauseType,
     CovenantType,
     DocumentStatus,
     ExtractionMethod,
+    ExtractionStatus,
     ReviewStatus,
 )
 from app.domain.extraction import RuleExtraction
@@ -563,3 +565,132 @@ async def _reset_rule_job(session: AsyncSession, document_id: uuid.UUID) -> None
     for job in result.scalars().all():
         await session.delete(job)
     await session.flush()
+
+
+class TestMultiCovenantSpans:
+    """A candidate span states several covenants; all of them must land."""
+
+    async def test_each_covenant_in_a_span_becomes_its_own_cited_clause(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        from app.extract.candidates import Candidate
+        from app.extract.llm_extractor import LLMExtraction
+        from app.extract.schemas import LLMCovenantExtraction
+
+        document_id = indexed_corpus[0]
+        chunks = await DocumentChunkRepository(db_session).list_for_document(document_id)
+        chunk = next(c for c in chunks if "gearing" in c.chunk_text.lower())
+
+        quote = chunk.chunk_text[: min(90, len(chunk.chunk_text))]
+        candidate = Candidate(
+            chunk_id=chunk.id,
+            text=chunk.chunk_text,
+            char_start=0,
+            char_end=len(chunk.chunk_text),
+            page_number=chunk.page_number,
+        )
+        two = [
+            LLMCovenantExtraction(
+                clause_type=ClauseType.FINANCIAL_COVENANT,
+                covenant_type=CovenantType.GEARING_RATIO,
+                source_quote=quote,
+                confidence=0.96,
+                threshold_ratio=Decimal("1.75"),
+                operator=ComparisonOperator.LTE,
+            ),
+            LLMCovenantExtraction(
+                clause_type=ClauseType.FINANCIAL_COVENANT,
+                covenant_type=CovenantType.FINANCE_SERVICE_COVER,
+                source_quote=quote,
+                confidence=0.96,
+                threshold_ratio=Decimal("1.50"),
+                operator=ComparisonOperator.GTE,
+            ),
+        ]
+
+        pipeline = ExtractionPipeline(
+            db_session, router=LLMRouter(db_session, provider=MockLLMProvider())
+        )
+        document = await db_session.get(Document, document_id)
+        assert document is not None
+        outcome = PipelineOutcome(document_id=document_id)
+
+        await pipeline._handle_llm_success(
+            document,
+            LLMExtraction(
+                candidate=candidate, outputs=two, extraction_status=ExtractionStatus.EXTRACTED
+            ),
+            {},
+            None,
+            outcome,
+        )
+
+        assert outcome.llm_clauses == 2, "both covenants must be persisted, not just the first"
+        assert outcome.llm_covenants == 2
+
+    async def test_an_empty_span_persists_nothing_and_is_not_a_failure(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """A span holding no covenant is a real answer, not an error."""
+        from app.extract.candidates import Candidate
+        from app.extract.llm_extractor import LLMExtraction
+
+        document_id = indexed_corpus[0]
+        chunks = await DocumentChunkRepository(db_session).list_for_document(document_id)
+        candidate = Candidate(
+            chunk_id=chunks[0].id,
+            text=chunks[0].chunk_text,
+            char_start=0,
+            char_end=len(chunks[0].chunk_text),
+            page_number=chunks[0].page_number,
+        )
+
+        pipeline = ExtractionPipeline(
+            db_session, router=LLMRouter(db_session, provider=MockLLMProvider())
+        )
+        document = await db_session.get(Document, document_id)
+        assert document is not None
+        outcome = PipelineOutcome(document_id=document_id)
+
+        await pipeline._handle_llm_success(
+            document,
+            LLMExtraction(
+                candidate=candidate, outputs=[], extraction_status=ExtractionStatus.EXTRACTED
+            ),
+            {},
+            None,
+            outcome,
+        )
+
+        assert outcome.llm_clauses == 0
+        assert outcome.queued_for_review == 0
+        assert outcome.llm_empty_spans == 1
+
+
+class TestReviewQueueDoesNotOrphan:
+    async def test_a_rerun_clears_the_queue_entries_it_invalidates(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """`human_reviews.entity_id` has no foreign key, so nothing cascades.
+
+        Left alone, every re-extraction stranded its pending queue entries
+        pointing at deleted covenants: a reviewer opens one and finds nothing,
+        and the eval harness counted them all, reporting agreement 0.12 on a
+        run that had found three disagreements.
+        """
+        document_id = indexed_corpus[0]
+        pipeline = ExtractionPipeline(
+            db_session, router=LLMRouter(db_session, provider=MockLLMProvider())
+        )
+
+        await pipeline.extract(document_id)
+        await pipeline.extract(document_id, force=True)
+
+        reviews = (await db_session.execute(select(HumanReview))).scalars().all()
+        orphans = []
+        for review in reviews:
+            model = {"covenant": Covenant, "clause": Clause}.get(review.entity_type)
+            if model is not None and await db_session.get(model, review.entity_id) is None:
+                orphans.append(review.entity_type)
+
+        assert not orphans, f"re-extraction stranded queue entries: {orphans}"

@@ -25,7 +25,7 @@ from app.domain.enums import ExtractionStatus, LLMStage
 from app.extract.candidates import Candidate
 from app.extract.citations import CitationCheck, verify_quote
 from app.extract.prompts import PROMPT_VERSION, build_system_prompt, build_user_message
-from app.extract.schemas import LLMCovenantExtraction
+from app.extract.schemas import LLMCovenantExtraction, LLMExtractionResponse
 from app.llm.router import LLMCallResult, LLMRouter
 
 logger = get_logger(__name__)
@@ -43,23 +43,30 @@ EXTRACTION_EFFORT: str = "high"
 class LLMExtraction:
     """Everything the LLM extractor produced from one candidate span.
 
-    `output` is None when extraction failed (validation, budget, or error).
-    `extraction_status` says why, and `validation_errors` carries the details.
+    `outputs` holds every covenant the model found in the span — a list,
+    because a span routinely states more than one and the previous
+    single-covenant shape silently dropped all but the first.
+
+    An empty `outputs` with `extraction_status == EXTRACTED` is a real answer:
+    the span held no covenant. That is different from a failure, where the
+    status says why and `validation_errors` carries the detail.
     """
 
     candidate: Candidate
-    output: LLMCovenantExtraction | None = None
+    outputs: list[LLMCovenantExtraction] = field(default_factory=list)
     extraction_status: ExtractionStatus = ExtractionStatus.PENDING
     validation_errors: list[str] = field(default_factory=list)
     retry_attempted: bool = False
-    citation_check: CitationCheck | None = None
+    # One citation check per covenant, in the same order as `outputs`.
+    citation_checks: list[CitationCheck] = field(default_factory=list)
     cost_usd: Decimal = Decimal("0")
     model_id: str = ""
     cache_hit: bool = False
 
     @property
     def succeeded(self) -> bool:
-        return self.output is not None and self.extraction_status is ExtractionStatus.EXTRACTED
+        """The call produced a valid answer — including a valid empty one."""
+        return self.extraction_status is ExtractionStatus.EXTRACTED
 
 
 class LLMExtractor:
@@ -106,7 +113,7 @@ class LLMExtractor:
         )
 
         extraction = self._validate(result, candidate)
-        if extraction.output is not None:
+        if extraction.succeeded:
             return extraction
         if extraction.retry_attempted:
             return extraction  # Already a retry (text-instead-of-JSON edge case handled)
@@ -140,7 +147,7 @@ class LLMExtractor:
         # Combine costs from both attempts.
         retry_extraction.cost_usd += extraction.cost_usd
 
-        if retry_extraction.output is None:
+        if not retry_extraction.succeeded:
             logger.warning(
                 "llm extraction failed after retry; routing to review",
                 extra={
@@ -195,12 +202,12 @@ class LLMExtractor:
         *,
         retry_attempted: bool = False,
     ) -> LLMExtraction:
-        """Validate the LLM response and perform a quick citation check.
+        """Validate the LLM response and quick-check each covenant's citation.
 
-        Always returns an LLMExtraction. The caller checks `output`:
-        - `output is not None` → success, persist it.
-        - `output is None and not retry_attempted` → retry needed.
-        - `output is None and retry_attempted` → final failure, route to review.
+        Always returns an LLMExtraction. The caller checks `succeeded`:
+        - succeeded → persist `outputs`, which may legitimately be empty.
+        - not succeeded and not `retry_attempted` → retry.
+        - not succeeded and `retry_attempted` → final failure, route to review.
         """
         content = result.content
         if isinstance(content, str):
@@ -217,7 +224,7 @@ class LLMExtractor:
 
         # content is a dict from structured output — validate via Pydantic.
         try:
-            output = LLMCovenantExtraction.model_validate(content)
+            response = LLMExtractionResponse.model_validate(content)
         except ValidationError as exc:
             errors = [str(e) for e in exc.errors()]
             logger.info(
@@ -238,24 +245,40 @@ class LLMExtractor:
                 cache_hit=result.cache_hit,
             )
 
-        # Quick citation check against the candidate text.
-        citation = verify_quote(output.source_quote, candidate.text)
-        if not citation.verified:
+        # One quick citation check per covenant, against the candidate text.
+        # Kept positional with `outputs` so the caller can pair them; the
+        # authoritative check is still the caller's, against the chunk.
+        checks = [verify_quote(item.source_quote, candidate.text) for item in response.covenants]
+        for item, check in zip(response.covenants, checks, strict=True):
+            if not check.verified:
+                logger.info(
+                    "quick citation check failed against candidate text",
+                    extra={
+                        "candidate_chunk_id": str(candidate.chunk_id),
+                        "covenant_type": item.covenant_type.value if item.covenant_type else None,
+                        "source_quote": item.source_quote[:200],
+                        "method": check.method,
+                    },
+                )
+
+        if len(response.covenants) > 1:
             logger.info(
-                "quick citation check failed against candidate text",
+                "span held several covenants",
                 extra={
                     "candidate_chunk_id": str(candidate.chunk_id),
-                    "source_quote": output.source_quote[:200],
-                    "method": citation.method,
+                    "covenants": [
+                        item.covenant_type.value if item.covenant_type else "none"
+                        for item in response.covenants
+                    ],
                 },
             )
 
         return LLMExtraction(
             candidate=candidate,
-            output=output,
+            outputs=list(response.covenants),
             extraction_status=ExtractionStatus.EXTRACTED,
             retry_attempted=retry_attempted,
-            citation_check=citation,
+            citation_checks=checks,
             cost_usd=result.estimated_cost_usd,
             model_id=result.model_id,
             cache_hit=result.cache_hit,
