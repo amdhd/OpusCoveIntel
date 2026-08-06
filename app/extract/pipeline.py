@@ -3,7 +3,9 @@
 PLAN.md §3: "We run the rule-based extractor and the Opus extractor on every
 candidate span." This module orchestrates that:
 
-1. Rule extraction runs on all chunks (free, always).
+1. Rule extraction runs on all chunks and is **persisted** (free, always) --
+   before any billable call, so a budget-exhausted document still ends up with
+   the deterministic extractor's clauses rather than with nothing.
 2. Candidate detection narrows the document to LLM-worthy spans.
 3. LLM extraction runs on each candidate (billable, budget-guarded).
 4. Results are compared field by field — disagreement triggers human review.
@@ -49,6 +51,7 @@ from app.extract.llm_extractor import LLMExtraction, LLMExtractor
 from app.extract.prompts import PROMPT_VERSION
 from app.extract.rule_extractor import extract as rule_extract
 from app.extract.schemas import LLMCovenantExtraction
+from app.extract.service import RuleExtractionService
 from app.llm.budget import BudgetExceededError
 from app.llm.router import LLMRouter
 
@@ -87,14 +90,19 @@ class PipelineOutcome:
     the "did the LLM actually help?" measurement PLAN.md 3 exists to enable was
     reading a number that mixed both.
 
-    `rule_extractions` counts what the rule extractor *found*, not rows it
-    wrote. This pipeline runs the rules only as the comparison baseline;
-    persisting them is `RuleExtractionService`'s job, and the field is named
-    for what it is so nobody reads it as a row count again.
+    `rule_clauses` and `rule_covenants` are rows `RuleExtractionService` wrote,
+    which this pipeline now runs before spending anything. `rule_extractions`
+    is a different number: what the regex pass *found* while building the
+    comparison baseline, which is not the same as what survived citation
+    verification and got persisted. Both are reported because a gap between
+    them is worth noticing.
     """
 
     document_id: uuid.UUID
+    rule_clauses: int = 0
+    rule_covenants: int = 0
     rule_extractions: int = 0
+    rule_skipped: bool = False
     llm_candidates: int = 0
     llm_extracted: int = 0
     llm_failed: int = 0
@@ -131,6 +139,7 @@ class ExtractionPipeline:
         self._covenants = CovenantRepository(session)
         self._reviews = HumanReviewRepository(session)
         self._jobs = ExtractionJobRepository(session)
+        self._rules = RuleExtractionService(session, self._settings)
         self._candidates_svc = CandidateDetectionService(session)
         self._llm_extractor = LLMExtractor(session, router=self._router)
 
@@ -212,17 +221,39 @@ class ExtractionPipeline:
         """The pipeline body, with the extraction identity already resolved."""
         document_id = document.id
 
-        # --- Rule extraction (always, free) ---------------------------------
+        # --- Rule extraction (always, free, and persisted) ------------------
+        # Persisted *before* any billable call, which is what makes PLAN.md 3's
+        # fallback real: when the budget guard trips mid-document, the rule
+        # extractor's clauses and covenants are already rows rather than
+        # something that was computed and discarded. This pipeline used to run
+        # the rules purely as a comparison baseline, so a budget-exhausted
+        # document ended up with nothing at all.
         try:
-            rule_results = await self._run_rule_extraction(document)
-            outcome.rule_extractions = sum(len(items) for items in rule_results.values())
+            persisted = await self._rules.extract_document(document_id, instrument_id=instrument_id)
+            outcome.rule_clauses = persisted.clauses
+            outcome.rule_covenants = persisted.covenants
+            outcome.rule_skipped = persisted.skipped
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 "rule extraction failed",
                 extra={"document_id": str(document_id), "error": str(exc)},
             )
             outcome.errors.append(f"rule: {exc}")
-            # Rule extraction failed, but we can still try LLM.
+
+        # The in-memory pass is the comparison baseline, and is deliberately
+        # separate from the rows above: `_fields_disagree` compares span-level
+        # `RuleExtraction` objects, and re-deriving them from persisted rows
+        # would lose the offsets the overlap check needs. It is regex over text
+        # already in memory, so running it twice costs nothing.
+        try:
+            rule_results = await self._run_rule_extraction(document)
+            outcome.rule_extractions = sum(len(items) for items in rule_results.values())
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "rule comparison baseline failed",
+                extra={"document_id": str(document_id), "error": str(exc)},
+            )
+            outcome.errors.append(f"rule-baseline: {exc}")
             rule_results = {}
 
         # --- LLM extraction (billable, budget-guarded) ----------------------
@@ -615,6 +646,8 @@ class ExtractionPipeline:
             "extraction pipeline complete",
             extra={
                 "document_id": str(outcome.document_id),
+                "rule_clauses": outcome.rule_clauses,
+                "rule_covenants": outcome.rule_covenants,
                 "rule_extractions": outcome.rule_extractions,
                 "llm_candidates": outcome.llm_candidates,
                 "llm_extracted": outcome.llm_extracted,
