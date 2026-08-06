@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.documents import DocumentChunk
 from app.domain.enums import ClauseType
-from app.extract.candidates import CandidateDetectionService, _detect_regex
+from app.extract.candidates import Candidate, CandidateDetectionService, _detect_regex
 
 
 @dataclass
@@ -135,3 +135,98 @@ async def test_service_detects_on_indexed_corpus(
     for chunk_id in chunk_ids:
         chunk = await db_session.get(DocumentChunk, chunk_id)
         assert chunk is not None
+
+
+class TestSemanticLegs:
+    """FTS and kNN against clause-type exemplars (PLAN.md 2's other two legs).
+
+    Off by default — see `SEMANTIC_LEGS_DEFAULT`. These pin the behaviour so the
+    legs are correct whenever they are switched on, and pin the relevance floors,
+    which are the difference between a retrieval leg and a spending bug.
+    """
+
+    async def test_off_by_default(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        service = CandidateDetectionService(db_session)
+
+        default = await service.detect(indexed_corpus[0])
+        explicit = await service.detect(indexed_corpus[0], semantic=False)
+
+        assert [c.chunk_id for c in default] == [c.chunk_id for c in explicit]
+
+    async def test_regex_candidates_already_cover_every_label(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """The measurement that decided the default.
+
+        If this ever fails, the regex leg has stopped covering the corpus and
+        the semantic legs have a job to do — turn them on and re-measure.
+        """
+        from sqlalchemy import select
+
+        from app.db.models.documents import Document
+        from app.evals.labels import COVENANT_LABELS
+        from app.extract.citations import verify_quote
+
+        service = CandidateDetectionService(db_session)
+        rows = (await db_session.execute(select(Document.id, Document.sha256))).all()
+        by_sha = {sha: did for did, sha in rows}
+
+        missed: list[str] = []
+        cache: dict[uuid.UUID, list[Candidate]] = {}
+        for label in COVENANT_LABELS:
+            document_id = by_sha.get(label.document_sha256)
+            if document_id is None:
+                continue
+            if document_id not in cache:
+                cache[document_id] = await service.detect(document_id, semantic=False)
+            if not any(verify_quote(label.evidence, c.text).verified for c in cache[document_id]):
+                missed.append(label.covenant_type.value)
+
+        assert not missed, f"regex candidates no longer cover: {missed}"
+
+    async def test_a_document_with_no_covenant_language_gets_no_semantic_candidates(
+        self, db_session: AsyncSession, object_store: object, seeded_universe: None
+    ) -> None:
+        """The floors, doing the job they exist for.
+
+        Unfloored, ranked retrieval returns its best N regardless of relevance:
+        a press release holding no covenants produced nine semantic candidates,
+        which is nine paid calls for nothing.
+        """
+        from app.ingest.service import IngestionService
+        from app.retrieval.indexing import IndexingService
+
+        prose = (
+            "PRESS RELEASE MINISTRY OF FINANCE\n\n"
+            "The Government has priced a US$1.5 billion Global Sukuk offering that was "
+            "4.7 times oversubscribed, with peak orderbook exceeding US$9.5 billion.\n\n"
+            "The issuance reaffirms the sovereign benchmark curve and serves as a pricing "
+            "reference for other issuers.\n"
+        )
+        from tests.fixtures.synthetic_pdf import build_prose_document
+
+        ingestion = IngestionService(db_session, object_store)  # type: ignore[arg-type]
+        outcome = await ingestion.upload(
+            filename="no-covenants.pdf", data=build_prose_document(prose, heading="PRESS RELEASE")
+        )
+        await ingestion.process(outcome.document.id)
+        await IndexingService(db_session).index_document(outcome.document.id)
+
+        service = CandidateDetectionService(db_session)
+        assert await service.detect(outcome.document.id, semantic=True) == []
+
+    async def test_semantic_candidates_carry_their_provenance(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """`found_by` is what makes "are these legs earning their calls?" answerable."""
+        service = CandidateDetectionService(db_session)
+
+        regex_only = {c.chunk_id for c in await service.detect(indexed_corpus[0], semantic=False)}
+        with_semantic = await service.detect(indexed_corpus[0], semantic=True)
+
+        for candidate in with_semantic:
+            if candidate.chunk_id not in regex_only:
+                assert candidate.found_by <= {"fts", "knn"}
+                assert candidate.found_by, "a semantic candidate must name the leg that found it"
