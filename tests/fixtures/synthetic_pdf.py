@@ -17,6 +17,7 @@ Run directly to write a file:
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pymupdf
@@ -213,11 +214,28 @@ def build_rating_report() -> bytes:
     return _to_bytes(document)
 
 
-CORPUS_BUILDERS: dict[str, object] = {
+CORPUS_BUILDERS: dict[str, Callable[[], bytes]] = {
     "prospectus.pdf": build_prospectus,
     "trust-deed.pdf": build_trust_deed,
     "rating-report.pdf": build_rating_report,
 }
+
+
+def write_corpus(directory: Path) -> list[Path]:
+    """Write every document of the synthetic corpus into `directory`.
+
+    `make eval` scores all three, so all three have to exist on disk before
+    ingestion. Writing only the prospectus -- which is what this module did --
+    left two thirds of the labelled corpus reported as "never ingested" and the
+    extraction numbers computed over one document.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for filename, builder in CORPUS_BUILDERS.items():
+        destination = directory / filename
+        destination.write_bytes(builder())
+        written.append(destination)
+    return written
 
 
 def build_scanned_document() -> bytes:
@@ -348,7 +366,18 @@ def _to_bytes(document: pymupdf.Document) -> bytes:
 
 
 def main(argv: list[str]) -> int:
+    """Write one prospectus, or the whole corpus when handed a directory.
+
+    A destination without a `.pdf` suffix means "put the corpus here" -- that is
+    what `make corpus` passes, and it keeps one entry point for both the
+    single-document demo and the three-document eval corpus.
+    """
     destination = Path(argv[1] if len(argv) > 1 else "var/sample-prospectus.pdf")
+    if destination.suffix.lower() != ".pdf":
+        for path in write_corpus(destination):
+            print(f"wrote {path}")
+        return 0
+
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(build_prospectus())
     print(f"wrote {destination}")
