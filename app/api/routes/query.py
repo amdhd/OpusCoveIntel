@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.service import AgentQueryService
+from app.api.deps import CurrentUser
 from app.core.logging import get_logger
 from app.db.session import get_readonly_session, get_session
 from app.domain.enums import QueryIntent
@@ -42,8 +43,15 @@ MAX_QUESTION_CHARS = 2000
 
 
 class QueryRequest(BaseModel):
+    """Just the question.
+
+    `user_id` used to be a field here. It is now taken from the session, for
+    the same reason `reviewer_id` was removed from the review queue: a
+    `query_logs` row that records whoever the caller claimed to be is not an
+    audit trail, it is a suggestion.
+    """
+
     question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
-    user_id: str | None = Field(default=None, max_length=255)
 
 
 class QueryResponse(BaseModel):
@@ -100,6 +108,7 @@ async def get_agent_service(
 async def ask(
     body: QueryRequest,
     request: Request,
+    user: CurrentUser,
     service: Annotated[AgentQueryService, Depends(get_agent_service)],
 ) -> QueryResponse:
     """Answer a question with citations, or refuse.
@@ -110,7 +119,7 @@ async def ask(
     request_id = getattr(request.state, "request_id", None)
     answer = await service.answer(
         body.question,
-        user_id=body.user_id,
+        user_id=user.username,
         request_id=request_id,
     )
 
@@ -121,6 +130,7 @@ async def ask(
             "refused": answer.refused,
             "confidence": answer.confidence,
             "citation_count": len(answer.citations),
+            "user": user.username,
         },
     )
 

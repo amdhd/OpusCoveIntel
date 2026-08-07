@@ -27,6 +27,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import current_user
 from app.catalog.service import CatalogService
 from app.db.session import get_readonly_session
 from app.domain.catalog import (
@@ -39,7 +40,7 @@ from app.domain.catalog import (
 )
 from app.domain.enums import CovenantType
 
-router = APIRouter(tags=["catalog"])
+router = APIRouter(tags=["catalog"], dependencies=[Depends(current_user)])
 
 MAX_PAGE_SIZE = 200
 

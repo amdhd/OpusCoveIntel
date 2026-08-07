@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import audit, catalog, documents, health, query, review
+from app.api.routes import audit, auth, catalog, documents, health, query, review
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestIDMiddleware
@@ -49,6 +49,7 @@ def create_app() -> FastAPI:
     app.state.settings = settings
     app.add_middleware(RequestIDMiddleware)
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(documents.router)
     app.include_router(catalog.router)
     app.include_router(query.router)

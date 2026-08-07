@@ -682,6 +682,97 @@ def cost_report() -> None:
         typer.echo(f"  {item.filename:<48} {item.calls:>4} call(s)  ${item.cost_usd}{flag}")
 
 
+@app.command("user-add")
+def user_add(
+    username: str = typer.Argument(..., help="Login name. Case-insensitive."),
+    role: str = typer.Option("analyst", help="analyst | reviewer"),
+    display_name: str | None = typer.Option(None, help="Name shown in the UI"),
+    email: str | None = typer.Option(None),
+) -> None:
+    """Create a user account. Prompts for the password; never takes it as an argument.
+
+    An argument would land the password in shell history, in `ps` output, and
+    in any process listing on the box. Typer's hidden prompt with confirmation
+    is the only way this command accepts one.
+    """
+    from app.auth.service import AuthService
+    from app.db.session import get_sessionmaker
+    from app.domain.enums import UserRole
+
+    settings = get_settings()
+    configure_logging(settings)
+
+    try:
+        parsed_role = UserRole(role)
+    except ValueError:
+        typer.secho(
+            f"unknown role {role!r}; expected one of {', '.join(r.value for r in UserRole)}",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=2) from None
+
+    password = typer.prompt("Password", hide_input=True, confirmation_prompt=True)
+
+    async def _run() -> str:
+        # Disposal happens inside this coroutine, on the loop that opened the
+        # connections. `asyncio.run(dispose_engines())` after the fact spins up
+        # a second loop and tears down connections bound to the first, which
+        # raises "attached to a different loop" on the way out.
+        try:
+            async with get_sessionmaker()() as session:
+                service = AuthService(session)
+                user = await service.create_user(
+                    username=username,
+                    password=password,
+                    display_name=display_name,
+                    email=email,
+                    role=parsed_role,
+                )
+                await session.commit()
+                return user.username
+        finally:
+            await dispose_engines()
+
+    try:
+        created = asyncio.run(_run())
+    except ValueError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
+
+    typer.secho(f"created {created} ({parsed_role.value})", fg=typer.colors.GREEN)
+
+
+@app.command("user-passwd")
+def user_passwd(username: str = typer.Argument(..., help="Login name")) -> None:
+    """Change a password and revoke every session that user holds."""
+    from app.auth.service import AuthService, normalize_username
+    from app.db.session import get_sessionmaker
+
+    settings = get_settings()
+    configure_logging(settings)
+    password = typer.prompt("New password", hide_input=True, confirmation_prompt=True)
+
+    async def _run() -> bool:
+        try:
+            async with get_sessionmaker()() as session:
+                service = AuthService(session)
+                user = await service.users.get_by_username(normalize_username(username))
+                if user is None:
+                    return False
+                await service.set_password(user, password)
+                await session.commit()
+                return True
+        finally:
+            await dispose_engines()
+
+    found = asyncio.run(_run())
+
+    if not found:
+        typer.secho(f"no such user: {username}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    typer.secho("password changed; existing sessions revoked", fg=typer.colors.GREEN)
+
+
 @app.command("check-schema")
 def check_schema() -> None:
     """Compare the database's enum CHECK constraints against the models.

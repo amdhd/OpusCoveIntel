@@ -184,6 +184,27 @@ make run         # uvicorn with autoreload on :8000
 | `app/query/` | The deterministic query path — intent, evidence, refusal. |
 | `app/evals/` | Golden questions, labelled ground truth, and the metrics harness behind `make eval`. |
 | `app/agent/` | LangGraph query graph + SQL guardrail. Deterministic — no model calls. |
+| `app/auth/` | Password hashing (stdlib scrypt), server-side sessions, login. |
+| `app/catalog/` | Read-side assembly of instruments, covenants and their provenance. |
+
+## Accounts
+
+Every endpoint except `/health`, `/ready` and `/auth/login` requires a session.
+Accounts are created from the CLI — there is no registration endpoint, and the password is
+prompted for rather than passed as an argument, so it never reaches shell history or `ps`:
+
+```bash
+uv run opuscovintel user-add aminah --role reviewer --display-name "Aminah"
+```
+
+Two roles. `analyst` reads and asks questions; `reviewer` additionally decides review-queue items.
+That is the only privileged action in the system, because it is the only point where a human
+overrides the machine — and the reviewer recorded on the row now comes from the session rather
+than from the request body, which is what makes "who approved this?" answerable.
+
+Sessions are rows in `user_sessions`, so they can be revoked; the database stores only a SHA-256
+of the token. `AUTH_ENABLED=false` runs every request as a single fixed local identity for offline
+demos, and `Settings` refuses to start with it off when `ENVIRONMENT=production`.
 
 ## The four things that make this auditable
 

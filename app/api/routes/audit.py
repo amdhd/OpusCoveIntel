@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CurrentUser
 from app.core.logging import get_logger
 from app.db.repositories.ops import AuditLogRepository
 from app.db.session import get_session
@@ -65,6 +66,7 @@ class AuditTrailResponse(BaseModel):
 async def get_audit_trail(
     entity_type: Annotated[str, Path(min_length=1, max_length=64)],
     entity_id: uuid.UUID,
+    user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_LIMIT,
     session: AsyncSession = Depends(get_session),
 ) -> AuditTrailResponse:
