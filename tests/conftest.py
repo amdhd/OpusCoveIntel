@@ -299,29 +299,31 @@ def reviewer_user() -> Any:
     )
 
 
-@pytest_asyncio.fixture
-async def api_client(
-    db_session: AsyncSession, object_store: LocalFileStore, reviewer_user: Any
-) -> AsyncIterator[AsyncClient]:
-    """An HTTP client over the real app, wired to the rolled-back test session.
+@pytest.fixture
+def api_app(db_session: AsyncSession, object_store: LocalFileStore, reviewer_user: Any) -> Any:
+    """The real app, wired to the rolled-back test session and a signed-in user.
 
-    `httpx.AsyncClient` rather than `TestClient`: the latter drives the app from
-    its own event loop on another thread, and an asyncpg connection belongs to
-    the loop that opened it. Sharing the test's session across loops fails in
-    ways that look like flaky tests rather than a fixture bug.
+    Exposed as its own fixture so a test can re-point one dependency -- the UI
+    tests swap the identity for an analyst -- without reaching into the
+    client's transport for the app object.
     """
     from app.api.deps import current_user
     from app.api.routes.documents import get_ingestion_service
     from app.db.session import get_readonly_session, get_session
     from app.ingest.service import IngestionService
     from app.main import create_app
+    from app.web.deps import page_user
 
     app = create_app()
     app.dependency_overrides[get_session] = lambda: db_session
     # Authenticated as a reviewer by default. Tests are about the endpoints,
     # not about logging in; the auth boundary itself has its own file, which
     # uses `anonymous_client` and drives the real login flow.
+    #
+    # Both identity dependencies, because the JSON API and the HTML pages use
+    # different ones on purpose: the API answers 401, the pages redirect.
     app.dependency_overrides[current_user] = lambda: reviewer_user
+    app.dependency_overrides[page_user] = lambda: reviewer_user
     # The query agent reads through the read-only role in production. A second
     # role would need a second connection, and a second connection cannot see
     # this test's uncommitted rows -- so both map to the one rolled-back
@@ -331,8 +333,19 @@ async def api_client(
     app.dependency_overrides[get_ingestion_service] = lambda: IngestionService(
         db_session, object_store
     )
+    return app
 
-    transport = ASGITransport(app=app)
+
+@pytest_asyncio.fixture
+async def api_client(api_app: Any) -> AsyncIterator[AsyncClient]:
+    """An HTTP client over the real app, wired to the rolled-back test session.
+
+    `httpx.AsyncClient` rather than `TestClient`: the latter drives the app from
+    its own event loop on another thread, and an asyncpg connection belongs to
+    the loop that opened it. Sharing the test's session across loops fails in
+    ways that look like flaky tests rather than a fixture bug.
+    """
+    transport = ASGITransport(app=api_app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
 

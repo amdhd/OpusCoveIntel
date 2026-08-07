@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Portfolios — OpusCovIntel{% endblock %}
+{% block content %}
+<h1>Portfolios</h1>
+{% if not portfolios %}
+<p class="empty">No portfolios. Run <code>make seed</code>.</p>
+{% else %}
+<div class="panel">
+<table>
+  <thead><tr><th>Name</th><th>Owner</th><th>Mandate</th><th>Currency</th></tr></thead>
+  <tbody>
+    {% for p in portfolios %}
+    <tr>
+      <td><a href="/ui/portfolios/{{ p.id }}">{{ p.name }}</a></td>
+      <td>{{ p.owner or '—' }}</td>
+      <td>{{ p.mandate_type or '—' }}</td>
+      <td>{{ p.base_currency }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

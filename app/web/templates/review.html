@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Review queue — OpusCovIntel{% endblock %}
+{% block content %}
+<h1>Review queue <span class="muted">({{ total_pending }} pending)</span></h1>
+
+{% if not can_review %}
+<p class="alert notice">
+  You are signed in as an analyst, so these items are read-only. Deciding a queue item
+  needs the reviewer role.
+</p>
+{% endif %}
+
+{% if not items %}
+<p class="empty">Nothing is waiting for review.</p>
+{% endif %}
+
+{% for item in items %}
+<div class="panel review-item">
+  <div>
+    <strong>{{ item.field_name }}</strong>
+    <span class="muted">on {{ item.entity_type }}</span>
+    <div class="trigger">
+      {{ item.trigger_reason.replace('_', ' ') }}
+      {% if item.confidence is not none %}
+        · confidence <span class="low-confidence">{{ '%.2f'|format(item.confidence) }}</span>
+      {% endif %}
+      {% if item.page_number %} · page {{ item.page_number }}{% endif %}
+    </div>
+  </div>
+
+  <div>
+    <span class="muted">Machine value:</span>
+    <strong>{{ item.old_value if item.old_value is not none else '—' }}</strong>
+  </div>
+
+  {% if item.source_quote %}
+  <blockquote class="citation">{{ item.source_quote }}</blockquote>
+  {% endif %}
+
+  {% if can_review %}
+  <div class="review-actions">
+    <form method="post" action="/ui/review/{{ item.id }}/approve">
+      <button type="submit">Approve</button>
+    </form>
+
+    <form method="post" action="/ui/review/{{ item.id }}/correct">
+      <input type="text" name="new_value" placeholder="Corrected value" required>
+      <button type="submit" class="primary">Correct</button>
+    </form>
+
+    <form method="post" action="/ui/review/{{ item.id }}/reject">
+      <input type="text" name="reason" placeholder="Reason for rejecting" required>
+      <button type="submit" class="danger">Reject</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

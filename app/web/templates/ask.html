@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Ask — OpusCovIntel{% endblock %}
+{% block content %}
+<h1>Ask</h1>
+
+<form class="panel" method="post" action="/ui/ask">
+  <label for="question" class="muted">Question</label>
+  <textarea id="question" name="question" rows="3" required
+            placeholder="Which holdings would breach their rating trigger at the current rating?"
+            >{{ question or "" }}</textarea>
+  <p style="margin:0.7rem 0 0"><button class="primary" type="submit">Ask</button></p>
+</form>
+
+{% if answer %}
+  {% if answer.refused %}
+    {# A refusal is the system working, not failing (CLAUDE.md 1.5), so it is
+       presented as an answer rather than as an error banner. #}
+    <div class="panel refusal">
+      <strong>No supporting evidence in the corpus.</strong>
+      <p class="answer" style="margin:0.5rem 0 0">{{ answer.answer }}</p>
+      <p class="muted" style="margin:0.6rem 0 0;font-size:0.82rem">
+        The agent declines rather than inferring an answer. Confidence 0.0.
+      </p>
+    </div>
+  {% else %}
+    <div class="panel">
+      <p class="muted" style="margin:0 0 0.6rem;font-size:0.82rem">
+        {{ answer.intent.value.replace('_', ' ') }}
+        · confidence {{ '%.2f'|format(answer.confidence) }}
+        · {{ answer.citations|length }} citation{{ '' if answer.citations|length == 1 else 's' }}
+      </p>
+      <div class="answer">{{ answer.answer }}</div>
+    </div>
+
+    <h2>Evidence</h2>
+    {% if answer.citations %}
+      {% for c in answer.citations %}
+      <div class="citation">
+        <div class="meta">
+          page {{ c.page_number }}{% if c.section_title %} · {{ c.section_title }}{% endif %}
+          {% if c.clause_id %}
+            · <a href="/ui/clauses/{{ c.clause_id }}">open the source</a>
+          {% endif %}
+        </div>
+        <blockquote>{{ c.quote }}</blockquote>
+      </div>
+      {% endfor %}
+    {% else %}
+      {# Not a bug: breach checks and portfolio questions are computed by the
+         rules engine over structured rows, which cite no span. Saying so is
+         better than showing an empty "Evidence" heading. #}
+      <p class="empty">
+        This answer was computed by the rules engine over extracted records rather than
+        read from document text, so it cites no passage. Each figure traces to a covenant
+        on its instrument.
+      </p>
+    {% endif %}
+
+    {% if answer.tools_used %}
+    <p class="muted" style="font-size:0.8rem">
+      Tools: {{ answer.tools_used|join(', ') }}
+    </p>
+    {% endif %}
+  {% endif %}
+{% endif %}
+{% endblock %}

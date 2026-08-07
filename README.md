@@ -186,6 +186,24 @@ make run         # uvicorn with autoreload on :8000
 | `app/agent/` | LangGraph query graph + SQL guardrail. Deterministic — no model calls. |
 | `app/auth/` | Password hashing (stdlib scrypt), server-side sessions, login. |
 | `app/catalog/` | Read-side assembly of instruments, covenants and their provenance. |
+| `app/web/` | Server-rendered UI — Jinja templates, four screens, no build step. |
+
+## The UI
+
+`make up`, then <http://localhost:8000>. Four screens, server-rendered from the same
+services the JSON API uses, so the two cannot disagree about what a covenant is:
+
+- **Ask** — a question, an answer, and its citations. A refusal renders as an answer, not
+  as an error, because it is one.
+- **Source** — click any citation to see the quote highlighted inside the chunk it was cut
+  from, with the page, the extraction method, and whether the citation verified. This is
+  the screen that makes the provenance chain checkable rather than merely recorded.
+- **Review queue** — approve, correct or reject, attributed to your session.
+- **Portfolio** — positions with rules-engine covenant status; breaches sort first, and
+  anything the engine could not evaluate reads *not reported* rather than *ok*.
+
+No SPA and no frontend toolchain: Jinja plus about forty lines of optional JavaScript.
+Every action is a plain form POST that works with scripting off.
 
 ## Accounts
 
