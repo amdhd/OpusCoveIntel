@@ -1,7 +1,7 @@
 # PLAN.md — OpusCovIntel Implementation Plan
 
-**Status:** Phase 0 (planning). No code written yet.
-**Date:** 2026-08-04
+**Status:** Phases 1–9 built. Phase 10 (accuracy and coverage) is the remaining work — see §6.
+**Written:** 2026-08-04 · **Last revised:** 2026-08-07
 
 This plan reconciles two prior drafts — a production-grade spec (`100usd`) and a minimal offline MVP
 (`10usd`) — against the actual target: a LangGraph-orchestrated, multi-provider covenant intelligence
@@ -23,7 +23,7 @@ MVP on Postgres/pgvector.
 | Human review | full queue + history | none | **Full queue with value history** |
 | Audit | audit tables | queries table | **Full audit + query log** |
 | Evaluation | multi-metric harness | 10 golden Q, 8/10 pass | **Both:** field-F1 *and* golden questions |
-| Infra | Docker, Redis, Celery, MinIO, S3, RBAC, OIDC, OTel | none | **Deferred to Phase 8.** Compose = Postgres + api + worker; local FS storage |
+| Infra | Docker, Redis, Celery, MinIO, S3, RBAC, OIDC, OTel | none | **Deferred, then mostly declined** — see Phase 10.6. Compose = Postgres + api + worker; local FS storage |
 | Portfolio module | full | holdings CSV | **Minimal** — 2 tables; the killer queries are portfolio-level |
 
 ### Where each draft was wrong
@@ -168,61 +168,111 @@ Phases 1–4 spend **$0 on LLM APIs** and still produce a working, queryable, de
 gives a baseline to measure LLM lift against, and means a budget bug in Phase 5 can't take down a
 system that already works.
 
-### Phase 0 — Plan *(this document)*
-Deliverables: `CLAUDE.md`, `PLAN.md`. **Awaiting approval before Phase 1.**
+Phases 0–9 are **built**. Phase 10 is not. Each heading below carries its state so a
+reader can stop guessing from commit history.
 
-### Phase 1 — Scaffold *($0)*
+### Phase 0 — Plan *(this document)* ✅
+Deliverables: `CLAUDE.md`, `PLAN.md`.
+
+### Phase 1 — Scaffold ✅ *($0)*
 `pyproject.toml`, Dockerfile, compose (postgres+pgvector, api, worker), Makefile, `.env.example`,
 ruff/mypy/pytest config, settings loader, structured logging + `request_id` middleware, FastAPI
 skeleton, `/health` + `/ready`.
 **Accept:** `make install lint type test` pass · `make up` boots · `GET /health` → 200.
 
-### Phase 2 — Database & domain *($0)*
+### Phase 2 — Database & domain ✅ *($0)*
 SQLAlchemy models, Pydantic schemas, enums, Alembic migration, repositories, pgvector + GIN indexes,
 seed script (synthetic portfolios + instruments).
 **Accept:** migrations apply clean from scratch · repository CRUD tests pass · seed produces a demo
 portfolio.
 
-### Phase 3 — Ingestion *($0)*
+### Phase 3 — Ingestion ✅ *($0)*
 Upload API, SHA256 dedup, local FS storage adapter (S3-shaped interface), PyMuPDF text + pdfplumber
 tables, **page-confidence scoring**, chunking with span offsets, job tracking.
 **Accept:** duplicate detected by hash · text+tables extracted from synthetic PDF · every chunk
 carries `(page, char_start, char_end)` · low-confidence pages correctly flagged (VLM not yet wired).
 
-### Phase 4 — Search & rules *($0 — first demoable milestone)*
+### Phase 4 — Search & rules ✅ *($0 — first demoable milestone)*
 Embedding adapter interface + **fake deterministic embedder**, hybrid retrieval (pgvector + tsvector,
 RRF fusion), rule-based regex extractor, **rules engine** (ordinal rating comparison, threshold
 evaluation, date windows), CLI query over the deterministic path.
 **Accept:** hybrid search beats either leg alone on the golden set · rules engine unit tests cover
 every covenant type · ≥6/10 golden questions answerable with **zero LLM calls**.
 
-### Phase 5 — LLM layer *(first spend — guards land before adapters)*
+### Phase 5 — LLM layer ✅ *(first spend — guards land before adapters)*
 `app/llm/`: budget guard, response cache, cost tracker, mock provider — **written and tested first**.
 Then adapters: Anthropic (`claude-opus-5`), OpenAI vision, Qwen (chat + embeddings). Real Qwen
 embeddings replace the fake embedder; VLM fallback wired to page confidence.
 **Accept:** budget guard provably blocks an over-budget call (unit test) · cache hit costs $0 ·
 mock provider drives the whole pipeline in CI · **`make test` makes zero paid API calls.**
 
-### Phase 6 — Extraction pipeline
+### Phase 6 — Extraction pipeline ✅
 Versioned Jinja2 prompts, candidate detection, Opus structured extraction with prompt-cached prefix,
 Pydantic validation + one feedback retry, **citation verification**, rules/LLM disagreement
 detection, review-queue routing, per-document cost attribution.
 **Accept:** golden synthetic covenant extracted correctly · invalid JSON triggers exactly one retry
 then review · unverifiable citation is never persisted · measured cost/document logged and under cap.
 
-### Phase 7 — Query agent, review & audit
+### Phase 7 — Query agent, review & audit ✅
 LangGraph graph, tools, SQL guardrail, citation formatting, verify node, query logging.
 Review queue API (approve/reject/edit with value history), audit log, audit read endpoint.
 **Accept:** ≥8/10 golden questions answered with correct citations · agent refuses when evidence is
 absent · non-`SELECT` SQL rejected (test) · a correction preserves prior value + reviewer + reason ·
 every mutation appears in `audit_logs`.
 
-### Phase 8 — Evaluation, hardening & deferred infra
+### Phase 8 — Evaluation, hardening & deferred infra ✅
 Eval harness (field-level F1, enum exact match, numeric tolerance, date tolerance, citation
 precision/recall, answer faithfulness, refusal correctness, **rules-vs-LLM agreement**, cost/doc).
 GitHub Actions (lint, type, test — no paid calls). Then, only now: Celery/Redis, S3/MinIO, RBAC/OIDC,
 OTel/Prometheus, deployment docs, runbook.
 **Accept:** `make eval` emits metrics to `evals/results/` · CI green · docs cover deploy + operate.
+
+**Delivered except the deferred infra**, which Phase 10 resolves by decision rather than
+by building most of it.
+
+### Phase 9 — HTTP surface, authentication, UI ✅
+Not in the original plan; added once the eval harness made it obvious the system had no
+human-facing surface at all. `POST /query` and the catalogue read endpoints, session
+auth with two roles, and the four-screen server-rendered UI.
+
+Also fixed here: `get_session` never committed, so every review decision returned 200 and
+persisted nothing. Found by running the endpoint against the real database — the rolled-back
+test session had hidden it from the whole suite.
+**Accept (met):** a reviewer clears a queue item end to end without the CLI · every covenant
+on screen links to its highlighted source span · anonymous requests are refused.
+
+### Phase 10 — Accuracy and coverage *(not started)*
+The remaining work, hardest and most valuable first. Phases 1–9 built the machine; this is
+about whether it is *right*, which none of the current numbers can answer.
+
+1. **A real prospectus, and a re-baseline.** §9 Q1, still open, and the largest source of
+   schedule risk. `make eval` reports F1 0.95 (LLM) / 0.99 (rules) against documents we
+   generated ourselves — that measures the harness, not the extractor. Regex patterns,
+   chunking and candidate detection are all tuned to invented layouts. Nothing licensed
+   may be committed (CLAUDE.md 7); keep it under `var/`.
+2. **`rating_agency` extraction.** The one weak field: P 0.50 / R 0.50 on the LLM path,
+   R 0.50 on rules, against ≥0.94 everywhere else. Both extractors miss the same label,
+   which points at normalisation rather than at either model — start with the `(m)` / `id`
+   national-scale suffixes in `app/rules/ratings.py`.
+3. **Live-verify the VLM.** Wired (`opuscovintel ocr`) and never once run against a real
+   provider; blocked on OpenAI credit. Closes §9 Q3.
+4. **Real embeddings and the semantic candidate legs.** Everything runs on
+   `HashingEmbedder`, so the vector leg of hybrid retrieval is noise and the FTS/kNN
+   candidate legs default off. Close §9 Q2 **before** indexing: 1024 dims is baked into the
+   schema, and changing it means re-embedding the corpus and rebuilding the HNSW index.
+5. **Refuse more.** The agent answers some unsupported questions at 0.95 confidence instead
+   of refusing — the intent classifier routes them to `instrument_lookup`, which answers
+   from structured rows without needing retrieval, so the refusal path is never reached.
+   The golden set misses this because its one unanswerable question takes the other path.
+6. **Decide the deferred infra, mostly by declining it.** Celery/Redis and MinIO buy nothing
+   at this volume — the worker's `FOR UPDATE ... SKIP LOCKED` poll is correct and simpler,
+   and the local store already implements an S3-shaped interface. OIDC was superseded by
+   Phase 9's session auth. Keep OTel/Prometheus, cheaply. Record the decision here rather
+   than leaving four unbuilt items looking like debt.
+
+**Accept:** one real document ingests, extracts, and has its numbers written down next to the
+synthetic baseline, however bad they are · `rating_agency` F1 ≥0.9 on both methods · one page
+OCR'd live with its cost in the ledger · retrieval measured against the hashing baseline.
 
 ---
 
@@ -260,8 +310,9 @@ production HA/DR.
 3. **GPT vision model ID.** Env-configured; needs a current, verified ID and its per-image token cost
    before the VLM cap can be tuned sensibly.
 4. **Portfolio holdings source.** CSV upload for MVP, or a read-only feed from the existing PMS?
-5. **Reviewer identity.** Placeholder user IDs for MVP, given OIDC is deferred to Phase 8 — confirm
-   that is acceptable for the audit trail.
+5. ~~**Reviewer identity.**~~ **Closed 2026-08-07.** Placeholder reviewer IDs were not acceptable:
+   the value came from the request body, so the audit trail recorded whatever the caller typed.
+   Phase 9 replaced it with session-derived identity and two roles. OIDC stays deferred.
 6. **Global budget.** Is `MAX_TOTAL_COST_USD=200` the right ceiling for the build phase?
 7. **Bahasa Malaysia volume.** What share of the real corpus is BM? If material, the extraction
    prompts need BM few-shot examples and the golden set needs BM questions.
