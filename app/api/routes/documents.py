@@ -12,6 +12,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import current_user
 from app.core.config import get_settings
 from app.db.session import get_session
 from app.domain.documents import (
@@ -31,7 +32,13 @@ from app.ingest.service import (
 )
 from app.ingest.storage import ObjectStore, get_object_store
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+# Gated at the router rather than per handler: a new endpoint added here is
+# authenticated by default, which is the failure mode worth designing for.
+router = APIRouter(
+    prefix="/documents",
+    tags=["documents"],
+    dependencies=[Depends(current_user)],
+)
 
 
 def get_ingestion_service(

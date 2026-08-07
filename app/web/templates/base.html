@@ -1,0 +1,42 @@
+{# Shared shell. Autoescaping is on for .html -- see app/web/templates.py. #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}OpusCovIntel{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/ui/ask">OpusCovIntel</a>
+  {% if user %}
+  <nav>
+    <a href="/ui/ask" {% if active == 'ask' %}class="on"{% endif %}>Ask</a>
+    <a href="/ui/instruments" {% if active == 'instruments' %}class="on"{% endif %}>Instruments</a>
+    <a href="/ui/portfolios" {% if active == 'portfolios' %}class="on"{% endif %}>Portfolios</a>
+    <a href="/ui/review" {% if active == 'review' %}class="on"{% endif %}>
+      Review{% if pending_count %} <span class="pill">{{ pending_count }}</span>{% endif %}
+    </a>
+  </nav>
+  <form class="signout" method="post" action="/ui/logout">
+    <span class="who">{{ user.display_name }} <em>{{ user.role.value }}</em></span>
+    <button type="submit">Sign out</button>
+  </form>
+  {% endif %}
+</header>
+
+<main>
+  {% if error %}<p class="alert error">{{ error }}</p>{% endif %}
+  {% if notice %}<p class="alert notice">{{ notice }}</p>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer>
+  Decision support, not investment or legal advice. Every figure is machine-extracted
+  and intended for human review.
+</footer>
+<script src="/static/app.js" defer></script>
+</body>
+</html>

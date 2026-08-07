@@ -11,7 +11,7 @@ import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import pytest_asyncio
@@ -31,6 +31,11 @@ if TYPE_CHECKING:
 # Pin the environment before anything imports settings.
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+# Set, not `setdefault`: a developer's `.env` with AUTH_ENABLED=false would
+# otherwise silently turn the whole suite into a test of the demo bypass, and
+# every "this endpoint refuses an anonymous caller" assertion would pass for
+# the wrong reason. An env var beats the `.env` file in pydantic-settings.
+os.environ["AUTH_ENABLED"] = "true"
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -273,10 +278,66 @@ async def indexed_corpus(
     return document_ids
 
 
+@pytest.fixture
+def reviewer_user() -> Any:
+    """An in-memory reviewer, not a database row.
+
+    Route handlers read only `.username` and `.role` off the identity
+    dependency, so persisting one would impose a fixture-ordering constraint on
+    most of the suite in exchange for nothing. Tests that need a real account
+    create one -- test_auth.py does.
+    """
+    from app.db.models.auth import User
+    from app.domain.enums import UserRole
+
+    return User(
+        username="test-reviewer",
+        display_name="Test Reviewer",
+        password_hash="scrypt$test",
+        role=UserRole.REVIEWER,
+        is_active=True,
+    )
+
+
+@pytest.fixture
+def api_app(db_session: AsyncSession, object_store: LocalFileStore, reviewer_user: Any) -> Any:
+    """The real app, wired to the rolled-back test session and a signed-in user.
+
+    Exposed as its own fixture so a test can re-point one dependency -- the UI
+    tests swap the identity for an analyst -- without reaching into the
+    client's transport for the app object.
+    """
+    from app.api.deps import current_user
+    from app.api.routes.documents import get_ingestion_service
+    from app.db.session import get_readonly_session, get_session
+    from app.ingest.service import IngestionService
+    from app.main import create_app
+    from app.web.deps import page_user
+
+    app = create_app()
+    app.dependency_overrides[get_session] = lambda: db_session
+    # Authenticated as a reviewer by default. Tests are about the endpoints,
+    # not about logging in; the auth boundary itself has its own file, which
+    # uses `anonymous_client` and drives the real login flow.
+    #
+    # Both identity dependencies, because the JSON API and the HTML pages use
+    # different ones on purpose: the API answers 401, the pages redirect.
+    app.dependency_overrides[current_user] = lambda: reviewer_user
+    app.dependency_overrides[page_user] = lambda: reviewer_user
+    # The query agent reads through the read-only role in production. A second
+    # role would need a second connection, and a second connection cannot see
+    # this test's uncommitted rows -- so both map to the one rolled-back
+    # session here. What that role is actually *denied* is covered by
+    # test_agent_sessions.py, which is where it belongs.
+    app.dependency_overrides[get_readonly_session] = lambda: db_session
+    app.dependency_overrides[get_ingestion_service] = lambda: IngestionService(
+        db_session, object_store
+    )
+    return app
+
+
 @pytest_asyncio.fixture
-async def api_client(
-    db_session: AsyncSession, object_store: LocalFileStore
-) -> AsyncIterator[AsyncClient]:
+async def api_client(api_app: Any) -> AsyncIterator[AsyncClient]:
     """An HTTP client over the real app, wired to the rolled-back test session.
 
     `httpx.AsyncClient` rather than `TestClient`: the latter drives the app from
@@ -284,13 +345,30 @@ async def api_client(
     the loop that opened it. Sharing the test's session across loops fails in
     ways that look like flaky tests rather than a fixture bug.
     """
+    transport = ASGITransport(app=api_app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+
+
+@pytest_asyncio.fixture
+async def anonymous_client(
+    db_session: AsyncSession, object_store: LocalFileStore
+) -> AsyncIterator[AsyncClient]:
+    """`api_client` without the identity override — nobody is logged in.
+
+    Deliberately a separate fixture rather than a flag on `api_client`: the
+    default for a test should be authenticated, and reaching the unauthenticated
+    path should require saying so. It carries a cookie jar, so a test can log in
+    through the real endpoint and keep the session.
+    """
     from app.api.routes.documents import get_ingestion_service
-    from app.db.session import get_session
+    from app.db.session import get_readonly_session, get_session
     from app.ingest.service import IngestionService
     from app.main import create_app
 
     app = create_app()
     app.dependency_overrides[get_session] = lambda: db_session
+    app.dependency_overrides[get_readonly_session] = lambda: db_session
     app.dependency_overrides[get_ingestion_service] = lambda: IngestionService(
         db_session, object_store
     )

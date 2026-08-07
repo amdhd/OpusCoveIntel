@@ -7,12 +7,13 @@ instantiating `Settings` directly so the object is built once per process.
 
 from __future__ import annotations
 
+import datetime as dt
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, SecretStr, field_validator
+from pydantic import Field, PostgresDsn, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "test", "staging", "production"]
@@ -90,8 +91,21 @@ class Settings(BaseSettings):
     # Verbatim-quote match floor for citation verification (CLAUDE.md 1.3).
     CITATION_FUZZY_THRESHOLD: float = 0.92
 
+    # -- authentication ---------------------------------------------------
+    # Session cookie name and lifetime. Sessions are rows in `user_sessions`,
+    # so shortening this does not orphan anything -- expiry is checked in SQL.
+    SESSION_COOKIE_NAME: str = "opuscovintel_session"
+    SESSION_TTL_HOURS: int = 12
+    # Sent only over HTTPS when true. Off locally because the dev stack is
+    # plain HTTP and a Secure cookie would simply never be stored; the
+    # validator below refuses to let that combination reach production.
+    SESSION_COOKIE_SECURE: bool = False
+
     # -- feature flags ----------------------------------------------------
-    AUTH_ENABLED: bool = False
+    # Secure by default. The escape hatch exists for local demos, and the
+    # validator below makes it unreachable in production -- a flag that can
+    # silently disable authentication is how an internal tool ends up open.
+    AUTH_ENABLED: bool = True
     AUDIT_ENABLED: bool = True
 
     @field_validator("STORAGE_DIR")
@@ -128,9 +142,36 @@ class Settings(BaseSettings):
             )
         return v
 
+    @model_validator(mode="after")
+    def _production_must_be_authenticated(self) -> Settings:
+        """Refuse to start an unauthenticated or cookie-insecure production.
+
+        Failing at startup rather than serving is the whole point. An
+        `AUTH_ENABLED=false` that merely warns gets deployed and then lives
+        there, because nothing stops it -- and the review queue and audit log
+        are precisely what an unauthenticated deployment exposes.
+        """
+        if self.ENVIRONMENT != "production":
+            return self
+        if not self.AUTH_ENABLED:
+            raise ValueError(
+                "AUTH_ENABLED=false is not permitted when ENVIRONMENT=production; "
+                "the flag exists for local demos only"
+            )
+        if not self.SESSION_COOKIE_SECURE:
+            raise ValueError(
+                "SESSION_COOKIE_SECURE=false is not permitted when ENVIRONMENT=production; "
+                "a session cookie must not travel over plain HTTP"
+            )
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
+
+    @property
+    def session_ttl(self) -> dt.timedelta:
+        return dt.timedelta(hours=self.SESSION_TTL_HOURS)
 
 
 @lru_cache(maxsize=1)

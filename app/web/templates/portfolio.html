@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ h.portfolio.name }} — OpusCovIntel{% endblock %}
+{% block content %}
+<p class="muted"><a href="/ui/portfolios">← Portfolios</a></p>
+<h1>{{ h.portfolio.name }}</h1>
+
+<div class="panel">
+  <dl class="kv">
+    {# Holdings are a time series, so the date is stated rather than implied --
+       exposure reported for an unknown date cannot be acted on. #}
+    <dt>As of</dt><dd>{{ h.as_of_date or '—' }}</dd>
+    <dt>Positions</dt><dd>{{ h.count }}</dd>
+    <dt>Market value</dt>
+    <dd>{% if h.total_market_value is not none %}
+        {{ h.portfolio.base_currency }} {{ '{:,.2f}'.format(h.total_market_value) }}
+        {% else %}—{% endif %}</dd>
+    <dt>Breaches</dt>
+    <dd>{% if breach_total %}<span class="status breach">{{ breach_total }}</span>
+        {% else %}<span class="status ok">none</span>{% endif %}
+      {% if at_risk_total %} · <span class="status at_risk">{{ at_risk_total }} at risk</span>{% endif %}
+    </dd>
+  </dl>
+</div>
+
+<h2>Positions</h2>
+<div class="panel">
+<table>
+  <thead>
+    <tr><th>Instrument</th><th>Rating</th><th class="num">Market value</th>
+        <th class="num">NAV weight</th><th>Covenant status</th></tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a href="/ui/instruments/{{ row.holding.instrument.id }}"
+            >{{ row.holding.instrument.instrument_name }}</a></td>
+      <td>{{ row.holding.instrument.current_rating or '—' }}</td>
+      <td class="num">{% if row.holding.market_value is not none %}
+          {{ '{:,.2f}'.format(row.holding.market_value) }}{% else %}—{% endif %}</td>
+      <td class="num">{% if row.holding.nav_weight is not none %}
+          {{ '{:.2%}'.format(row.holding.nav_weight) }}{% else %}—{% endif %}</td>
+      <td>
+        {% if row.breaches %}<span class="status breach">{{ row.breaches }} breach</span>
+        {% elif row.at_risk %}<span class="status at_risk">{{ row.at_risk }} at risk</span>
+        {% else %}<span class="status ok">ok</span>{% endif %}
+        {% if row.insufficient %}
+          <span class="status insufficient_data">{{ row.insufficient }} not reported</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Covenant evaluations</h2>
+<p class="muted" style="font-size:0.82rem">
+  Computed by the deterministic rules engine, not by a model. Anything the engine could
+  not evaluate is reported as <em>not reported</em> rather than as compliant — silence is
+  not compliance.
+</p>
+{% for row in rows %}
+  {% if row.evaluations %}
+  <div class="panel">
+    <strong>{{ row.holding.instrument.instrument_name }}</strong>
+    <table style="margin-top:0.5rem">
+      <thead><tr><th>Covenant</th><th>Status</th><th>Explanation</th></tr></thead>
+      <tbody>
+        {% for e in row.evaluations %}
+        <tr>
+          <td>{{ e.covenant_type.replace('_', ' ') }}</td>
+          <td><span class="status {{ e.status }}">{{ e.status.replace('_', ' ') }}</span></td>
+          <td class="muted">{{ e.explanation }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+{% endfor %}
+{% endblock %}

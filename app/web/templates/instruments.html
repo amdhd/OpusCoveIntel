@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Instruments — OpusCovIntel{% endblock %}
+{% block content %}
+<h1>Instruments</h1>
+{% if not instruments %}
+<p class="empty">No instruments. Run <code>make seed</code>.</p>
+{% else %}
+<div class="panel">
+<table>
+  <thead>
+    <tr>
+      <th>Instrument</th><th>Issuer</th><th>Structure</th>
+      <th>Rating</th><th class="num">Issue size</th><th>Matures</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for i in instruments %}
+    <tr>
+      <td><a href="/ui/instruments/{{ i.id }}">{{ i.instrument_name }}</a></td>
+      <td>{{ i.issuer_name }}</td>
+      <td>{{ i.sukuk_structure.value }}</td>
+      {# Sorted by rank elsewhere, never by this string: 'AA-' < 'A+' lexically
+         and the reverse ordinally (CLAUDE.md 6). #}
+      <td>{{ i.current_rating or '—' }}{% if i.rating_agency.value != 'unknown' %}
+            <span class="muted">({{ i.rating_agency.value }})</span>{% endif %}</td>
+      <td class="num">
+        {% if i.issue_size is not none %}{{ i.currency }} {{ '{:,.0f}'.format(i.issue_size) }}
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ i.maturity_date or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import CurrentUser, Reviewer
 from app.core.logging import get_logger
 from app.db.models.ops import AuditLog
 from app.db.repositories.ops import HumanReviewRepository
@@ -68,19 +69,23 @@ class PendingResponse(BaseModel):
     total_pending: int
 
 
+# `reviewer_id` is deliberately absent from every request body below. It used
+# to be a client-supplied string, which meant the audit trail recorded whatever
+# the caller typed -- "who approved this?" was answerable only if they chose to
+# be honest. It now comes from the session (CLAUDE.md 1.2 applied to people
+# rather than to text), and cannot be overridden by the request.
+
+
 class ApproveRequest(BaseModel):
-    reviewer_id: str = Field(min_length=1, max_length=255)
     notes: str | None = None
 
 
 class CorrectRequest(BaseModel):
-    reviewer_id: str = Field(min_length=1, max_length=255)
     new_value: str = Field(min_length=1)
     notes: str | None = None
 
 
 class RejectRequest(BaseModel):
-    reviewer_id: str = Field(min_length=1, max_length=255)
     reason: str = Field(min_length=1)
     notes: str | None = None
 
@@ -99,6 +104,7 @@ class ReviewActionResponse(BaseModel):
 
 @router.get("/pending", response_model=PendingResponse)
 async def list_pending(
+    user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=500)] = DEFAULT_LIMIT,
     session: AsyncSession = Depends(get_session),
 ) -> PendingResponse:
@@ -137,6 +143,7 @@ async def list_pending(
 async def approve_review(
     review_id: uuid.UUID,
     body: ApproveRequest,
+    reviewer: Reviewer,
     session: AsyncSession = Depends(get_session),
 ) -> ReviewActionResponse:
     """Accept the machine-extracted value.
@@ -157,7 +164,7 @@ async def approve_review(
 
     # Update the review
     review.status = ReviewStatus.APPROVED
-    review.reviewer_id = body.reviewer_id
+    review.reviewer_id = reviewer.username
     review.review_notes = body.notes
     review.reviewed_at = dt.datetime.now(dt.UTC)
     await session.flush()
@@ -165,7 +172,7 @@ async def approve_review(
     # Write audit entry
     audit = AuditLog(
         actor_type=ActorType.USER,
-        actor_id=body.reviewer_id,
+        actor_id=reviewer.username,
         action="review_approved",
         entity_type=review.entity_type,
         entity_id=review.entity_id,
@@ -183,7 +190,7 @@ async def approve_review(
         "review.approved",
         extra={
             "review_id": str(review_id),
-            "reviewer": body.reviewer_id,
+            "reviewer": reviewer.username,
             "entity_type": review.entity_type,
         },
     )
@@ -202,6 +209,7 @@ async def approve_review(
 async def correct_review(
     review_id: uuid.UUID,
     body: CorrectRequest,
+    reviewer: Reviewer,
     session: AsyncSession = Depends(get_session),
 ) -> ReviewActionResponse:
     """Replace the machine-extracted value with a human-corrected one.
@@ -227,7 +235,7 @@ async def correct_review(
     # Update with correction
     review.new_value = body.new_value
     review.status = ReviewStatus.CORRECTED
-    review.reviewer_id = body.reviewer_id
+    review.reviewer_id = reviewer.username
     review.review_notes = body.notes
     review.reviewed_at = dt.datetime.now(dt.UTC)
     await session.flush()
@@ -235,7 +243,7 @@ async def correct_review(
     # Write audit entry preserving the full history
     audit = AuditLog(
         actor_type=ActorType.USER,
-        actor_id=body.reviewer_id,
+        actor_id=reviewer.username,
         action="review_corrected",
         entity_type=review.entity_type,
         entity_id=review.entity_id,
@@ -254,7 +262,7 @@ async def correct_review(
         "review.corrected",
         extra={
             "review_id": str(review_id),
-            "reviewer": body.reviewer_id,
+            "reviewer": reviewer.username,
             "field": review.field_name,
         },
     )
@@ -273,6 +281,7 @@ async def correct_review(
 async def reject_review(
     review_id: uuid.UUID,
     body: RejectRequest,
+    reviewer: Reviewer,
     session: AsyncSession = Depends(get_session),
 ) -> ReviewActionResponse:
     """Reject a review item (false positive, not applicable, etc.).
@@ -292,7 +301,7 @@ async def reject_review(
         )
 
     review.status = ReviewStatus.REJECTED
-    review.reviewer_id = body.reviewer_id
+    review.reviewer_id = reviewer.username
     review.review_notes = body.notes or body.reason
     review.reviewed_at = dt.datetime.now(dt.UTC)
     await session.flush()
@@ -300,7 +309,7 @@ async def reject_review(
     # Write audit entry
     audit = AuditLog(
         actor_type=ActorType.USER,
-        actor_id=body.reviewer_id,
+        actor_id=reviewer.username,
         action="review_rejected",
         entity_type=review.entity_type,
         entity_id=review.entity_id,
@@ -319,7 +328,7 @@ async def reject_review(
         "review.rejected",
         extra={
             "review_id": str(review_id),
-            "reviewer": body.reviewer_id,
+            "reviewer": reviewer.username,
             "reason": body.reason[:120],
         },
     )

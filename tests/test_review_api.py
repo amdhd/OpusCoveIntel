@@ -71,7 +71,7 @@ class TestApproveReview:
 
         response = await api_client.post(
             f"/review/{review.id}/approve",
-            json={"reviewer_id": "analyst-1", "notes": "threshold confirmed"},
+            json={"notes": "threshold confirmed"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -81,7 +81,7 @@ class TestApproveReview:
         # Verify in DB
         await db_session.refresh(review)
         assert review.status == ReviewStatus.APPROVED
-        assert review.reviewer_id == "analyst-1"
+        assert review.reviewer_id == "test-reviewer"
 
     async def test_approve_writes_audit_log(
         self, api_client: AsyncClient, db_session: AsyncSession
@@ -90,7 +90,7 @@ class TestApproveReview:
 
         await api_client.post(
             f"/review/{review.id}/approve",
-            json={"reviewer_id": "analyst-1"},
+            json={},
         )
 
         # Audit log must exist
@@ -100,7 +100,7 @@ class TestApproveReview:
         assert len(entries) >= 1
         approved_entry = next((e for e in entries if e.action == "review_approved"), None)
         assert approved_entry is not None
-        assert approved_entry.actor_id == "analyst-1"
+        assert approved_entry.actor_id == "test-reviewer"
 
     async def test_approve_fails_for_already_resolved_review(
         self, api_client: AsyncClient, db_session: AsyncSession
@@ -115,7 +115,7 @@ class TestApproveReview:
 
         response = await api_client.post(
             f"/review/{review.id}/approve",
-            json={"reviewer_id": "analyst-1"},
+            json={},
         )
         assert response.status_code == 409
 
@@ -123,7 +123,7 @@ class TestApproveReview:
         fake_id = uuid.uuid4()
         response = await api_client.post(
             f"/review/{fake_id}/approve",
-            json={"reviewer_id": "analyst-1"},
+            json={},
         )
         assert response.status_code == 404
 
@@ -138,7 +138,6 @@ class TestCorrectReview:
         response = await api_client.post(
             f"/review/{review.id}/correct",
             json={
-                "reviewer_id": "analyst-2",
                 "new_value": "RM50,000,000",
                 "notes": "misread — trust deed states RM50m",
             },
@@ -152,7 +151,7 @@ class TestCorrectReview:
         # Old value preserved
         assert review.old_value == "RM30,000,000"
         assert review.new_value == "RM50,000,000"
-        assert review.reviewer_id == "analyst-2"
+        assert review.reviewer_id == "test-reviewer"
 
     async def test_correct_writes_audit_log_with_full_history(
         self, api_client: AsyncClient, db_session: AsyncSession
@@ -162,7 +161,6 @@ class TestCorrectReview:
         await api_client.post(
             f"/review/{review.id}/correct",
             json={
-                "reviewer_id": "analyst-2",
                 "new_value": "RM50,000,000",
                 "notes": "corrected per trust deed",
             },
@@ -183,7 +181,7 @@ class TestCorrectReview:
         review = await _create_pending_review(db_session)
         response = await api_client.post(
             f"/review/{review.id}/correct",
-            json={"reviewer_id": "analyst-2", "new_value": ""},
+            json={"new_value": ""},
         )
         assert response.status_code == 422
 
@@ -198,7 +196,6 @@ class TestRejectReview:
         response = await api_client.post(
             f"/review/{review.id}/reject",
             json={
-                "reviewer_id": "analyst-3",
                 "reason": "false positive — pattern matched a definition section",
             },
         )
@@ -217,7 +214,6 @@ class TestRejectReview:
         await api_client.post(
             f"/review/{review.id}/reject",
             json={
-                "reviewer_id": "analyst-3",
                 "reason": "not a real covenant — Boilerplate text",
             },
         )
@@ -236,6 +232,6 @@ class TestRejectReview:
         review = await _create_pending_review(db_session)
         response = await api_client.post(
             f"/review/{review.id}/reject",
-            json={"reviewer_id": "analyst-3", "reason": ""},
+            json={"reason": ""},
         )
         assert response.status_code == 422

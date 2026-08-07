@@ -247,6 +247,25 @@ class ActorType(StrEnum):
     AGENT = "agent"
 
 
+class UserRole(StrEnum):
+    """Who may do what.
+
+    Two roles, not a permission matrix. The only privileged action in the
+    system is deciding a review-queue item -- that is the point at which a
+    human overrides the machine and the audit trail records their name, so it
+    is the one thing worth gating. Everything else is reading.
+
+    Deliberately not OIDC groups or an RBAC table (CLAUDE.md 9 defers those).
+    """
+
+    ANALYST = "analyst"
+    REVIEWER = "reviewer"
+
+    @property
+    def may_review(self) -> bool:
+        return self is UserRole.REVIEWER
+
+
 class QueryIntent(StrEnum):
     """PLAN.md 5 -- the LangGraph classifier's output space."""
 

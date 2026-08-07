@@ -21,6 +21,10 @@ dependencies = [
     "rapidfuzz>=3.12",
     "sqlglot>=25.0",
     "langgraph>=0.2",
+    # Server-rendered UI. Chosen over string formatting for its autoescaping:
+    # these pages render clause text lifted verbatim out of third-party PDFs,
+    # so escaping is a security control rather than a nicety.
+    "jinja2>=3.1",
 ]
 
 [project.scripts]

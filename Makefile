@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install lint fmt type test test-live check run worker \
-        up down down-volumes logs psql shell migrate migration migrate-down seed \
+        up down down-volumes logs psql shell migrate migration migrate-down seed user-add \
         sample-pdf ingest-sample corpus ingest-corpus index extract-sample \
         extract-llm-dry-run extract-llm \
         ocr ocr-dry-run \
@@ -47,9 +47,15 @@ worker:  ## Run the background worker
 
 up:  ## Start db, api and worker
 	docker compose up -d --build
-	@echo "api      -> http://localhost:8000"
-	@echo "docs     -> http://localhost:8000/docs"
+	@echo "ui       -> http://localhost:8000"
+	@echo "api docs -> http://localhost:8000/docs"
 	@echo "health   -> http://localhost:8000/health"
+	@echo
+	@echo "The UI needs an account: make user-add u=<name> role=reviewer"
+
+user-add:  ## Create a UI account: make user-add u=aminah role=reviewer
+	@test -n "$(u)" || (echo "usage: make user-add u=<username> [role=analyst|reviewer]"; exit 2)
+	$(UV) run opuscovintel user-add $(u) --role $(or $(role),analyst)
 
 down:  ## Stop services, keep data
 	docker compose down

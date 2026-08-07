@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Clause — OpusCovIntel{% endblock %}
+{% block content %}
+<h1>Source</h1>
+
+<div class="panel">
+  <dl class="kv">
+    <dt>Document</dt><dd>{{ p.document_filename or '—' }}</dd>
+    <dt>Page</dt><dd>{{ p.source.page_number }}</dd>
+    <dt>Section</dt><dd>{{ p.source.section_title or '—' }}</dd>
+    <dt>Clause type</dt><dd>{{ p.source.clause_type.value.replace('_', ' ') }}</dd>
+    <dt>Extracted by</dt><dd>{{ p.method.value }}</dd>
+    <dt>Confidence</dt>
+    <dd>
+      {% if p.confidence is none %}—
+      {% else %}
+        <span {% if p.confidence < confidence_threshold %}class="low-confidence"{% endif %}>
+          {{ '%.2f'|format(p.confidence) }}
+        </span>
+        {% if p.confidence < confidence_threshold %}
+          <span class="muted">— below the review threshold</span>
+        {% endif %}
+      {% endif %}
+    </dd>
+    <dt>Citation</dt>
+    <dd>
+      {% if p.source.citation_verified %}
+        <span class="verified">verified{% if p.source.citation_match_score %}
+          ({{ '%.2f'|format(p.source.citation_match_score) }}){% endif %}</span>
+      {% else %}
+        <span class="unverified">not verified</span>
+      {% endif %}
+    </dd>
+  </dl>
+</div>
+
+<h2>Quoted passage, in context</h2>
+{% if p.chunk_text %}
+  <div class="chunk">
+    {#- The highlight is built from server-resolved offsets. When the service
+        could not locate the quote it returns nulls, and we show the chunk
+        unhighlighted rather than guessing -- a highlight over the wrong span
+        would point a reviewer at text the extractor never read. -#}
+    {%- if p.quote_start is not none -%}
+      {{- p.chunk_text[:p.quote_start] -}}
+      <mark>{{- p.chunk_text[p.quote_start:p.quote_end] -}}</mark>
+      {{- p.chunk_text[p.quote_end:] -}}
+    {%- else -%}
+      {{- p.chunk_text -}}
+    {%- endif -%}
+  </div>
+  {% if p.quote_start is none %}
+    <p class="muted" style="font-size:0.82rem">
+      The quote could not be located within this chunk, so nothing is highlighted.
+      The verbatim quote recorded against the clause is below.
+    </p>
+    <blockquote class="citation">{{ p.source.source_quote }}</blockquote>
+  {% endif %}
+{% else %}
+  <p class="empty">No chunk is linked to this clause, so the surrounding context is unavailable.</p>
+  <blockquote class="citation">{{ p.source.source_quote }}</blockquote>
+{% endif %}
+
+<h2>Covenants derived from this clause</h2>
+{% if p.covenants %}
+<table>
+  <thead>
+    <tr><th>Type</th><th>Summary</th><th class="num">Threshold</th><th>Severity</th></tr>
+  </thead>
+  <tbody>
+    {% for c in p.covenants %}
+    <tr>
+      <td>{{ c.covenant_type.value.replace('_', ' ') }}</td>
+      <td>{{ c.summary or '—' }}</td>
+      <td class="num">
+        {% if c.threshold_amount is not none %}
+          {{ c.threshold_currency or '' }} {{ '{:,.2f}'.format(c.threshold_amount) }}
+        {% elif c.thresholds.get('ratio') is not none %}
+          {{ c.thresholds['ratio'] }}×
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ c.severity.value }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">None.</p>
+{% endif %}
+{% endblock %}
