@@ -112,17 +112,19 @@ two releases; there is no online-schema-change tooling here to hide behind.
 
 ## 6. What is deferred, and what to add first
 
-CLAUDE.md 9 defers Celery/Redis, S3/MinIO, RBAC/OIDC and OTel/Prometheus.
-PLAN.md Phase 8 unblocks them; none is built. In the order the constraints
-actually bite:
+CLAUDE.md 9 deferred Celery/Redis, S3/MinIO, RBAC/OIDC and OTel/Prometheus.
+Phase 9 built authentication; PLAN.md Phase 10.6 declines most of the rest with
+reasons. In the order the remaining constraints actually bite:
 
 1. **Object storage (S3).** The first thing to break when the API and worker
    stop sharing a filesystem — which is the first thing that happens on more
    than one host. `app/ingest/storage.py` is already the S3-shaped seam.
-2. **Reviewer identity (OIDC).** `human_reviews.reviewer_id` is a free-text
-   placeholder today. Every other part of the audit trail is real, which makes
-   this the weakest link in it, and PLAN.md 9 lists confirming it as an open
-   question.
+2. ~~**Reviewer identity (OIDC).**~~ **Built in Phase 9**, and scoped down:
+   session auth with two roles rather than OIDC. `human_reviews.reviewer_id` is
+   no longer a client-supplied placeholder — it comes from the session, so the
+   audit trail records who was actually signed in. Full OIDC stays deferred and
+   is not currently needed. Before exposing this beyond a trusted network, read
+   [review.md](review.md): login has no rate limiting and no password policy yet.
 3. **Metrics (OTel/Prometheus).** Spend and job state are already queryable —
    `opuscovintel cost-report`, `extraction_jobs`, `llm_calls` — so this buys
    alerting, not visibility. Alert on the budget ceilings and on the pending

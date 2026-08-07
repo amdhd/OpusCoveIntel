@@ -241,9 +241,13 @@ test session had hidden it from the whole suite.
 **Accept (met):** a reviewer clears a queue item end to end without the CLI · every covenant
 on screen links to its highlighted source span · anonymous requests are refused.
 
-### Phase 10 — Accuracy and coverage *(not started)*
-The remaining work, hardest and most valuable first. Phases 1–9 built the machine; this is
-about whether it is *right*, which none of the current numbers can answer.
+### Phase 10 — Hardening and accuracy *(not started)*
+The remaining work. Phases 1–9 built the machine; this is about whether it is *right* and
+whether it is *safe*, neither of which the current numbers answer.
+
+Findings and their evidence are in **[docs/review.md](docs/review.md)** — an audit taken at
+`dc30321` against the running stack and three real 200–535 page prospectuses. This section is
+the plan; that document is the reasoning behind it. Items 7–10 below came out of it.
 
 1. **A real prospectus, and a re-baseline.** §9 Q1, still open, and the largest source of
    schedule risk. `make eval` reports F1 0.95 (LLM) / 0.99 (rules) against documents we
@@ -269,10 +273,34 @@ about whether it is *right*, which none of the current numbers can answer.
    and the local store already implements an S3-shaped interface. OIDC was superseded by
    Phase 9's session auth. Keep OTel/Prometheus, cheaply. Record the decision here rather
    than leaving four unbuilt items looking like debt.
+7. **Move the boundary for the six operational tables.** `opuscovintel_ro` still holds
+   `SELECT` on `audit_logs`, `human_reviews`, `query_logs`, `llm_calls`, `llm_cache` and
+   `extraction_jobs`. `sql_guard.py` excludes all six from the allowlist and says plainly why;
+   the grant never followed. The init script calls the grant "the actual boundary", so for
+   these tables the boundary does not exist yet. Same migration shape as the Phase 9 revoke
+   for `users`, plus a test that the role gets `permission denied`.
+8. **Raise the cost cap, and fail before spending rather than during.** All three real
+   prospectuses exceed `MAX_COST_PER_DOCUMENT_USD=2.00` — worst case $20.94, $11.48 and
+   $4.28 — so each would abort mid-document, paying for the calls made and leaving a
+   partial extraction. Raise the default to something calibrated for 500-page documents,
+   and make the guard refuse a document whose dry-run ceiling already exceeds the cap.
+   Then build the **Batch API** path §2 specifies and nothing implements: 50% off, and
+   backfilling a corpus is exactly its workload.
+9. **Close the auth gaps.** No rate limiting on login (scrypt's ~170ms is a side effect, not
+   a control), no password minimum length, and no security response headers. A CSP matters
+   more here than usual because the UI renders clause text lifted verbatim out of
+   third-party PDFs — autoescaping is on and tested, and CSP is the layer that holds when an
+   escaping bug slips through. A `login_attempts` table fits the existing design; no Redis.
+10. **Batch the portfolio page's rule evaluation.** It calls `evaluate_covenant_rule` once per
+    holding, each issuing several queries — fine for two positions, hundreds of queries for a
+    realistic 200-bond portfolio. Reusing the agent's tool was right; a second rules
+    implementation would eventually disagree with the first. Batch the loading, not the logic.
 
 **Accept:** one real document ingests, extracts, and has its numbers written down next to the
 synthetic baseline, however bad they are · `rating_agency` F1 ≥0.9 on both methods · one page
-OCR'd live with its cost in the ledger · retrieval measured against the hashing baseline.
+OCR'd live with its cost in the ledger · retrieval measured against the hashing baseline ·
+the read-only role is denied on all six operational tables · a document over the cost cap is
+refused before the first call, not during.
 
 ---
 
