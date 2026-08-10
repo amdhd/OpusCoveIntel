@@ -218,24 +218,30 @@ Everything except extraction and vision OCR runs at $0, including the entire tes
 - **Who approved what is not self-reported.** The reviewer recorded on a decision comes from the
   session, not from the request body, so the audit trail can't be forged by a client.
 - **Passwords** use `hashlib.scrypt` (memory-hard) with per-password parameters stored alongside
-  the hash, so cost can be raised later without invalidating anyone.
+  the hash, so cost can be raised later without invalidating anyone. New passwords must be at
+  least twelve characters — length only, no "one symbol, one digit" rules.
+- **Repeated failed logins back off**, per username and per client address, doubling up to a cap.
+  Backoff rather than lockout, so knowing someone's username is not a way to lock them out.
 - **Sessions** are revocable database rows. Only a SHA-256 of the token is stored, so a database
   dump doesn't hand over live sessions.
 - **The query agent connects as a read-only Postgres role.** Generated SQL is parsed with
   `sqlglot`, checked against a table *and column* allowlist, capped with `LIMIT`, and bounded by a
-  statement timeout. The grant is the real boundary; the parser is defence in depth.
+  statement timeout. The grant is the real boundary; the parser is defence in depth. The role is
+  denied the operational tables outright — the audit trail, the review queue, other people's
+  questions and the cached model output are not readable by the thing being audited.
 - **Login is deliberately uninformative** — wrong password, unknown user and disabled account
   return the same message in the same time, so the endpoint can't be used to enumerate staff.
 
-Known gaps are listed honestly in [docs/review.md](docs/review.md): there is no rate limiting on
-login, no password strength policy, and no security response headers yet.
+Known gaps are listed honestly in [docs/review.md](docs/review.md): there are no security response
+headers yet, and behind a proxy the per-address half of the login limit needs the client address
+forwarded ([docs/deploy.md](docs/deploy.md) §6).
 
 ---
 
 ## Testing
 
 ```bash
-make check    # lint + type check + 758 tests
+make check    # lint + type check + 804 tests
 make eval     # score extraction accuracy -> evals/results/
 ```
 

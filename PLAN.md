@@ -290,10 +290,12 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
 9. **Close the auth gaps.** ✅ *Rate limiting* — `login_attempts` plus exponential backoff per
    username and per client address (`app/auth/rate_limit.py`), enforced inside
    `AuthService.authenticate` so both login paths inherit it; backoff rather than lockout, so
-   nobody needs an operator to get back in. Still open: no password minimum length, and no
-   security response headers. A CSP matters more here than usual because the UI renders clause
-   text lifted verbatim out of third-party PDFs — autoescaping is on and tested, and CSP is the
-   layer that holds when an escaping bug slips through.
+   nobody needs an operator to get back in. ✅ *Password policy* — twelve characters, no
+   composition rules, checked where a password is chosen rather than at login so the floor cannot
+   lock out an account that predates it. Still open: **security response headers**. A CSP matters
+   more here than usual because the UI renders clause text lifted verbatim out of third-party
+   PDFs — autoescaping is on and tested, and CSP is the layer that holds when an escaping bug
+   slips through.
 10. **Batch the portfolio page's rule evaluation.** It calls `evaluate_covenant_rule` once per
     holding, each issuing several queries — fine for two positions, hundreds of queries for a
     realistic 200-bond portfolio. Reusing the agent's tool was right; a second rules

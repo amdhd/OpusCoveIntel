@@ -124,7 +124,7 @@ reasons. In the order the remaining constraints actually bite:
    no longer a client-supplied placeholder — it comes from the session, so the
    audit trail records who was actually signed in. Full OIDC stays deferred and
    is not currently needed. Before exposing this beyond a trusted network, read
-   [review.md](review.md): login has no password policy yet.
+   [review.md](review.md): there are still no security response headers.
 
    **If you put a proxy in front of this, pass the client address through.**
    Login rate limiting counts failures per username *and* per client IP, and

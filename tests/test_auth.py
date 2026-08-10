@@ -21,9 +21,16 @@ from httpx import AsyncClient, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.passwords import hash_password, needs_rehash, verify_password
+from app.auth.passwords import (
+    MIN_PASSWORD_LENGTH,
+    WeakPasswordError,
+    hash_password,
+    needs_rehash,
+    validate_password,
+    verify_password,
+)
 from app.auth.service import AuthService, normalize_username
-from app.db.models.auth import UserSession
+from app.db.models.auth import User, UserSession
 from app.db.models.ops import AuditLog, HumanReview
 from app.domain.enums import ReviewStatus, ReviewTrigger, UserRole
 
@@ -93,6 +100,84 @@ class TestPasswordHashing:
     def test_a_weaker_hash_is_flagged_for_rehash(self) -> None:
         assert needs_rehash(hash_password(PASSWORD, n=1 << 14))
         assert not needs_rehash(hash_password(PASSWORD))
+
+
+# -- the strength policy -----------------------------------------------------
+
+
+class TestPasswordPolicy:
+    """Length, and one context rule. No composition rules -- see passwords.py."""
+
+    @pytest.mark.parametrize("password", ["", "x", "short", "elevenchars"])
+    def test_anything_under_twelve_characters_is_refused(self, password: str) -> None:
+        assert len(password) < MIN_PASSWORD_LENGTH
+        with pytest.raises(WeakPasswordError, match="at least 12"):
+            validate_password(password)
+
+    def test_twelve_ordinary_characters_are_enough(self) -> None:
+        """No symbol, no digit, no capital. Length is the property that matters."""
+        validate_password("correcthorse")
+
+    def test_a_password_containing_the_username_is_refused(self) -> None:
+        with pytest.raises(WeakPasswordError, match="username"):
+            validate_password("aminah-aminah-aminah", username="Aminah")
+
+    def test_an_absurdly_long_password_is_refused(self) -> None:
+        """Not a strength rule -- an unbounded password is an unbounded scrypt input."""
+        with pytest.raises(WeakPasswordError, match="at most"):
+            validate_password("x" * 5000)
+
+    def test_hashing_itself_stays_permissive(self) -> None:
+        """The login path re-hashes with whatever the account already has.
+
+        If `hash_password` applied the policy, raising the scrypt cost would
+        turn every legacy short password into a 500 at the moment its owner
+        types it correctly.
+        """
+        assert hash_password("short")
+
+    async def test_a_weak_password_cannot_create_an_account(self, db_session: AsyncSession) -> None:
+        with pytest.raises(WeakPasswordError):
+            await AuthService(db_session).create_user(username="aminah", password="short")
+
+        assert await AuthService(db_session).users.get_by_username("aminah") is None
+
+    async def test_a_rejected_password_change_leaves_the_account_untouched(
+        self, db_session: AsyncSession
+    ) -> None:
+        """Validate before mutating.
+
+        A change that raises after assigning the hash would leave the user
+        unable to log in with either password, and their sessions revoked.
+        """
+        user = await _make_user(db_session)
+        service = AuthService(db_session)
+        issued = await service.start_session(user, ttl=dt.timedelta(hours=1))  # type: ignore[arg-type]
+
+        with pytest.raises(WeakPasswordError):
+            await service.set_password(user, "short")  # type: ignore[arg-type]
+
+        assert await service.authenticate("aminah", PASSWORD) is not None
+        assert await service.resolve(issued.token) is not None
+
+    async def test_an_account_created_before_the_policy_can_still_log_in(
+        self, db_session: AsyncSession
+    ) -> None:
+        """The floor is at the point of choosing, not at the door.
+
+        Enforcing it at login would lock out every account that predates the
+        policy -- an outage dressed as a security improvement.
+        """
+        legacy = User(
+            username="legacy",
+            display_name="Legacy",
+            password_hash=hash_password("short"),
+            role=UserRole.ANALYST,
+        )
+        db_session.add(legacy)
+        await db_session.flush()
+
+        assert await AuthService(db_session).authenticate("legacy", "short") is not None
 
 
 # -- the service -------------------------------------------------------------

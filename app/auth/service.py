@@ -31,6 +31,7 @@ from app.auth.passwords import (
     needs_rehash,
     new_session_token,
     token_fingerprint,
+    validate_password,
     verify_password,
 )
 from app.auth.rate_limit import LoginRateLimiter
@@ -87,10 +88,18 @@ class AuthService:
         email: str | None = None,
         role: UserRole = UserRole.ANALYST,
     ) -> User:
-        """Create an account. Raises ValueError if the username is taken."""
+        """Create an account.
+
+        Raises `ValueError` if the username is taken or empty, and
+        `WeakPasswordError` (a `ValueError`) if the password is below the
+        policy in `app/auth/passwords.py`. Enforced here rather than in the CLI
+        so that the one path that exists today and any path added later inherit
+        the same floor.
+        """
         normalized = normalize_username(username)
         if not normalized:
             raise ValueError("username must not be empty")
+        validate_password(password, username=normalized)
         if await self.users.get_by_username(normalized) is not None:
             raise ValueError(f"username {normalized!r} already exists")
 
@@ -111,7 +120,11 @@ class AuthService:
         Revoking is not optional politeness: a password change is usually a
         response to a suspected compromise, and leaving live sessions alone
         would defeat the reason for it.
+
+        The policy is checked before anything is mutated, so a rejected change
+        leaves the account exactly as it was -- including its live sessions.
         """
+        validate_password(password, username=user.username)
         user.password_hash = hash_password(password)
         await self._session.flush()
         revoked = await self.sessions.revoke_all_for_user(user.id, now=_now())

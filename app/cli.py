@@ -765,7 +765,13 @@ def user_passwd(username: str = typer.Argument(..., help="Login name")) -> None:
         finally:
             await dispose_engines()
 
-    found = asyncio.run(_run())
+    try:
+        found = asyncio.run(_run())
+    except ValueError as exc:
+        # A password below the policy floor. A message, not a traceback --
+        # this is the command an operator runs at a terminal.
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
 
     if not found:
         typer.secho(f"no such user: {username}", fg=typer.colors.RED)

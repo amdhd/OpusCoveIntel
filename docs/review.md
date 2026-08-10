@@ -22,7 +22,7 @@ so what was true at `dc30321` remains readable.
 |---|---|---|---|---|
 | 1 | Read-only role can read the audit trail and other users' questions | Security | **High** | Fixed |
 | 2 | No rate limiting on login | Security | **High** | Fixed |
-| 3 | No password strength policy | Security | Medium | Open |
+| 3 | No password strength policy | Security | Medium | Fixed |
 | 4 | Per-document cost cap is too low for real documents | Cost | **High** | Open |
 | 5 | No security response headers | Security | Medium | Open |
 | 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Open |
@@ -138,6 +138,24 @@ but nothing enforces a floor.
 the CLI and any future path inherit it. Avoid composition rules ("one symbol, one digit"); length
 is the property that matters. Optionally check against a breached-password list, though for an
 internal tool with operator-created accounts that is likely over-engineering.
+
+**Fixed.** `validate_password` in [`app/auth/passwords.py`](../app/auth/passwords.py): twelve
+characters, no composition rules, plus one context rule — the password may not contain the
+username. The breached-password list stays declined, for the reason above. The floor is a module
+constant rather than a setting: a per-environment minimum is one someone lowers for a demo and
+never raises.
+
+Called from `create_user` and `set_password` — where a password is *chosen* — and deliberately not
+from `hash_password`, which the login path also calls to re-hash when the scrypt cost is raised.
+Enforcing it there would turn every account created before the policy into a 500 at the moment its
+owner types the right password; there is a test for that. `set_password` validates before it
+mutates, so a rejected change leaves the account and its sessions alone.
+
+`LoginRequest.min_length` stays at 1. The floor belongs at the point of choosing, not at the door.
+
+Verified live through the CLI: `user-add` and `user-passwd` both print the message and exit
+non-zero rather than raising. `user-passwd` had no `ValueError` handling — nothing it called could
+raise one before — so it gained the same handler `user-add` already had.
 
 ---
 
@@ -338,7 +356,7 @@ Grouped by what they buy, hardest-hitting first.
 
 1. ~~Revoke the read-only role's grant on the six operational tables~~ *(finding 1 — done)*
 2. Raise the per-document cost cap and refuse-before-spending *(finding 4)*
-3. Password minimum length *(finding 3)*
+3. ~~Password minimum length~~ *(finding 3 — done)*
 4. Security headers middleware *(finding 5)*
 
 **Next — needs design**
