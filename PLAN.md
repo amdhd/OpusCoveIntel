@@ -287,11 +287,13 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    and make the guard refuse a document whose dry-run ceiling already exceeds the cap.
    Then build the **Batch API** path §2 specifies and nothing implements: 50% off, and
    backfilling a corpus is exactly its workload.
-9. **Close the auth gaps.** No rate limiting on login (scrypt's ~170ms is a side effect, not
-   a control), no password minimum length, and no security response headers. A CSP matters
-   more here than usual because the UI renders clause text lifted verbatim out of
-   third-party PDFs — autoescaping is on and tested, and CSP is the layer that holds when an
-   escaping bug slips through. A `login_attempts` table fits the existing design; no Redis.
+9. **Close the auth gaps.** ✅ *Rate limiting* — `login_attempts` plus exponential backoff per
+   username and per client address (`app/auth/rate_limit.py`), enforced inside
+   `AuthService.authenticate` so both login paths inherit it; backoff rather than lockout, so
+   nobody needs an operator to get back in. Still open: no password minimum length, and no
+   security response headers. A CSP matters more here than usual because the UI renders clause
+   text lifted verbatim out of third-party PDFs — autoescaping is on and tested, and CSP is the
+   layer that holds when an escaping bug slips through.
 10. **Batch the portfolio page's rule evaluation.** It calls `evaluate_covenant_rule` once per
     holding, each issuing several queries — fine for two positions, hundreds of queries for a
     realistic 200-bond portfolio. Reusing the agent's tool was right; a second rules

@@ -124,7 +124,16 @@ reasons. In the order the remaining constraints actually bite:
    no longer a client-supplied placeholder — it comes from the session, so the
    audit trail records who was actually signed in. Full OIDC stays deferred and
    is not currently needed. Before exposing this beyond a trusted network, read
-   [review.md](review.md): login has no rate limiting and no password policy yet.
+   [review.md](review.md): login has no password policy yet.
+
+   **If you put a proxy in front of this, pass the client address through.**
+   Login rate limiting counts failures per username *and* per client IP, and
+   the IP it sees is `request.client.host`. Behind a load balancer that is the
+   balancer, so every user shares one counter and `LOGIN_MAX_FAILURES_PER_IP`
+   becomes a global limit rather than a per-attacker one. Run uvicorn with
+   `--proxy-headers --forwarded-allow-ips=<proxy>` so `X-Forwarded-For` is
+   honoured — and only from the proxy, since a client that can set the header
+   itself can also reset its own counter.
 3. **Metrics (OTel/Prometheus).** Spend and job state are already queryable —
    `opuscovintel cost-report`, `extraction_jobs`, `llm_calls` — so this buys
    alerting, not visibility. Alert on the budget ceilings and on the pending

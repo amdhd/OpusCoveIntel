@@ -8,7 +8,7 @@ invisible to migrations -- add new modules to the imports below.
 from __future__ import annotations
 
 from app.db.base import Base
-from app.db.models.auth import User, UserSession
+from app.db.models.auth import LoginAttempt, User, UserSession
 from app.db.models.clauses import CallSchedule, Clause, Covenant, RatingTrigger
 from app.db.models.documents import Document, DocumentChunk, DocumentPage
 from app.db.models.instruments import Instrument, SukukStructure
@@ -36,6 +36,7 @@ __all__ = [
     "Instrument",
     "LLMCache",
     "LLMCall",
+    "LoginAttempt",
     "Portfolio",
     "PortfolioHolding",
     "QueryLog",

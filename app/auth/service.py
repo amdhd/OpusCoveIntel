@@ -10,6 +10,12 @@ enumeration an attacker wants.
 
 **Only the fingerprint is stored.** The client holds an opaque token; the row
 holds its SHA-256. A database dump does not yield live sessions.
+
+**Rate limiting lives inside `authenticate`, not beside it.** Both the JSON API
+and the HTML form call this one method, so putting the check here is the only
+placement a future third caller cannot forget. It raises `LoginThrottledError`
+rather than returning a third kind of `None`, so that forgetting to handle it
+is a 500 rather than a silently unlimited login endpoint.
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ from app.auth.passwords import (
     token_fingerprint,
     verify_password,
 )
+from app.auth.rate_limit import LoginRateLimiter
 from app.core.logging import get_logger
 from app.db.models.auth import User, UserSession
 from app.db.repositories.auth import UserRepository, UserSessionRepository
@@ -67,6 +74,7 @@ class AuthService:
         self._session = session
         self.users = UserRepository(session)
         self.sessions = UserSessionRepository(session)
+        self.throttle = LoginRateLimiter(session)
 
     # -- accounts ------------------------------------------------------------
 
@@ -115,15 +123,38 @@ class AuthService:
 
     # -- login / logout ------------------------------------------------------
 
-    async def authenticate(self, username: str, password: str) -> User | None:
+    async def authenticate(
+        self, username: str, password: str, *, client_ip: str | None = None
+    ) -> User | None:
         """Verify credentials. Returns None for every kind of failure.
 
         The dummy verification on the miss path is load-bearing: without it a
         request for a non-existent user returns in microseconds while a real
         user with a wrong password takes ~170ms, and that difference alone
         enumerates the user table.
+
+        Raises `LoginThrottledError` when too many recent attempts have failed for
+        this username or this client address. That happens *before* the
+        password is checked, so a throttled attempt costs neither the scrypt
+        work nor a lookup -- and the outcome is identical whether or not the
+        username exists.
         """
-        user = await self.users.get_by_username(normalize_username(username))
+        normalized = normalize_username(username)
+        await self.throttle.check(username=normalized, client_ip=client_ip)
+
+        user = await self._verify(normalized, password)
+        await self.throttle.record(
+            username=normalized, client_ip=client_ip, succeeded=user is not None
+        )
+        return user
+
+    async def _verify(self, normalized_username: str, password: str) -> User | None:
+        """The credential check itself, with no rate limiting in it.
+
+        Split out so `authenticate` reads as check-verify-record, and so every
+        `return None` below is counted as a failure by exactly one caller.
+        """
+        user = await self.users.get_by_username(normalized_username)
 
         if user is None:
             verify_password(password, _DUMMY_HASH)

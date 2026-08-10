@@ -21,7 +21,7 @@ so what was true at `dc30321` remains readable.
 | # | Finding | Area | Severity | Status |
 |---|---|---|---|---|
 | 1 | Read-only role can read the audit trail and other users' questions | Security | **High** | Fixed |
-| 2 | No rate limiting on login | Security | **High** | Open |
+| 2 | No rate limiting on login | Security | **High** | Fixed |
 | 3 | No password strength policy | Security | Medium | Open |
 | 4 | Per-document cost cap is too low for real documents | Cost | **High** | Open |
 | 5 | No security response headers | Security | Medium | Open |
@@ -95,6 +95,32 @@ failure mode — prevents username enumeration but does nothing about brute forc
 already Postgres rows, a `login_attempts` table fits the existing design without adding Redis.
 Consider a lockout threshold with an audit-logged unlock, since this is an internal tool where an
 operator can unlock an account.
+
+**Fixed.** [`app/auth/rate_limit.py`](../app/auth/rate_limit.py) over a `login_attempts` table, no
+Redis. Five failures per username and twenty per client address, then each further attempt waits
+2s, 4s, 8s … capped at fifteen minutes; a success clears the count.
+
+Two departures from the suggestion above, both deliberate. **No lockout** — a threshold that
+disables an account hands anyone who knows a username a denial-of-service against that person, and
+backoff bounds an attacker without needing an operator at 2am. **No off switch** — a flag that
+disables rate limiting is the same shape as `AUTH_ENABLED=false`, and this one has no demo to
+justify it.
+
+Enforcement sits inside `AuthService.authenticate`, before the password is checked, so both login
+paths inherit it and a future third caller cannot forget it; it raises rather than returning, so
+forgetting to handle it is a 500 rather than an unlimited endpoint. Verified live against the
+running API: attempts 1–5 answer 401, the sixth 429 with `Retry-After: 2`, the correct password is
+refused while throttled, and after the wait the next attempt is 401 again with the delay doubled
+to 4s.
+
+One thing this cost: the attempt row has to be committed by the limiter itself. `get_session`
+rolls back whenever a handler raises, and a failed login raises `HTTPException(401)` — so the row
+counting the failure is destroyed by that failure, and the counter never passes one. The
+regression test rolls the transaction back by hand, because the suite overrides `get_session` and
+an HTTP-level test passes either way.
+
+**Still open:** behind a proxy, `request.client.host` is the proxy, so the per-IP limit becomes
+global. [docs/deploy.md §6](deploy.md) says what to configure.
 
 ---
 
@@ -317,7 +343,7 @@ Grouped by what they buy, hardest-hitting first.
 
 **Next — needs design**
 
-5. Login rate limiting *(finding 2)*
+5. ~~Login rate limiting~~ *(finding 2 — done)*
 6. Make unsupported questions refuse, and extend the golden set to catch them *(finding 6)*
 7. Fix `rating_agency` normalisation *(finding 9)*
 

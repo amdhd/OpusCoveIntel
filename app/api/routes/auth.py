@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.deps import AuthServiceDep, CurrentUser
+from app.auth.rate_limit import LoginThrottledError
 from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 from app.domain.enums import UserRole
@@ -89,8 +90,24 @@ async def login(
     Every failure is the same 401 with the same message. Distinguishing "no
     such user" from "wrong password" would turn this endpoint into a directory
     of who works here.
+
+    Too many recent failures answer 429 with `Retry-After` instead. That is
+    visible to an attacker by construction -- a rate limit that could not be
+    observed could not be obeyed either -- but it says nothing about whether
+    the username exists, because failed attempts are counted for usernames that
+    do not.
     """
-    user = await service.authenticate(body.username, body.password)
+    client_ip = request.client.host if request.client else None
+
+    try:
+        user = await service.authenticate(body.username, body.password, client_ip=client_ip)
+    except LoginThrottledError as throttled:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="too many failed login attempts; try again later",
+            headers={"Retry-After": str(throttled.retry_after_seconds)},
+        ) from throttled
+
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="invalid username or password")
 
@@ -98,7 +115,7 @@ async def login(
         user,
         ttl=settings.session_ttl,
         user_agent=request.headers.get("user-agent"),
-        client_ip=request.client.host if request.client else None,
+        client_ip=client_ip,
     )
     _set_session_cookie(response, issued.token, settings)
 

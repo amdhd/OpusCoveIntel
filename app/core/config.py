@@ -101,6 +101,24 @@ class Settings(BaseSettings):
     # validator below refuses to let that combination reach production.
     SESSION_COOKIE_SECURE: bool = False
 
+    # -- login rate limiting ----------------------------------------------
+    # Failures older than this stop counting, so a locked-out user recovers
+    # without an operator (app/auth/rate_limit.py).
+    LOGIN_FAILURE_WINDOW_MINUTES: int = 15
+    # Free attempts before backoff starts, per username and per client IP. The
+    # IP threshold is higher because a shared office address is one IP for the
+    # whole desk.
+    LOGIN_MAX_FAILURES_PER_USERNAME: int = 5
+    LOGIN_MAX_FAILURES_PER_IP: int = 20
+    # The delay doubles from the threshold on: 2s, 4s, 8s ... capped at 15
+    # minutes, which is also the window, so the cap is where an attacker's
+    # throughput settles.
+    LOGIN_BACKOFF_BASE_SECONDS: int = 2
+    LOGIN_BACKOFF_MAX_SECONDS: int = 900
+    # How long an attempt row is kept. Long enough to answer "was this account
+    # under attack last night?", short enough that the table stays small.
+    LOGIN_ATTEMPT_RETENTION_HOURS: int = 24
+
     # -- feature flags ----------------------------------------------------
     # Secure by default. The escape hatch exists for local demos, and the
     # validator below makes it unreachable in production -- a flag that can
@@ -140,6 +158,25 @@ class Settings(BaseSettings):
             raise ValueError(
                 "budget guards must be positive; use a feature flag to disable a stage"
             )
+        return v
+
+    @field_validator(
+        "LOGIN_FAILURE_WINDOW_MINUTES",
+        "LOGIN_MAX_FAILURES_PER_USERNAME",
+        "LOGIN_MAX_FAILURES_PER_IP",
+        "LOGIN_BACKOFF_BASE_SECONDS",
+        "LOGIN_BACKOFF_MAX_SECONDS",
+    )
+    @classmethod
+    def _login_limits_must_be_positive(cls, v: int) -> int:
+        """Zero would read as "no limit" but means "throttle the first attempt".
+
+        A negative or zero threshold turns the backoff on before anyone has
+        failed anything, locking every account out of a system that looks
+        configured. There is deliberately no "disable rate limiting" setting.
+        """
+        if v <= 0:
+            raise ValueError("login rate-limit settings must be positive")
         return v
 
     @model_validator(mode="after")

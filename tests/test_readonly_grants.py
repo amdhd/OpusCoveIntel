@@ -39,22 +39,18 @@ from sqlalchemy.pool import NullPool
 from app.agent.sql_guard import ALLOWED_TABLES
 from app.db.models import Base
 
-MIGRATION_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "migrations"
-    / "versions"
-    / "20260810_0733_revoke_operational_tables_from_readonly.py"
-)
+VERSIONS = Path(__file__).resolve().parents[1] / "migrations" / "versions"
+REVOKE_MIGRATION = "20260810_0733_revoke_operational_tables_from_readonly.py"
 
 
-def _load_migration() -> ModuleType:
-    """Import the revision module by path.
+def _load_migration(path: Path) -> ModuleType:
+    """Import a revision module by path.
 
     `migrations/versions` is not a package, and Alembic loads revisions the
-    same way. Importing it is safe: the module defines constants and functions
-    and touches `op` only inside `upgrade()`/`downgrade()`.
+    same way. Importing one is safe: they define constants and functions and
+    touch `op` only inside `upgrade()`/`downgrade()`.
     """
-    spec = importlib.util.spec_from_file_location("_revoke_migration", MIGRATION_PATH)
+    spec = importlib.util.spec_from_file_location(f"_migration_{path.stem}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -62,7 +58,17 @@ def _load_migration() -> ModuleType:
     return module
 
 
-migration = _load_migration()
+migration = _load_migration(VERSIONS / REVOKE_MIGRATION)
+
+# Every migration that narrows the read-only role publishes its statement as
+# `revoke_sql()`. Collecting them means a new one is picked up by the sweep
+# below without anybody remembering to add it here -- and a new table that
+# arrives *without* a revoke is exactly what the sweep is for.
+REVOKING_MIGRATIONS = [
+    module
+    for module in (_load_migration(path) for path in sorted(VERSIONS.glob("*.py")))
+    if hasattr(module, "revoke_sql")
+]
 
 # Replays the Phase 9 migration (`20260807_0652_users_and_sessions.py`), which
 # revoked these two the same way. Setup, not the subject: it is here so the
@@ -217,6 +223,8 @@ async def test_the_readable_set_is_exactly_the_guardrail_allowlist(revoked: _Pro
     SELECT, so a table added later arrives readable by the agent's role unless
     someone thinks about it. This fails when that happens -- which is the point.
     """
+    for module in REVOKING_MIGRATIONS:
+        await revoked.admin_execute(module.revoke_sql())
     await revoked.admin_execute(_PHASE_9_REVOKE.format(role=revoked.role))
 
     readable = {table for table in Base.metadata.tables if await revoked.may_select(table)}
