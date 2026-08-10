@@ -33,7 +33,7 @@ so what was true at `dc30321` remains readable.
 | 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Open |
 | 12 | No dependency vulnerability scanning in CI | Security | Low | Open |
 | 13 | Review-queue pages are unbounded | Performance | Low | Open |
-| 14 | Agent answers a question about one instrument with all of them | Correctness | Medium | Open |
+| 14 | Agent answers a question about one instrument with all of them | Correctness | Medium | Fixed |
 
 Finding 14 was found on 2026-08-10 while fixing 6, not in the original audit; its entry is at the
 end of the Correctness section.
@@ -296,7 +296,8 @@ must *not* be refused against 8 that must be.
 by listing all three instruments. The graph's `_retrieve` calls `get_instrument` with no name
 filter, where the deterministic path narrows to the instrument the question names. Over-broad
 rather than unsupported, and a separate defect — recorded as finding 14 rather than folded in
-here.
+here, and fixed there. (The deterministic path turned out not to narrow this one either; see
+finding 14.)
 
 ### 9. `rating_agency` extraction accuracy is 0.50 — Medium
 
@@ -327,6 +328,33 @@ at a portfolio's scale that is a page of noise around the fact somebody asked fo
 **Fix:** narrow in `_retrieve` the way the deterministic path does, using `mentioned_entities`
 against instrument and issuer names. Then decide whether the golden set should pin it — a
 question naming one instrument whose answer must not name the others.
+
+**Fixed, and it was worse than written above.** Two defects, not one.
+
+*The claim that the deterministic path narrows was only half true.* It narrows when the question
+quotes the stored name in full. The instrument is stored as `RM300m Green Ijarah Sukuk` and the
+question said "the Green Ijarah Sukuk", so `mentioned_entities` — literal substring matching —
+matched nothing and **both** paths answered about all three. `mentioned_entities` now also accepts
+a contiguous run of at least two of a name's words, provided no other candidate shares that
+phrase. Ambiguity still narrows to nothing and answers broadly: a phrase two instruments share
+names neither, and over-answering is noise where guessing is a wrong attribution.
+
+*The portfolio branch had the same defect, and there it produces a wrong number.*
+`What is the total exposure of the Green Fixed Income Fund portfolio?` listed holdings from
+`Income Growth Fund` too and totalled all of them — a figure presented as one fund's exposure that
+was not. Narrowing covers instrument lookups, breach checks and portfolio queries alike, and it
+runs after the answerability check from finding 6, which needs every name to decide whether the
+question can be answered at all.
+
+Both read paths now agree on all four questions checked live, `make eval` still reports 13/13 with
+faithfulness 1.00, and a question that names nothing — `Which holdings would breach their rating
+trigger?` — still evaluates all three instruments, which is the regression the narrowing could
+most easily have caused.
+
+**Noticed while fixing, not fixed:** `_format_portfolio_answer` reads the `get_portfolio_holdings`
+result before the `run_read_only_sql` one, so the generated SQL is executed and its rows are then
+ignored whenever holdings exist. Dead work rather than a wrong answer, but the SQL path is what
+PLAN.md §5 says portfolio aggregation runs on.
 
 ---
 

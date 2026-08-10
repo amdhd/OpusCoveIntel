@@ -86,3 +86,64 @@ def test_an_unmentioned_entity_is_not_matched() -> None:
     # Attaching an answer to the wrong issuer produces a confident, wrong
     # portfolio number -- worse than returning nothing.
     assert mentioned_entities("What covenants apply?", ["Synthetic Retail REIT Berhad"]) == []
+
+
+# -- naming something without quoting the database ---------------------------
+#
+# Nobody types "RM300m Green Ijarah Sukuk". They type "the Green Ijarah Sukuk",
+# and the verbatim rule missed it -- so both read paths answered a question
+# about one instrument with every instrument in the corpus (finding 14).
+
+INSTRUMENTS = [
+    "RM300m Green Ijarah Sukuk",
+    "RM500m Wakalah Sukuk",
+    "RM250m Retail REIT Sukuk",
+]
+
+
+def test_a_partial_name_identifies_the_instrument() -> None:
+    assert mentioned_entities("Who is the issuer of the Green Ijarah Sukuk?", INSTRUMENTS) == [
+        "RM300m Green Ijarah Sukuk"
+    ]
+
+
+def test_a_word_every_candidate_shares_names_none_of_them() -> None:
+    """ "Sukuk" is in all three names, so it identifies nothing.
+
+    This is the case the phrase rule must not get wrong: matching here would
+    attach an answer about one instrument to whichever row sorted first.
+    """
+    assert mentioned_entities("What is the maturity of the sukuk?", INSTRUMENTS) == []
+
+
+def test_a_phrase_two_candidates_share_names_neither() -> None:
+    """Ambiguity is answered broadly, never resolved by guessing.
+
+    Two tranches of one programme differ only by year. A question that does not
+    say which one gets both, which is noisy; picking one would be wrong.
+    """
+    tranches = ["Green Ijarah Sukuk 2030", "Green Ijarah Sukuk 2032"]
+
+    assert mentioned_entities("When does the Green Ijarah Sukuk mature?", tranches) == []
+    assert mentioned_entities("When does the Green Ijarah Sukuk 2032 mature?", tranches) == [
+        "Green Ijarah Sukuk 2032"
+    ]
+
+
+def test_one_issuer_appearing_twice_does_not_clash_with_itself() -> None:
+    """Callers pass overlapping lists.
+
+    Two instruments from one issuer put that issuer's name in `candidates`
+    twice. Counting phrase owners by position rather than by name would read
+    that as ambiguity and silently stop narrowing.
+    """
+    candidates = ["Synthetic Green Energy Sdn Bhd", "Synthetic Green Energy Sdn Bhd"]
+
+    found = mentioned_entities("What does Synthetic Green Energy hold?", candidates)
+
+    assert found == candidates
+
+
+def test_a_single_word_of_a_name_is_never_enough() -> None:
+    """One word is not a name. "Green" is a fund, an instrument and a colour."""
+    assert mentioned_entities("Which green instruments do we hold?", INSTRUMENTS) == []
