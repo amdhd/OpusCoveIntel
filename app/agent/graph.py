@@ -29,7 +29,7 @@ those constants for why one session cannot serve both.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -52,7 +52,7 @@ from app.db.models.ops import AuditLog, QueryLog
 from app.domain.enums import ActorType, QueryIntent
 from app.domain.rules import Citation
 from app.query.answerable import STRUCTURED_INTENTS, refusal_for, unsupported_terms
-from app.query.intent import classify
+from app.query.intent import classify, mentioned_entities
 from app.query.service import NO_EVIDENCE, UNSUPPORTED_MESSAGE, covenant_type_in
 
 # RunnableConfig is langgraph's config dict. Defined here to keep imports
@@ -251,7 +251,74 @@ async def _retrieve(state: AgentState, config: RunnableConfig) -> AgentState:
     ):
         logger.info("agent.insufficient_evidence", extra={"intent": state.intent.value})
 
+    # Narrow to what the question actually named. The tools fetch everything
+    # and the formatters print whatever they are handed, so a question about
+    # one instrument was answered with the whole universe -- and a question
+    # about one fund's exposure with another fund's holdings in the total.
+    #
+    # After the vocabulary check above, which needs every name to decide
+    # whether the question is answerable at all.
+    _narrow_to_named(state)
+
     return state
+
+
+def _narrow_to_named(state: AgentState) -> None:
+    """Drop rows the question did not ask about, in place.
+
+    Only when the question names something. Naming nothing is a question about
+    the whole book -- "which holdings breach their rating trigger?" -- and
+    narrowing that to nothing would refuse the flagship query.
+    """
+    narrowed: list[ToolResult] = []
+    for result in state.tool_results:
+        rows = result.data if result.ok and isinstance(result.data, dict) else None
+        if rows is None:
+            narrowed.append(result)
+            continue
+
+        if instruments := rows.get("instruments"):
+            names = [item.instrument_name for item in instruments]
+            names += [item.issuer_name for item in instruments]
+            mentioned = set(mentioned_entities(state.question, names))
+            kept = [
+                item
+                for item in instruments
+                if item.instrument_name in mentioned or item.issuer_name in mentioned
+            ]
+        elif holdings := rows.get("holdings"):
+            names = [str(item.get("portfolio_name", "")) for item in holdings]
+            names += [str(item.get("instrument_name", "")) for item in holdings]
+            names += [str(item.get("issuer_name", "")) for item in holdings]
+            mentioned = set(mentioned_entities(state.question, [n for n in names if n]))
+            kept = [
+                item
+                for item in holdings
+                if mentioned
+                & {
+                    str(item.get("portfolio_name", "")),
+                    str(item.get("instrument_name", "")),
+                    str(item.get("issuer_name", "")),
+                }
+            ]
+        else:
+            narrowed.append(result)
+            continue
+
+        if not kept or len(kept) == len(rows.get("instruments") or rows.get("holdings") or []):
+            narrowed.append(result)
+            continue
+
+        key = "instruments" if "instruments" in rows else "holdings"
+        narrowed.append(
+            replace(result, data={**rows, key: kept, "count": len(kept)}),
+        )
+        logger.info(
+            "agent.narrowed_to_named_entities",
+            extra={"intent": state.intent.value, "kept": len(kept), "of": len(rows[key])},
+        )
+
+    state.tool_results = narrowed
 
 
 def _known_names(results: list[ToolResult]) -> list[str]:

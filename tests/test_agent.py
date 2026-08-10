@@ -168,6 +168,75 @@ async def test_the_verify_node_refuses_even_if_synthesis_does_not(
     assert "'ceo'" in verified.answer
 
 
+# -- answering about what was asked about ------------------------------------
+#
+# The tools fetch everything and the formatters print what they are handed, so
+# a question about one instrument came back with the whole universe at
+# confidence 0.95 (finding 14). Wrong in a quieter way than finding 6 -- the
+# right row is in there -- but a 200-bond portfolio makes it a page of noise
+# around the fact somebody asked for.
+
+
+async def test_a_question_about_one_instrument_is_answered_about_one(
+    db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
+) -> None:
+    answer = await service(db_session).answer("Who is the issuer of the Green Ijarah Sukuk?")
+
+    assert "Green Ijarah Sukuk" in answer.answer
+    assert "1 instrument(s)" in answer.answer
+    # The other two instruments are not part of this answer.
+    assert "Wakalah" not in answer.answer
+    assert "Retail REIT" not in answer.answer
+
+
+async def test_a_breach_check_about_one_instrument_evaluates_one(
+    db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
+) -> None:
+    """Narrowing reaches the rules engine, not just the printed list.
+
+    Evaluating every covenant in the book and printing a subset would leave the
+    headline count describing something the question never asked about.
+    """
+    answer = await service(db_session).answer(
+        "Does the Green Ijarah Sukuk breach its rating trigger?"
+    )
+
+    assert "across 1 instrument(s)" in answer.answer
+    assert "Retail REIT" not in answer.answer
+
+
+async def test_a_question_about_one_fund_does_not_total_another(
+    db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
+) -> None:
+    """The worst version of this defect: a wrong number, not just noise.
+
+    The answer carries a total, and an unnarrowed one sums holdings from every
+    portfolio into the figure for the fund that was named.
+    """
+    answer = await service(db_session).answer(
+        "What is the total exposure of the Green Fixed Income Fund portfolio?"
+    )
+
+    assert "Green Fixed Income Fund" in answer.answer
+    assert "Income Growth Fund" not in answer.answer
+
+
+async def test_a_question_that_names_nothing_still_gets_everything(
+    db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
+) -> None:
+    """The regression guard: narrowing must not narrow to nothing.
+
+    "Which holdings breach their rating trigger?" names no instrument on
+    purpose -- it is a question about the whole book, and the flagship one.
+    """
+    answer = await service(db_session).answer(
+        "Which holdings would breach their rating trigger at the current rating?"
+    )
+
+    assert not answer.refused
+    assert "across 3 instrument(s)" in answer.answer
+
+
 # -- citations --------------------------------------------------------------
 
 

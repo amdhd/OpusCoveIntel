@@ -241,7 +241,7 @@ forwarded ([docs/deploy.md](docs/deploy.md) §6).
 ## Testing
 
 ```bash
-make check    # lint + type check + 849 tests
+make check    # lint + type check + 858 tests
 make eval     # score extraction accuracy -> evals/results/
 ```
 

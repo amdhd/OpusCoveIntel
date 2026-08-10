@@ -112,12 +112,64 @@ def classify(question: str) -> QueryIntent:
     return QueryIntent.DOCUMENT_SEARCH
 
 
+# A phrase shorter than this identifies nothing: "sukuk" is in every
+# instrument name in the corpus, and "sdn bhd" is in half the issuers.
+_MIN_PHRASE_WORDS: Final[int] = 2
+
+_NAME_WORD = re.compile(r"[a-z0-9]+")
+
+
+def _name_words(text: str) -> list[str]:
+    return _NAME_WORD.findall(text.lower())
+
+
+def _phrases(words: list[str], *, minimum: int) -> set[str]:
+    """Every contiguous run of `words` of at least `minimum` length."""
+    return {
+        " ".join(words[start:end])
+        for start in range(len(words))
+        for end in range(start + minimum, len(words) + 1)
+    }
+
+
 def mentioned_entities(question: str, candidates: list[str]) -> list[str]:
     """Which known names the question names.
 
-    Substring matching on registered names, deliberately literal: attaching an
-    answer to the wrong issuer produces a confident, wrong portfolio number,
-    which is the failure mode this system exists to prevent.
+    Two ways to name one. The **whole registered name appearing verbatim** is
+    the original rule and still the strongest: it cannot be ambiguous, so it
+    matches regardless of what else is registered.
+
+    The second exists because people do not quote database columns. The
+    instrument is stored as "RM300m Green Ijarah Sukuk" and an analyst asks
+    about "the Green Ijarah Sukuk", which the verbatim rule misses -- so the
+    answer came back about every instrument in the corpus, on both read paths
+    (finding 14). A candidate is also named when the question contains a
+    **contiguous run of at least two of its words** that belongs to no other
+    candidate.
+
+    Uniqueness is what keeps this as literal as the original. A phrase two
+    instruments share names neither of them, and the caller answers about both
+    rather than guessing which was meant -- attaching an answer to the wrong
+    issuer produces a confident, wrong portfolio number, which is the failure
+    mode this system exists to prevent. Over-answering is merely noisy.
     """
     text = question.lower()
-    return [name for name in candidates if name.lower() in text]
+    asked = _phrases(_name_words(question), minimum=_MIN_PHRASE_WORDS)
+
+    # Which candidates each phrase could refer to. A phrase claimed by two
+    # names identifies neither. Counted over *distinct* names, because callers
+    # pass overlapping lists -- two instruments from one issuer put that
+    # issuer's name in `candidates` twice, and that must not read as a clash.
+    owners: dict[str, set[str]] = {}
+    candidate_phrases: list[set[str]] = []
+    for name in candidates:
+        phrases = _phrases(_name_words(name), minimum=_MIN_PHRASE_WORDS) & asked
+        candidate_phrases.append(phrases)
+        for phrase in phrases:
+            owners.setdefault(phrase, set()).add(name.lower())
+
+    return [
+        name
+        for name, phrases in zip(candidates, candidate_phrases, strict=True)
+        if name.lower() in text or any(len(owners[phrase]) == 1 for phrase in phrases)
+    ]
