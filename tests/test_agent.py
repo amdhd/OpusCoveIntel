@@ -1,13 +1,14 @@
 """Phase 7 agent tests — the LangGraph agent with deterministic tools.
 
 PLAN.md, Phase 7 acceptance: "≥8/10 golden questions answered with correct
-citations · agent refuses when evidence is absent."
+citations · agent refuses when evidence is absent" -- ≥11 of 13 since the
+Phase 10 additions.
 
 These tests run the AgentQueryService against the same indexed_corpus fixture
 used by the Phase 4 deterministic tests. The agent wraps the deterministic path,
-so the golden questions that pass in Phase 4 (≥6/10) must still pass here.
+so the golden questions that pass in Phase 4 (≥9/13) must still pass here.
 
-The acceptance bar is **≥8/10** — the two above the Phase 4 baseline are
+The acceptance bar is **≥11/13** — the two above the Phase 4 baseline are
 exercised by the agent's verify node and query logging.
 """
 
@@ -50,7 +51,7 @@ def passes(answer: AgentAnswer, case: GoldenQuestion) -> bool:
 async def test_the_agent_meets_the_phase_7_golden_target(
     db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
 ) -> None:
-    """The aggregate bar: ≥8/10 golden questions answered correctly."""
+    """The aggregate bar: ≥11/13 golden questions answered correctly."""
     answered = 0
     failures: list[str] = []
 
@@ -100,6 +101,71 @@ async def test_the_agent_refuses_when_no_evidence_exists(
     answer = await service(db_session).answer("What does the trust deed say about insurance?")
     assert answer.refused
     assert answer.confidence == 0.0
+
+
+async def test_the_agent_refuses_a_question_no_column_can_answer(
+    db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
+) -> None:
+    """The reported failure, end to end.
+
+    "issuer" routes this to `instrument_lookup`, which answers from rows and
+    never reaches the refusal path retrieval owns. It returned every instrument
+    at confidence 0.95 with no citations -- fluent, uncited, and about
+    something else entirely.
+    """
+    answer = await service(db_session).answer("What is the CEO of the issuer paid?")
+
+    assert answer.intent is QueryIntent.INSTRUMENT_LOOKUP
+    assert answer.refused
+    assert answer.confidence == 0.0
+    assert answer.citations == []
+    # The refusal names the words it could not place, so the question can be
+    # rephrased or abandoned on the evidence.
+    assert "'ceo'" in answer.answer
+    # And no instrument leaked into the text on the way out.
+    assert "Sdn Bhd" not in answer.answer
+
+
+async def test_an_unanswerable_question_runs_no_tools(
+    db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
+) -> None:
+    """Refused before the rules engine and the portfolio SQL, not after.
+
+    A breach check that evaluates every covenant and *then* discards the result
+    is both slower and one edit away from reporting it.
+    """
+    answer = await service(db_session).answer("Which holdings breach their ESG policy limits?")
+
+    assert answer.refused
+    assert "evaluate_covenant_rule" not in answer.tools_used
+    assert "run_read_only_sql" not in answer.tools_used
+
+
+async def test_the_verify_node_refuses_even_if_synthesis_does_not(
+    db_session: AsyncSession,
+) -> None:
+    """The last gate, on its own.
+
+    `_synthesize` is a per-intent match statement and is where a new intent
+    gets added; verify is where an answer stops being the graph's problem. This
+    drives verify directly with a state that synthesis has already turned into
+    a confident answer, which is what a forgotten branch would produce.
+    """
+    from app.agent.graph import AgentState, _verify
+
+    state = AgentState(
+        question="What is the CEO of the issuer paid?",
+        intent=QueryIntent.INSTRUMENT_LOOKUP,
+        answer="3 instrument(s) matched.",
+        confidence=0.95,
+        unsupported_terms=["ceo", "paid"],
+    )
+
+    verified = await _verify(state)
+
+    assert verified.refused
+    assert verified.confidence == 0.0
+    assert "'ceo'" in verified.answer
 
 
 # -- citations --------------------------------------------------------------

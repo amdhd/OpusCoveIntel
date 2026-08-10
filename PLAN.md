@@ -22,7 +22,7 @@ MVP on Postgres/pgvector.
 | **Budget control** | token *logging* | **hard caps + cache + breaker** | **Adopted from the cheap plan — see §2** |
 | Human review | full queue + history | none | **Full queue with value history** |
 | Audit | audit tables | queries table | **Full audit + query log** |
-| Evaluation | multi-metric harness | 10 golden Q, 8/10 pass | **Both:** field-F1 *and* golden questions |
+| Evaluation | multi-metric harness | 13 golden Q, 11/13 pass | **Both:** field-F1 *and* golden questions |
 | Infra | Docker, Redis, Celery, MinIO, S3, RBAC, OIDC, OTel | none | **Deferred, then mostly declined** — see Phase 10.6. Compose = Postgres + api + worker; local FS storage |
 | Portfolio module | full | holdings CSV | **Minimal** — 2 tables; the killer queries are portfolio-level |
 
@@ -264,10 +264,13 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    `HashingEmbedder`, so the vector leg of hybrid retrieval is noise and the FTS/kNN
    candidate legs default off. Close §9 Q2 **before** indexing: 1024 dims is baked into the
    schema, and changing it means re-embedding the corpus and rebuilding the HNSW index.
-5. **Refuse more.** The agent answers some unsupported questions at 0.95 confidence instead
-   of refusing — the intent classifier routes them to `instrument_lookup`, which answers
-   from structured rows without needing retrieval, so the refusal path is never reached.
-   The golden set misses this because its one unanswerable question takes the other path.
+5. ~~**Refuse more.**~~ ✅ The agent answered some unsupported questions at 0.95 confidence —
+   the intent classifier routed them to `instrument_lookup`, which answers from structured rows
+   without needing retrieval, so the refusal path was never reached, and the golden set missed it
+   because its one unanswerable question took the other path. `app/query/answerable.py` now
+   refuses a structured-intent question containing any word the schema, the enums and the row
+   names cannot account for, and names the word. Golden set 10 → 13 (targets 6/8 → 9/11); both
+   paths score 13/13 with refusal P/R 1.00.
 6. **Decide the deferred infra, mostly by declining it.** Celery/Redis and MinIO buy nothing
    at this volume — the worker's `FOR UPDATE ... SKIP LOCKED` poll is correct and simpler,
    and the local store already implements an S3-shaped interface. OIDC was superseded by
@@ -324,7 +327,7 @@ production HA/DR.
 3. Covenants, call schedules, rating triggers, and sukuk structures extract into structured rows,
    each with a verified page + verbatim quote.
 4. Low-confidence and disagreeing extractions land in the review queue; a correction preserves history.
-5. The LangGraph agent answers ≥8/10 golden questions with citations and refuses the unanswerable one.
+5. The LangGraph agent answers ≥11/13 golden questions with citations and refuses the four unanswerable ones.
 6. No answer contains a claim not traceable to a retrieved clause.
 7. `make eval` reports extraction F1, citation recall, and faithfulness.
 8. Total LLM spend per document is logged, attributed by stage, and under `MAX_COST_PER_DOCUMENT_USD`.

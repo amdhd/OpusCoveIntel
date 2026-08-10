@@ -1,17 +1,21 @@
 """The golden question set.
 
-Ten questions an analyst would actually ask, against the synthetic corpus:
+Thirteen questions an analyst would actually ask, against the synthetic corpus:
 the three seeded instruments, two portfolios, and the generated prospectus.
 
-**One of them is unanswerable on purpose.** PLAN.md 8.5 requires the system to
-refuse the question it cannot evidence, and a golden set with no refusal case
-measures only eagerness. Q10 asks for a market forecast; the correct answer is
-a refusal, and answering it fluently would be a failure.
+**Four are unanswerable on purpose.** PLAN.md 8.5 requires the system to refuse
+what it cannot evidence, and a golden set with no refusal case measures only
+eagerness. G10 asks for a market forecast. G11-G13 are the harder kind, added
+in Phase 10: questions that *classify as answerable* and are not, because they
+name a field no column holds. The set had none of those, which is why 10/10
+looked like a system that refuses correctly while it was answering
+`What is the CEO of the issuer paid?` at confidence 0.95.
 
-Phase 4's bar is **≥6 of 10 answered with zero LLM calls** (PLAN.md, Phase 4).
-Phase 7 raises it to ≥8 of 10 with an agent on top. Keeping the same questions
-across both is what makes "did the LLM actually help?" a measurable question
-rather than an assumption.
+Phase 4's bar was **≥6 of the original 10 answered with zero LLM calls**
+(PLAN.md, Phase 4) and Phase 7's ≥8 of 10; both were raised by three when
+G11-G13 landed, so the bar still means what it meant. Keeping the same
+questions across both paths is what makes "did the LLM actually help?" a
+measurable question rather than an assumption.
 
 Each case states what a correct answer must contain, not what it must say --
 the deterministic path and the Phase 7 agent will word things differently, and
@@ -139,6 +143,52 @@ GOLDEN_QUESTIONS: tuple[GoldenQuestion, ...] = (
         ),
         tags=("refusal",),
     ),
+    # G11-G13: unanswerable questions that classify as something answerable.
+    #
+    # G10 alone made 10/10 look like a system that refuses correctly, and it was
+    # not: it classifies as `unsupported` and takes the refusal path from the
+    # first node. The three intents below answer from structured rows without
+    # retrieval, so the "no evidence" path is never reached -- every one of
+    # these returned a confident, uncited list of rows about something else.
+    # Each names a field no column holds, in a question shaped like one the
+    # system can answer.
+    GoldenQuestion(
+        id="G11",
+        question="What is the CEO of the issuer paid?",
+        expected_intent=QueryIntent.INSTRUMENT_LOOKUP,
+        expect_refusal=True,
+        notes=(
+            "Reproduced live against the running API before the fix: "
+            "refused=false, confidence 0.95, citations [], and a list of every "
+            "instrument. 'issuer' routes it to instrument_lookup; executive "
+            "compensation appears in no document and in no column."
+        ),
+        tags=("refusal", "structured"),
+    ),
+    GoldenQuestion(
+        id="G12",
+        question="How much exposure do we have to Indonesian coal?",
+        expected_intent=QueryIntent.PORTFOLIO_QUERY,
+        expect_refusal=True,
+        notes=(
+            "Sector and country are not held on any row. The shape of the "
+            "question is answerable; its subject is not, and the honest answer "
+            "is not a portfolio total for something else."
+        ),
+        tags=("refusal", "structured"),
+    ),
+    GoldenQuestion(
+        id="G13",
+        question="Which holdings breach their ESG policy limits?",
+        expected_intent=QueryIntent.COVENANT_BREACH_CHECK,
+        expect_refusal=True,
+        notes=(
+            "'breach' routes to the rules engine, which evaluates covenants "
+            "and knows nothing of ESG policy. Answering with covenant verdicts "
+            "would be a fluent answer to a different question."
+        ),
+        tags=("refusal", "structured", "rules"),
+    ),
 )
 
 
@@ -193,10 +243,15 @@ RETRIEVAL_CASES: tuple[RetrievalCase, ...] = (
 )
 
 
-# PLAN.md, Phase 4 acceptance.
-PHASE_4_TARGET = 6
-# PLAN.md, Phase 7 acceptance.
-PHASE_7_TARGET = 8
+# PLAN.md, Phase 4 acceptance: 6 of the original 10.
+# PLAN.md, Phase 7 acceptance: 8 of the original 10.
+#
+# Both were raised by three when G11-G13 were added, so the bar means the same
+# thing it did: the three new questions are refusals both paths must get right,
+# and leaving the targets alone would have let a path lose three answers it
+# used to get and still report "target met".
+PHASE_4_TARGET = 9
+PHASE_7_TARGET = 11
 
 
 def by_id(question_id: str) -> GoldenQuestion:

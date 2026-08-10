@@ -51,6 +51,7 @@ from app.core.logging import get_logger
 from app.db.models.ops import AuditLog, QueryLog
 from app.domain.enums import ActorType, QueryIntent
 from app.domain.rules import Citation
+from app.query.answerable import STRUCTURED_INTENTS, refusal_for, unsupported_terms
 from app.query.intent import classify
 from app.query.service import NO_EVIDENCE, UNSUPPORTED_MESSAGE, covenant_type_in
 
@@ -79,6 +80,9 @@ class AgentState:
     # Reasoning
     plan: str = ""
     evidence_sufficient: bool = False
+    # Words in the question that the structured path has no meaning for. Set by
+    # `_retrieve`; non-empty is a refusal (app/query/answerable.py).
+    unsupported_terms: list[str] = field(default_factory=list)
 
     # Output
     answer: str = ""
@@ -226,6 +230,21 @@ async def _retrieve(state: AgentState, config: RunnableConfig) -> AgentState:
         r.ok and r.data and r.data.get("count", 0) > 0 for r in state.tool_results
     )
 
+    # Rows were found; whether they answer *this* question is a separate
+    # question, and for the structured intents nothing downstream asks it. An
+    # instrument lookup returns instruments however far the question is from
+    # anything an instrument row records (app/query/answerable.py).
+    if state.intent in STRUCTURED_INTENTS:
+        state.unsupported_terms = list(
+            unsupported_terms(state.question, known_names=_known_names(state.tool_results))
+        )
+        if state.unsupported_terms:
+            state.evidence_sufficient = False
+            logger.info(
+                "agent.unsupported_terms",
+                extra={"intent": state.intent.value, "terms": state.unsupported_terms},
+            )
+
     if not state.evidence_sufficient and state.intent not in (
         QueryIntent.UNSUPPORTED,
         QueryIntent.COVENANT_BREACH_CHECK,
@@ -233,6 +252,28 @@ async def _retrieve(state: AgentState, config: RunnableConfig) -> AgentState:
         logger.info("agent.insufficient_evidence", extra={"intent": state.intent.value})
 
     return state
+
+
+def _known_names(results: list[ToolResult]) -> list[str]:
+    """Names the database holds, harvested from what retrieval already loaded.
+
+    A question is free to name an instrument, an issuer or a portfolio, and
+    those words are known even though no vocabulary could list them. Taken from
+    the tool results rather than queried again: the rows are already in hand.
+    """
+    names: list[str] = []
+    for result in results:
+        if not (result.ok and result.data):
+            continue
+        for instrument in result.data.get("instruments", []):
+            names.append(instrument.instrument_name)
+            names.append(instrument.issuer_name)
+        for holding in result.data.get("holdings", []):
+            names.extend(
+                str(holding.get(key, ""))
+                for key in ("instrument_name", "issuer_name", "portfolio_name")
+            )
+    return [name for name in names if name]
 
 
 async def _tools(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -282,6 +323,15 @@ async def _rules_eval(state: AgentState) -> AgentState:
 
 async def _synthesize(state: AgentState) -> AgentState:
     """Produce the final answer from tool results, deterministically."""
+    # Checked before the intent, because every branch below would otherwise
+    # format the rows it happens to hold into an answer to a question those
+    # rows cannot address.
+    if state.unsupported_terms:
+        state.answer = refusal_for(state.unsupported_terms)
+        state.refused = True
+        state.confidence = 0.0
+        return state
+
     match state.intent:
         case QueryIntent.UNSUPPORTED:
             state.answer = UNSUPPORTED_MESSAGE
@@ -323,6 +373,20 @@ async def _verify(state: AgentState) -> AgentState:
     that was actually retrieved this turn."
     """
     if state.refused:
+        return state
+
+    # The same signal `_synthesize` acts on, enforced again at the last gate.
+    # Deliberate duplication: synthesize is a per-intent match statement and is
+    # where a new intent will be added, and an intent added without its refusal
+    # branch must not be able to answer a question the data cannot address.
+    if state.unsupported_terms:
+        state.answer = refusal_for(state.unsupported_terms)
+        state.refused = True
+        state.confidence = 0.0
+        logger.warning(
+            "agent.verify_caught_unsupported_answer",
+            extra={"intent": state.intent.value, "terms": state.unsupported_terms},
+        )
         return state
 
     if not state.citations and state.intent not in (
@@ -422,6 +486,11 @@ def _route_after_plan(state: AgentState) -> Literal["refuse", "retrieve"]:
 
 
 def _route_after_retrieve(state: AgentState) -> Literal["insufficient", "tools"]:
+    # A question the data cannot address skips the tools entirely -- there is
+    # no point evaluating covenants or running portfolio SQL for it, and the
+    # breach check's exemption below must not let it through.
+    if state.unsupported_terms:
+        return "insufficient"
     if not state.evidence_sufficient and state.intent not in (
         QueryIntent.COVENANT_BREACH_CHECK,
         QueryIntent.UNSUPPORTED,

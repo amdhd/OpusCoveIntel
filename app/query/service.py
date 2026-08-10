@@ -45,6 +45,7 @@ from app.domain.rules import (
     RuleStatus,
 )
 from app.extract.patterns import RATING_TOKEN
+from app.query.answerable import STRUCTURED_INTENTS, refusal_for, unsupported_terms
 from app.query.intent import classify, mentioned_entities
 from app.retrieval.hybrid import HybridSearcher
 from app.rules.covenants import evaluate
@@ -115,6 +116,25 @@ class DeterministicQueryService:
     async def answer(self, question: str) -> Answer:
         intent = classify(question)
         logger.info("query", extra={"intent": intent.value, "chars": len(question)})
+
+        # The structured intents answer from rows, so nothing further down can
+        # notice that the question was about something no row holds. Checked
+        # once, here, rather than in each branch (app/query/answerable.py).
+        if intent in STRUCTURED_INTENTS:
+            unsupported = await self._unsupported_terms(question)
+            if unsupported:
+                logger.info(
+                    "query.unsupported_terms",
+                    extra={"intent": intent.value, "terms": list(unsupported)},
+                )
+                return Answer(
+                    question=question,
+                    intent=intent,
+                    text=refusal_for(unsupported),
+                    confidence=0.0,
+                    refused=True,
+                    tools_used=["classify_intent"],
+                )
 
         match intent:
             case QueryIntent.UNSUPPORTED:
@@ -373,6 +393,23 @@ class DeterministicQueryService:
         )
 
     # -- data access -------------------------------------------------------
+
+    async def _unsupported_terms(self, question: str) -> tuple[str, ...]:
+        """Words in the question that no row and no vocabulary accounts for.
+
+        Two `SELECT name` queries so that a question naming a real instrument,
+        issuer or portfolio is understood. They run before any answer is built,
+        which is the point: the alternative is discovering the question was
+        unanswerable after formatting rows into a reply to it.
+        """
+        instruments = (
+            await self._session.execute(select(Instrument.instrument_name, Instrument.issuer_name))
+        ).all()
+        portfolios = (await self._session.execute(select(Portfolio.name))).scalars().all()
+        names = [str(row[0]) for row in instruments]
+        names += [str(row[1]) for row in instruments]
+        names += [str(name) for name in portfolios]
+        return unsupported_terms(question, known_names=names)
 
     async def _instruments_for(self, question: str) -> list[Instrument]:
         result = await self._session.execute(select(Instrument))

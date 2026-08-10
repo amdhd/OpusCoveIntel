@@ -25,7 +25,7 @@ so what was true at `dc30321` remains readable.
 | 3 | No password strength policy | Security | Medium | Fixed |
 | 4 | Per-document cost cap is too low for real documents | Cost | **High** | Open |
 | 5 | No security response headers | Security | Medium | Open |
-| 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Open |
+| 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Fixed |
 | 7 | No document upload in the UI | Gap | Medium | Open |
 | 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Open |
 | 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Open |
@@ -33,6 +33,10 @@ so what was true at `dc30321` remains readable.
 | 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Open |
 | 12 | No dependency vulnerability scanning in CI | Security | Low | Open |
 | 13 | Review-queue pages are unbounded | Performance | Low | Open |
+| 14 | Agent answers a question about one instrument with all of them | Correctness | Medium | Open |
+
+Finding 14 was found on 2026-08-10 while fixing 6, not in the original audit; its entry is at the
+end of the Correctness section.
 
 ---
 
@@ -261,6 +265,39 @@ why this is High despite being pre-existing.
 intents refuse when nothing in the question maps to a known entity or field. Treat zero citations
 plus high confidence as a contradiction the verify node should catch.
 
+**Fixed.** G11–G13 were added first and failed on both read paths — the deterministic service has
+the same defect, since `_instruments_for` falls back to every instrument when the question names
+none. Then [`app/query/answerable.py`](../app/query/answerable.py): a question routed to a
+structured intent is answerable only if **every salient word** in it is one the system has a
+meaning for — a field it holds, a controlled vocabulary it knows, or the name of something in the
+database. One unknown word and the answer is a refusal that names the word.
+
+That is stricter than the rule suggested above, because the weaker one does not fix this bug.
+"Issuer" *is* a field, so "nothing in the question maps to a known entity or field" is false for
+the reported question, and it is doubly false for `What is the CEO of Synthetic Green Energy Sdn
+Bhd paid?`, which names a real issuer. A whitelist also fails in the safe direction: an
+unrecognised phrasing produces a visible refusal naming what it did not understand, where a
+blocklist of out-of-scope topics is never finished and each gap is a confident wrong answer.
+
+Enforced in the graph at three points, deliberately: `_retrieve` computes it (so an unanswerable
+breach check never runs the rules engine or the portfolio SQL), `_synthesize` refuses on it, and
+`_verify` refuses again — synthesis is a per-intent `match` and is where the next intent will be
+added without its refusal branch.
+
+Reproduced against the running API before and after. The three questions now return
+`refused: true`, `confidence: 0.0`, no citations, and name the terms; twenty-two ordinary
+questions across all three intents still answer, and `make eval` reports 13/13 on both paths with
+refusal precision and recall 1.00.
+
+The guard's real risk is over-refusal, so the test file is weighted that way — 22 questions that
+must *not* be refused against 8 that must be.
+
+**Also found while verifying:** the agent answers "Who is the issuer of the Green Ijarah Sukuk?"
+by listing all three instruments. The graph's `_retrieve` calls `get_instrument` with no name
+filter, where the deterministic path narrows to the instrument the question names. Over-broad
+rather than unsupported, and a separate defect — recorded as finding 14 rather than folded in
+here.
+
 ### 9. `rating_agency` extraction accuracy is 0.50 — Medium
 
 The one weak field in `make eval`: P 0.50 / R 0.50 on the LLM path, R 0.50 on rules, against ≥0.94
@@ -270,6 +307,26 @@ than at either model — likely the Malaysian national-scale suffixes (`(m)`, `i
 
 **Fix:** start in [`app/rules/ratings.py`](../app/rules/ratings.py). Write the regression test,
 watch it fail, then fix.
+
+### 14. The agent answers about one instrument with all of them — Medium
+
+*Found 2026-08-10 while verifying the fix for finding 6, not in the original audit.*
+
+**Reproduced live:** `Who is the issuer of the Green Ijarah Sukuk?` returns `3 instrument(s)
+matched` and lists the whole universe, at confidence 0.95.
+
+The graph's `_retrieve` calls `get_instrument(session)` with no filter for `instrument_lookup`,
+and the formatter prints whatever it is handed. The deterministic path does narrow — its
+`_instruments_for` filters by the names the question mentions — so the two read paths disagree,
+and the agent is the looser one.
+
+Less dangerous than finding 6: the answer contains the right row and is not about something the
+data cannot address. Still wrong — a question about one instrument is answered about three, and
+at a portfolio's scale that is a page of noise around the fact somebody asked for.
+
+**Fix:** narrow in `_retrieve` the way the deterministic path does, using `mentioned_entities`
+against instrument and issuer names. Then decide whether the golden set should pin it — a
+question naming one instrument whose answer must not name the others.
 
 ---
 
@@ -369,7 +426,7 @@ Grouped by what they buy, hardest-hitting first.
 **Next — needs design**
 
 5. ~~Login rate limiting~~ *(finding 2 — done)*
-6. Make unsupported questions refuse, and extend the golden set to catch them *(finding 6)*
+6. ~~Make unsupported questions refuse, and extend the golden set to catch them~~ *(finding 6 — done)*
 7. Fix `rating_agency` normalisation *(finding 9)*
 
 **Then — the accuracy question that matters most**

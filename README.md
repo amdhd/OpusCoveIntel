@@ -124,7 +124,7 @@ make demo
 ```
 
 That ingests a synthetic prospectus, indexes it, extracts covenants with the regex extractor, and
-answers ten benchmark questions without calling any model.
+answers thirteen benchmark questions without calling any model.
 
 ## Loading your own documents
 
@@ -241,7 +241,7 @@ forwarded ([docs/deploy.md](docs/deploy.md) §6).
 ## Testing
 
 ```bash
-make check    # lint + type check + 804 tests
+make check    # lint + type check + 849 tests
 make eval     # score extraction accuracy -> evals/results/
 ```
 

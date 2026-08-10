@@ -124,7 +124,7 @@ make eval             # scores extraction + answers -> evals/results/
 
 $0, no model calls, and it writes both a JSON record and a Markdown summary,
 plus `latest.json` / `latest.md`. It exits non-zero when a read path misses its
-PLAN.md target (6/10 deterministic, 8/10 agent). Extraction F1 is reported and
+PLAN.md target (9/13 deterministic, 11/13 agent). Extraction F1 is reported and
 never gated — PLAN.md sets no target for it, and a threshold invented against a
 synthetic corpus would be a gate that says nothing about production.
 
