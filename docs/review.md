@@ -77,6 +77,13 @@ every denial would pass in a test database that never received it. Its last test
 readable set to the guardrail's allowlist, so the next table to arrive cannot inherit `SELECT`
 from the init script's `ALTER DEFAULT PRIVILEGES` unnoticed.
 
+**It broke two things, and the suite did not notice.** `make eval` and `make cost-report` both
+read `llm_calls` through the read-only session and now exit with `permission denied`. Neither is
+the agent — an operator asking what the pipeline spent is entitled to the ledger — so both were
+moved to the app role. Found by running the commands, not by the 810 tests that were green, which
+is [CLAUDE.md §7](../CLAUDE.md) making its point again: the suite runs everything read-write, so
+no test in it can see a grant.
+
 ---
 
 ### 2. No rate limiting on login — High
