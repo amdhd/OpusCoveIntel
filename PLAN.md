@@ -241,7 +241,7 @@ test session had hidden it from the whole suite.
 **Accept (met):** a reviewer clears a queue item end to end without the CLI · every covenant
 on screen links to its highlighted source span · anonymous requests are refused.
 
-### Phase 10 — Hardening and accuracy *(not started)*
+### Phase 10 — Hardening and accuracy *(in progress)*
 The remaining work. Phases 1–9 built the machine; this is about whether it is *right* and
 whether it is *safe*, neither of which the current numbers answer.
 
@@ -273,12 +273,13 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    and the local store already implements an S3-shaped interface. OIDC was superseded by
    Phase 9's session auth. Keep OTel/Prometheus, cheaply. Record the decision here rather
    than leaving four unbuilt items looking like debt.
-7. **Move the boundary for the six operational tables.** `opuscovintel_ro` still holds
-   `SELECT` on `audit_logs`, `human_reviews`, `query_logs`, `llm_calls`, `llm_cache` and
-   `extraction_jobs`. `sql_guard.py` excludes all six from the allowlist and says plainly why;
-   the grant never followed. The init script calls the grant "the actual boundary", so for
-   these tables the boundary does not exist yet. Same migration shape as the Phase 9 revoke
-   for `users`, plus a test that the role gets `permission denied`.
+7. ~~**Move the boundary for the six operational tables.**~~ ✅ `opuscovintel_ro` held `SELECT`
+   on `audit_logs`, `human_reviews`, `query_logs`, `llm_calls`, `llm_cache` and
+   `extraction_jobs`; `sql_guard.py` excluded all six from the allowlist and said plainly why,
+   and the grant never followed. Revoked in
+   `20260810_0733_revoke_operational_tables_from_readonly.py`, with a test that connects as the
+   role, gets `permission denied`, and pins the role's readable set to the allowlist so a future
+   table cannot inherit `SELECT` from the init script's default privileges.
 8. **Raise the cost cap, and fail before spending rather than during.** All three real
    prospectuses exceed `MAX_COST_PER_DOCUMENT_USD=2.00` — worst case $20.94, $11.48 and
    $4.28 — so each would abort mid-document, paying for the calls made and leaving a

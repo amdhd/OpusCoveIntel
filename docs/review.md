@@ -15,21 +15,24 @@ from reading code alone, which is the discipline [CLAUDE.md §7](../CLAUDE.md) e
 
 ## Summary
 
-| # | Finding | Area | Severity |
-|---|---|---|---|
-| 1 | Read-only role can read the audit trail and other users' questions | Security | **High** |
-| 2 | No rate limiting on login | Security | **High** |
-| 3 | No password strength policy | Security | Medium |
-| 4 | Per-document cost cap is too low for real documents | Cost | **High** |
-| 5 | No security response headers | Security | Medium |
-| 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** |
-| 7 | No document upload in the UI | Gap | Medium |
-| 8 | Portfolio page runs N rule evaluations per request | Performance | Medium |
-| 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium |
-| 10 | Vision/OCR path has never run against a real provider | Coverage | Medium |
-| 11 | Retrieval runs on a placeholder embedder | Quality | Medium |
-| 12 | No dependency vulnerability scanning in CI | Security | Low |
-| 13 | Review-queue pages are unbounded | Performance | Low |
+Status is kept current as findings are closed; the finding text itself stays as it was written,
+so what was true at `dc30321` remains readable.
+
+| # | Finding | Area | Severity | Status |
+|---|---|---|---|---|
+| 1 | Read-only role can read the audit trail and other users' questions | Security | **High** | Fixed |
+| 2 | No rate limiting on login | Security | **High** | Open |
+| 3 | No password strength policy | Security | Medium | Open |
+| 4 | Per-document cost cap is too low for real documents | Cost | **High** | Open |
+| 5 | No security response headers | Security | Medium | Open |
+| 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Open |
+| 7 | No document upload in the UI | Gap | Medium | Open |
+| 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Open |
+| 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Open |
+| 10 | Vision/OCR path has never run against a real provider | Coverage | Medium | Open |
+| 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Open |
+| 12 | No dependency vulnerability scanning in CI | Security | Low | Open |
+| 13 | Review-queue pages are unbounded | Performance | Low | Open |
 
 ---
 
@@ -64,6 +67,15 @@ Precedent already exists: the Phase 9 migration revokes exactly this grant for `
 **Fix:** a migration revoking `SELECT` on those six tables from `opuscovintel_ro`, guarded on the
 role existing, mirroring `20260807_0652_users_and_sessions.py`. Then a test asserting the read-only
 role gets `permission denied` — which will also catch anyone re-widening the grant later.
+
+**Fixed.** [`20260810_0733_revoke_operational_tables_from_readonly.py`](../migrations/versions/20260810_0733_revoke_operational_tables_from_readonly.py)
+revokes all six; verified against the running database, which now grants the role eleven tables
+rather than seventeen, and round-trips cleanly on `downgrade`.
+[`tests/test_readonly_grants.py`](../tests/test_readonly_grants.py) proves the denial by
+connecting *as the role*, after first asserting the grant was there to take away — otherwise
+every denial would pass in a test database that never received it. Its last test pins the
+readable set to the guardrail's allowlist, so the next table to arrive cannot inherit `SELECT`
+from the init script's `ALTER DEFAULT PRIVILEGES` unnoticed.
 
 ---
 
@@ -298,7 +310,7 @@ Grouped by what they buy, hardest-hitting first.
 
 **Now — small, high value**
 
-1. Revoke the read-only role's grant on the six operational tables *(finding 1)*
+1. ~~Revoke the read-only role's grant on the six operational tables~~ *(finding 1 — done)*
 2. Raise the per-document cost cap and refuse-before-spending *(finding 4)*
 3. Password minimum length *(finding 3)*
 4. Security headers middleware *(finding 5)*
