@@ -577,7 +577,7 @@ def eval_command(
     says nothing about production.
     """
     from app.agent.service import open_agent_query_service
-    from app.db.session import get_readonly_sessionmaker
+    from app.db.session import get_readonly_sessionmaker, get_sessionmaker
     from app.evals.harness import EvalReport, run_eval
     from app.evals.report import render_markdown, write_report
     from app.query.service import DeterministicQueryService
@@ -590,16 +590,29 @@ def eval_command(
             # Read-only for the scoring path (CLAUDE.md 1.6). The agent opens
             # its own pair of sessions, because its query log has to be written
             # by a role that can write.
-            async with get_readonly_sessionmaker()() as session:
+            #
+            # The cost ledger needs a third: `llm_calls` is one of the tables
+            # the read-only role is now denied, so the session that scores
+            # answers cannot be the session that reads what they cost.
+            async with (
+                get_readonly_sessionmaker()() as session,
+                get_sessionmaker()() as cost_session,
+            ):
                 deterministic = DeterministicQueryService(session)
                 if skip_agent:
-                    return await run_eval(session, deterministic=deterministic, settings=settings)
+                    return await run_eval(
+                        session,
+                        deterministic=deterministic,
+                        settings=settings,
+                        cost_session=cost_session,
+                    )
                 async with open_agent_query_service() as agent:
                     return await run_eval(
                         session,
                         deterministic=deterministic,
                         agent=agent,
                         settings=settings,
+                        cost_session=cost_session,
                     )
         finally:
             await dispose_engines()
@@ -629,7 +642,13 @@ def cost_report() -> None:
     The ledger is the only source. A cost figure computed anywhere else would
     be an estimate of the number this table already holds (PLAN.md 2).
     """
-    from app.db.session import get_readonly_sessionmaker
+    # The app role, not the read-only one. `opuscovintel_ro` exists for the
+    # query agent, and the agent is denied `llm_calls` on purpose -- an agent
+    # able to read the ledger of what it cost is one of the six tables the
+    # Phase 10 revoke closed. An operator asking what the pipeline spent is not
+    # the agent, and reading through that role now fails with `permission
+    # denied` (found by running it, not by reading it).
+    from app.db.session import get_sessionmaker
     from app.evals.cost import CostEvaluator, CostReport
 
     settings = get_settings()
@@ -637,7 +656,7 @@ def cost_report() -> None:
 
     async def _run() -> CostReport:
         try:
-            async with get_readonly_sessionmaker()() as session:
+            async with get_sessionmaker()() as session:
                 return await CostEvaluator(session, settings).report()
         finally:
             await dispose_engines()
@@ -765,7 +784,13 @@ def user_passwd(username: str = typer.Argument(..., help="Login name")) -> None:
         finally:
             await dispose_engines()
 
-    found = asyncio.run(_run())
+    try:
+        found = asyncio.run(_run())
+    except ValueError as exc:
+        # A password below the policy floor. A message, not a traceback --
+        # this is the command an operator runs at a terminal.
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
 
     if not found:
         typer.secho(f"no such user: {username}", fg=typer.colors.RED)

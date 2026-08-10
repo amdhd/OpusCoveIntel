@@ -65,15 +65,22 @@ Items land there by policy, not by accident (CLAUDE.md 5): confidence below
 citation that would not verify, a value read off a VLM page, or any monetary
 threshold above RM100m.
 
+Reviewers normally work the queue in the UI at `/ui/review`, which shows the
+flagged value, its quote and its trigger. Over HTTP (both need a session cookie
+— see `POST /auth/login`):
+
 ```bash
-curl -s localhost:8000/review/pending \
+curl -s -b cookies.txt localhost:8000/review/pending \
   | jq '{total: .total_pending, by_reason: (.items | group_by(.trigger_reason)
         | map({(.[0].trigger_reason): length}) | add)}'
 ```
 
 Approve, correct or reject through `POST /review/{id}/approve`, `/correct` or
-`/reject`. Each requires a `reviewer_id` — the resolved-review CHECK constraint
-refuses a decision that names nobody.
+`/reject`. **The reviewer is taken from the session, not from the request body** —
+it used to be a client-supplied `reviewer_id`, which meant the audit trail
+recorded whatever the caller typed. Only the `reviewer` role may decide an item;
+an `analyst` reading the same queue gets a 403. The resolved-review CHECK
+constraint is the backstop: it refuses a decision that names nobody.
 
 Triage by `trigger_reason`, because the reasons need different work:
 
@@ -117,7 +124,7 @@ make eval             # scores extraction + answers -> evals/results/
 
 $0, no model calls, and it writes both a JSON record and a Markdown summary,
 plus `latest.json` / `latest.md`. It exits non-zero when a read path misses its
-PLAN.md target (6/10 deterministic, 8/10 agent). Extraction F1 is reported and
+PLAN.md target (9/13 deterministic, 11/13 agent). Extraction F1 is reported and
 never gated — PLAN.md sets no target for it, and a threshold invented against a
 synthetic corpus would be a gate that says nothing about production.
 

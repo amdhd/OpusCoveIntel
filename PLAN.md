@@ -22,7 +22,7 @@ MVP on Postgres/pgvector.
 | **Budget control** | token *logging* | **hard caps + cache + breaker** | **Adopted from the cheap plan — see §2** |
 | Human review | full queue + history | none | **Full queue with value history** |
 | Audit | audit tables | queries table | **Full audit + query log** |
-| Evaluation | multi-metric harness | 10 golden Q, 8/10 pass | **Both:** field-F1 *and* golden questions |
+| Evaluation | multi-metric harness | 13 golden Q, 11/13 pass | **Both:** field-F1 *and* golden questions |
 | Infra | Docker, Redis, Celery, MinIO, S3, RBAC, OIDC, OTel | none | **Deferred, then mostly declined** — see Phase 10.6. Compose = Postgres + api + worker; local FS storage |
 | Portfolio module | full | holdings CSV | **Minimal** — 2 tables; the killer queries are portfolio-level |
 
@@ -241,9 +241,13 @@ test session had hidden it from the whole suite.
 **Accept (met):** a reviewer clears a queue item end to end without the CLI · every covenant
 on screen links to its highlighted source span · anonymous requests are refused.
 
-### Phase 10 — Accuracy and coverage *(not started)*
-The remaining work, hardest and most valuable first. Phases 1–9 built the machine; this is
-about whether it is *right*, which none of the current numbers can answer.
+### Phase 10 — Hardening and accuracy *(in progress)*
+The remaining work. Phases 1–9 built the machine; this is about whether it is *right* and
+whether it is *safe*, neither of which the current numbers answer.
+
+Findings and their evidence are in **[docs/review.md](docs/review.md)** — an audit taken at
+`dc30321` against the running stack and three real 200–535 page prospectuses. This section is
+the plan; that document is the reasoning behind it. Items 7–10 below came out of it.
 
 1. **A real prospectus, and a re-baseline.** §9 Q1, still open, and the largest source of
    schedule risk. `make eval` reports F1 0.95 (LLM) / 0.99 (rules) against documents we
@@ -260,19 +264,51 @@ about whether it is *right*, which none of the current numbers can answer.
    `HashingEmbedder`, so the vector leg of hybrid retrieval is noise and the FTS/kNN
    candidate legs default off. Close §9 Q2 **before** indexing: 1024 dims is baked into the
    schema, and changing it means re-embedding the corpus and rebuilding the HNSW index.
-5. **Refuse more.** The agent answers some unsupported questions at 0.95 confidence instead
-   of refusing — the intent classifier routes them to `instrument_lookup`, which answers
-   from structured rows without needing retrieval, so the refusal path is never reached.
-   The golden set misses this because its one unanswerable question takes the other path.
+5. ~~**Refuse more.**~~ ✅ The agent answered some unsupported questions at 0.95 confidence —
+   the intent classifier routed them to `instrument_lookup`, which answers from structured rows
+   without needing retrieval, so the refusal path was never reached, and the golden set missed it
+   because its one unanswerable question took the other path. `app/query/answerable.py` now
+   refuses a structured-intent question containing any word the schema, the enums and the row
+   names cannot account for, and names the word. Golden set 10 → 13 (targets 6/8 → 9/11); both
+   paths score 13/13 with refusal P/R 1.00.
 6. **Decide the deferred infra, mostly by declining it.** Celery/Redis and MinIO buy nothing
    at this volume — the worker's `FOR UPDATE ... SKIP LOCKED` poll is correct and simpler,
    and the local store already implements an S3-shaped interface. OIDC was superseded by
    Phase 9's session auth. Keep OTel/Prometheus, cheaply. Record the decision here rather
    than leaving four unbuilt items looking like debt.
+7. ~~**Move the boundary for the six operational tables.**~~ ✅ `opuscovintel_ro` held `SELECT`
+   on `audit_logs`, `human_reviews`, `query_logs`, `llm_calls`, `llm_cache` and
+   `extraction_jobs`; `sql_guard.py` excluded all six from the allowlist and said plainly why,
+   and the grant never followed. Revoked in
+   `20260810_0733_revoke_operational_tables_from_readonly.py`, with a test that connects as the
+   role, gets `permission denied`, and pins the role's readable set to the allowlist so a future
+   table cannot inherit `SELECT` from the init script's default privileges.
+8. **Raise the cost cap, and fail before spending rather than during.** All three real
+   prospectuses exceed `MAX_COST_PER_DOCUMENT_USD=2.00` — worst case $20.94, $11.48 and
+   $4.28 — so each would abort mid-document, paying for the calls made and leaving a
+   partial extraction. Raise the default to something calibrated for 500-page documents,
+   and make the guard refuse a document whose dry-run ceiling already exceeds the cap.
+   Then build the **Batch API** path §2 specifies and nothing implements: 50% off, and
+   backfilling a corpus is exactly its workload.
+9. **Close the auth gaps.** ✅ *Rate limiting* — `login_attempts` plus exponential backoff per
+   username and per client address (`app/auth/rate_limit.py`), enforced inside
+   `AuthService.authenticate` so both login paths inherit it; backoff rather than lockout, so
+   nobody needs an operator to get back in. ✅ *Password policy* — twelve characters, no
+   composition rules, checked where a password is chosen rather than at login so the floor cannot
+   lock out an account that predates it. Still open: **security response headers**. A CSP matters
+   more here than usual because the UI renders clause text lifted verbatim out of third-party
+   PDFs — autoescaping is on and tested, and CSP is the layer that holds when an escaping bug
+   slips through.
+10. **Batch the portfolio page's rule evaluation.** It calls `evaluate_covenant_rule` once per
+    holding, each issuing several queries — fine for two positions, hundreds of queries for a
+    realistic 200-bond portfolio. Reusing the agent's tool was right; a second rules
+    implementation would eventually disagree with the first. Batch the loading, not the logic.
 
 **Accept:** one real document ingests, extracts, and has its numbers written down next to the
 synthetic baseline, however bad they are · `rating_agency` F1 ≥0.9 on both methods · one page
-OCR'd live with its cost in the ledger · retrieval measured against the hashing baseline.
+OCR'd live with its cost in the ledger · retrieval measured against the hashing baseline ·
+the read-only role is denied on all six operational tables · a document over the cost cap is
+refused before the first call, not during.
 
 ---
 
@@ -291,7 +327,7 @@ production HA/DR.
 3. Covenants, call schedules, rating triggers, and sukuk structures extract into structured rows,
    each with a verified page + verbatim quote.
 4. Low-confidence and disagreeing extractions land in the review queue; a correction preserves history.
-5. The LangGraph agent answers ≥8/10 golden questions with citations and refuses the unanswerable one.
+5. The LangGraph agent answers ≥11/13 golden questions with citations and refuses the four unanswerable ones.
 6. No answer contains a claim not traceable to a retrieved clause.
 7. `make eval` reports extraction F1, citation recall, and faithfulness.
 8. Total LLM spend per document is logged, attributed by stage, and under `MAX_COST_PER_DOCUMENT_USD`.

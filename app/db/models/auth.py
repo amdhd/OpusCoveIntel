@@ -1,4 +1,4 @@
-"""User and session models.
+"""User, session and login-attempt models.
 
 The reason these exist is the audit trail. Review decisions were recorded
 against whatever `reviewer_id` the client sent, so "who approved this?" was
@@ -9,6 +9,10 @@ Sessions are rows rather than signed cookies. A signed cookie needs no table
 but cannot be revoked before it expires, and "revoke that person's access now"
 is a question an asset manager's compliance function will ask. Postgres is
 already here; a broker is not (CLAUDE.md 9).
+
+`login_attempts` is the same reasoning applied to rate limiting: the counter an
+attacker has to beat lives in the database everything else already lives in,
+rather than in a Redis this deployment does not have.
 """
 
 from __future__ import annotations
@@ -86,4 +90,41 @@ class UserSession(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint("length(token_fingerprint) = 64", name="fingerprint_is_sha256_hex"),
         Index("ix_user_sessions_user_id_expires_at", "user_id", "expires_at"),
+    )
+
+
+class LoginAttempt(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """One credential check, successful or not.
+
+    Append-only, and deliberately *not* a foreign key to `users`: an attempt
+    against a username that does not exist has to be counted exactly like one
+    against a username that does, or the rate limiter becomes the username
+    oracle `app/auth/service.py` works so hard to avoid.
+
+    The password never appears here, in any form. Neither does the session
+    token. What is stored is the smallest thing that can answer "should this
+    attempt be allowed": who was tried, from where, and whether it worked.
+
+    `created_at` is written explicitly by the service from the application
+    clock rather than left to the `now()` server default. Postgres's `now()` is
+    *transaction* start time, so a batch of attempts inside one transaction
+    would all carry the same instant -- and backoff computed from that would be
+    measuring the transaction, not the attacker.
+    """
+
+    __tablename__ = "login_attempts"
+
+    # Normalised the same way `users.username` is, so "A.Rahman" and "a.rahman"
+    # share one counter. Not a FK: see the class docstring.
+    username: Mapped[str] = mapped_column(String(128), nullable=False)
+    client_ip: Mapped[str | None] = mapped_column(String(64))
+    succeeded: Mapped[bool] = mapped_column(nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("length(username) > 0", name="username_not_empty"),
+        # Both lookups are "recent failures for this key", so both indexes are
+        # (key, time) -- a plain index on either column alone would still make
+        # Postgres sort the window.
+        Index("ix_login_attempts_username_created_at", "username", "created_at"),
+        Index("ix_login_attempts_client_ip_created_at", "client_ip", "created_at"),
     )

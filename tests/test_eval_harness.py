@@ -174,6 +174,58 @@ async def test_cost_reports_nothing_rather_than_zero_when_nothing_was_spent(
     assert "No provider call" in render_markdown(report)
 
 
+async def test_the_ledger_is_read_through_the_session_it_was_given(
+    db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
+) -> None:
+    """`llm_calls` is denied to the read-only role, so it needs its own session.
+
+    `make eval` scores answers through `opuscovintel_ro` -- the role the agent
+    uses -- and that role cannot read the cost ledger: it is one of the six
+    operational tables Phase 10 revoked. Reading costs through the scoring
+    session made the whole command exit with `permission denied`, which no test
+    caught because the suite runs everything read-write.
+
+    Proved here without a second role: the spend row lives in an uncommitted
+    transaction, so a report that reads it can only have read it through the
+    session that holds it.
+    """
+    from app.db.models.ops import LLMCall
+    from app.domain.enums import LLMStage
+
+    db_session.add(
+        LLMCall(
+            stage=LLMStage.EXTRACT,
+            provider="mock",
+            model_id="mock-model",
+            estimated_cost_usd=Decimal("1.25"),
+        )
+    )
+    await db_session.flush()
+
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from tests.conftest import _test_database_url
+
+    # A second connection to the same database. It cannot see this test's
+    # uncommitted row, which is what makes the assertion below discriminating.
+    engine = create_async_engine(
+        _test_database_url().render_as_string(hide_password=False), poolclass=NullPool
+    )
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as blind:
+            through_cost_session = await run_eval(blind, cost_session=db_session)
+            through_scoring_session = await run_eval(blind)
+    finally:
+        await engine.dispose()
+
+    assert through_cost_session.cost.has_spend
+    assert through_cost_session.cost.total_usd == Decimal("1.25")
+    # And the control: the session that scores answers sees no spend at all, so
+    # the report above can only have come from the one it was handed.
+    assert not through_scoring_session.cost.has_spend
+
+
 async def test_report_is_written_as_json_and_markdown(
     db_session: AsyncSession, indexed_corpus: list[uuid.UUID], tmp_path: Path
 ) -> None:

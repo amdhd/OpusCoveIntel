@@ -2,9 +2,9 @@
 
 Runs `app.evals.golden.GOLDEN_QUESTIONS` down both read paths -- the Phase 4
 deterministic service and the Phase 7 LangGraph agent -- and scores them the
-same way. Keeping the two comparable is the point: PLAN.md sets 6/10 for the
-deterministic path and 8/10 with the agent on top, and the only way to know
-whether the agent earned those two questions is to ask it the same ten.
+same way. Keeping the two comparable is the point: PLAN.md sets 9/13 for the
+deterministic path and 11/13 with the agent on top, and the only way to know
+whether the agent earned those two questions is to ask it the same thirteen.
 
 Neither path calls a model, so this is $0 and runs in CI (CLAUDE.md 7).
 

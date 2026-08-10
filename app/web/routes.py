@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.service import AgentQueryService
 from app.agent.tools import evaluate_covenant_rule
 from app.api.deps import get_auth_service
+from app.auth.rate_limit import LoginThrottledError
 from app.auth.service import AuthService
 from app.catalog.service import CatalogService
 from app.core.config import Settings, get_settings
@@ -58,8 +59,11 @@ def _page(
     context: dict[str, Any],
     *,
     status_code: int = 200,
+    headers: dict[str, str] | None = None,
 ) -> HTMLResponse:
-    return templates.TemplateResponse(request, name, context, status_code=status_code)
+    return templates.TemplateResponse(
+        request, name, context, status_code=status_code, headers=headers
+    )
 
 
 # -- login -------------------------------------------------------------------
@@ -80,7 +84,28 @@ async def login_submit(
     next: Annotated[str, Form()] = "",
 ) -> Response:
     destination = safe_next(next)
-    user = await service.authenticate(username, password)
+    client_ip = request.client.host if request.client else None
+
+    try:
+        user = await service.authenticate(username, password, client_ip=client_ip)
+    except LoginThrottledError as throttled:
+        # The form again, not a bare 429 body: whoever hits this is usually the
+        # real user on their fourth try, and they need somewhere to type.
+        return _page(
+            request,
+            "login.html",
+            {
+                "user": None,
+                "next_path": destination,
+                "error": (
+                    "Too many failed sign-in attempts. "
+                    f"Try again in {throttled.retry_after_seconds} seconds."
+                ),
+            },
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(throttled.retry_after_seconds)},
+        )
+
     if user is None:
         # 401 with the form re-rendered. The message does not distinguish an
         # unknown user from a wrong password (see app/auth/service.py).
@@ -99,7 +124,7 @@ async def login_submit(
         user,
         ttl=settings.session_ttl,
         user_agent=request.headers.get("user-agent"),
-        client_ip=request.client.host if request.client else None,
+        client_ip=client_ip,
     )
     response = RedirectResponse(destination, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(

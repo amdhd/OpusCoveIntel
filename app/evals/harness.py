@@ -156,6 +156,7 @@ async def run_eval(
     deterministic: Answerer | None = None,
     agent: Answerer | None = None,
     settings: Settings | None = None,
+    cost_session: AsyncSession | None = None,
 ) -> EvalReport:
     """Score the corpus and the golden set through whichever paths are supplied.
 
@@ -163,6 +164,12 @@ async def run_eval(
     not decide which database role the agent runs on -- that choice belongs to
     the caller, and CLAUDE.md 1.6 makes it a real one (the read path must be
     the read-only role, the query log must not be).
+
+    `cost_session` is the same choice for the ledger, in the other direction.
+    `llm_calls` is denied to the read-only role, so a caller that scores answers
+    through it must hand over a session that may read what those answers cost.
+    Defaults to `session`, which is right for a test or a script running
+    entirely read-write.
     """
     resolved = settings or get_settings()
     report = EvalReport(
@@ -196,7 +203,7 @@ async def run_eval(
             agent, path=AGENT_PATH, target=PHASE_7_TARGET
         )
 
-    costs = CostEvaluator(session, resolved)
+    costs = CostEvaluator(cost_session or session, resolved)
     report.cost = await costs.report()
     report.agreement = await costs.agreement()
 
