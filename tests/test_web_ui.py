@@ -136,6 +136,22 @@ class TestPagesRender:
         assert "MYR 300,000,000" in response.text
         assert "300000000" not in response.text, "an ungrouped figure reached the page"
 
+    async def test_a_rating_names_its_scale(
+        self, api_client: AsyncClient, seeded_universe: None
+    ) -> None:
+        """RAM's AA3 and MARC's AA- are one notch on two scales.
+
+        A column that shows the raw string alone invites the lexical comparison
+        CLAUDE.md 6 forbids, so it carries the agency and, where the raw string
+        is not already canonical, the notch it maps to.
+        """
+        response = await api_client.get("/ui/instruments")
+
+        assert 'class="agency">RAM' in response.text
+        assert "= AA-" in response.text, "AA3's canonical notch should be shown"
+        # A- is already the canonical notch; repeating it would be noise.
+        assert "= A-" not in response.text.replace("= AA-", "")
+
     async def test_a_portfolio_reports_its_as_of_date(
         self, api_client: AsyncClient, db_session: AsyncSession, seeded_universe: None
     ) -> None:

@@ -10,9 +10,11 @@
     <dt>Type</dt><dd>{{ i.instrument_type.value }} · {{ i.sukuk_structure.value }}</dd>
     <dt>Rating</dt>
     <dd>{{ i.current_rating or '—' }}
-      {% if i.rating_agency.value != 'unknown' %}({{ i.rating_agency.value }}){% endif %}
-      {% if i.current_rating_rank is not none %}
-        <span class="muted">· notch rank {{ i.current_rating_rank }}</span>
+      {% if i.rating_agency.value != 'unknown' %}
+        <span class="agency">{{ i.rating_agency.value }}</span>
+      {% endif %}
+      {% if i.current_rating_notch %}
+        <span class="notch">· notch {{ i.current_rating_notch }}, rank {{ i.current_rating_rank }}</span>
       {% endif %}
     </dd>
     <dt>Issue size</dt>

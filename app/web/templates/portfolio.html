@@ -32,7 +32,11 @@
     <tr>
       <td><a href="/ui/instruments/{{ row.holding.instrument.id }}"
             >{{ row.holding.instrument.instrument_name }}</a></td>
-      <td>{{ row.holding.instrument.current_rating or '—' }}</td>
+      <td>{{ row.holding.instrument.current_rating or '—' }}
+        {% if row.holding.instrument.rating_agency.value != 'unknown' %}
+          <span class="agency">{{ row.holding.instrument.rating_agency.value }}</span>
+        {% endif %}
+      </td>
       <td class="num">{{ row.holding.market_value | money }}</td>
       <td class="num">{% if row.holding.nav_weight is not none %}
           {{ '{:.2%}'.format(row.holding.nav_weight) }}{% else %}—{% endif %}</td>

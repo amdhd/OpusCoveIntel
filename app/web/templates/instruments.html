@@ -20,9 +20,18 @@
       <td>{{ i.issuer_name }}</td>
       <td>{{ i.sukuk_structure.value }}</td>
       {# Sorted by rank elsewhere, never by this string: 'AA-' < 'A+' lexically
-         and the reverse ordinally (CLAUDE.md 6). #}
-      <td>{{ i.current_rating or '—' }}{% if i.rating_agency.value != 'unknown' %}
-            <span class="muted">({{ i.rating_agency.value }})</span>{% endif %}</td>
+         and the reverse ordinally (CLAUDE.md 6). The agency and the canonical
+         notch are shown for the same reason -- AA3 and AA- are one notch on
+         two scales, and a column that hides that invites the comparison the
+         rules engine refuses to make. #}
+      <td>{{ i.current_rating or '—' }}
+        {% if i.rating_agency.value != 'unknown' %}
+          <span class="agency">{{ i.rating_agency.value }}</span>
+        {% endif %}
+        {% if i.current_rating_notch and i.current_rating_notch != i.current_rating %}
+          <span class="notch" title="{{ i.rating_agency.value }} {{ i.current_rating }} is the same notch as {{ i.current_rating_notch }}">= {{ i.current_rating_notch }}</span>
+        {% endif %}
+      </td>
       <td class="num">
         {{ i.issue_size | money(i.currency) }}
       </td>

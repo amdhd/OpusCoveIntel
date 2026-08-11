@@ -123,6 +123,17 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
  * present them as settled while they sit in the queue. */
 .low-confidence { border-bottom: 1px dotted var(--warn); }
 
+/* A rating is only meaningful with the scale it is on: MARC writes AA- where
+ * RAM writes AA3, and those are the same notch. The agency is therefore a
+ * qualifier on the figure, not a footnote after it, and the canonical notch is
+ * shown whenever the raw string is not already it. */
+.agency {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 3px;
+  padding: 0 4px; vertical-align: 1px;
+}
+.notch { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+
 /* -- ask ---------------------------------------------------------------- */
 
 .answer { white-space: pre-wrap; font-size: 0.95rem; }

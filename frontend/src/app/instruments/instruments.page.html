@@ -26,9 +26,32 @@
           <tr (click)="select(instrument)" style="cursor: pointer">
             <td>{{ instrument.instrument_name }}</td>
             <td class="muted">{{ instrument.issuer_name }}</td>
+            <!-- The agency is which scale the figure is on, not a footnote:
+                 MARC's AA- and RAM's AA3 are the same notch. The canonical
+                 notch comes from the server, where the rank table lives -- a
+                 copy of it here would be a second source of truth for an
+                 ordering every breach evaluation depends on. -->
             <td>
               {{ instrument.current_rating ?? '—' }}
-              <span class="muted">{{ instrument.rating_agency }}</span>
+              @if (instrument.rating_agency !== 'unknown') {
+                <span class="agency">{{ instrument.rating_agency }}</span>
+              }
+              @if (
+                instrument.current_rating_notch &&
+                instrument.current_rating_notch !== instrument.current_rating
+              ) {
+                <span
+                  class="notch"
+                  [title]="
+                    instrument.rating_agency +
+                    ' ' +
+                    instrument.current_rating +
+                    ' is the same notch as ' +
+                    instrument.current_rating_notch
+                  "
+                  >= {{ instrument.current_rating_notch }}</span
+                >
+              }
             </td>
             <td class="muted">{{ instrument.sukuk_structure }}</td>
             <td class="num">{{ instrument.issue_size | money: instrument.currency }}</td>

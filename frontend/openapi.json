@@ -1328,6 +1328,17 @@
             ],
             "title": "Current Rating"
           },
+          "current_rating_notch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rating Notch"
+          },
           "current_rating_rank": {
             "anyOf": [
               {
@@ -1457,6 +1468,17 @@
               }
             ],
             "title": "Current Rating"
+          },
+          "current_rating_notch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rating Notch"
           },
           "current_rating_rank": {
             "anyOf": [

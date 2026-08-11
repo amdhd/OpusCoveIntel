@@ -58,6 +58,25 @@ class TestInstruments:
         assert rated, "the seed rates its instruments"
         assert all(row["current_rating_rank"] is not None for row in rated)
 
+    async def test_the_canonical_notch_is_exposed(
+        self, api_client: AsyncClient, seeded_universe: None
+    ) -> None:
+        """The rank orders ratings; the notch names what a rank *is*.
+
+        A client rendering RAM's `AA3` beside MARC's `AA-` has to be able to say
+        they are the same notch, and cannot without shipping the scale table --
+        which would put a second copy of an ordering that breach evaluation
+        depends on in TypeScript.
+        """
+        body = (await api_client.get("/instruments")).json()
+        rated = [row for row in body if row["current_rating"] is not None]
+        assert rated, "the seed rates its instruments"
+        assert all(row["current_rating_notch"] is not None for row in rated)
+
+        by_rating = {row["current_rating"]: row["current_rating_notch"] for row in rated}
+        assert by_rating["AA3"] == "AA-", "RAM's numeric modifier maps onto the same notch"
+        assert by_rating["A-"] == "A-", "a rating already on the canonical scale is unchanged"
+
     async def test_detail_assembles_the_related_records(
         self, api_client: AsyncClient, db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
     ) -> None:

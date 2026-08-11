@@ -991,6 +991,8 @@ export interface components {
             currency: string;
             /** Current Rating */
             current_rating?: string | null;
+            /** Current Rating Notch */
+            current_rating_notch?: string | null;
             /** Current Rating Rank */
             current_rating_rank?: number | null;
             /**
@@ -1024,6 +1026,8 @@ export interface components {
             currency: string;
             /** Current Rating */
             current_rating?: string | null;
+            /** Current Rating Notch */
+            current_rating_notch?: string | null;
             /** Current Rating Rank */
             current_rating_rank?: number | null;
             /**
