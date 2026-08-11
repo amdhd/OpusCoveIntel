@@ -88,6 +88,8 @@ table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* The row a detail panel elsewhere on the page is describing. */
+tr.selected > td { background: #f2f6fb; }
 
 .muted { color: var(--muted); }
 .empty { color: var(--muted); font-style: italic; padding: 1rem 0; }
@@ -107,6 +109,9 @@ button {
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.danger { color: var(--breach); border-color: #e3b9c1; }
 button:disabled { opacity: 0.55; cursor: not-allowed; }
+/* A button whose panel is currently open. Not `.primary`: this is a statement
+ * about what you are looking at, not the action the screen wants next. */
+button.on { border-color: var(--accent); color: var(--accent); }
 
 .alert { padding: 0.6rem 0.85rem; border-radius: 6px; margin: 0 0 1rem; }
 .alert.error { background: var(--breach-bg); color: var(--breach); }

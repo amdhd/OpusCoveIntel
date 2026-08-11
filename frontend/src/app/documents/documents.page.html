@@ -136,7 +136,7 @@
       </thead>
       <tbody>
         @for (document of documents(); track document.id) {
-          <tr>
+          <tr [class.selected]="watching()?.document_id === document.id">
             <td>{{ document.filename }}</td>
             <!-- `unknown` is the absence of a classification, not a kind of
                  document, and printing the enum makes it look like a finding. -->
@@ -145,7 +145,19 @@
               <span class="status {{ statusClass(document.status) }}">{{ document.status }}</span>
             </td>
             <td class="num">{{ document.page_count ?? '—' }}</td>
-            <td><button type="button" (click)="watch(document.id)">Progress</button></td>
+            <!-- Named after what it opens, and marked while it is open: the
+                 panel it fills is above the table, so with five identical
+                 buttons there was nothing to say which row you were reading. -->
+            <td>
+              <button
+                type="button"
+                (click)="watch(document.id)"
+                [attr.aria-pressed]="watching()?.document_id === document.id"
+                [class.on]="watching()?.document_id === document.id"
+              >
+                {{ watching()?.document_id === document.id ? 'Showing detail' : 'Ingestion detail' }}
+              </button>
+            </td>
           </tr>
         }
       </tbody>
