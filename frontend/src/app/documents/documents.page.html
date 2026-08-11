@@ -84,7 +84,7 @@
       <dt>pages needing the vision model</dt>
       <dd>{{ status.pages_flagged_for_vlm }}</dd>
       <dt>parse confidence</dt>
-      <dd>{{ status.parse_confidence ?? '—' }}</dd>
+      <dd>{{ status.parse_confidence | confidence }}</dd>
     </dl>
 
     <table>

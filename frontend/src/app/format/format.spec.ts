@@ -6,7 +6,7 @@
  * only way to notice they have drifted is to assert the same table on both
  * sides.
  */
-import { EM_DASH, money } from './format';
+import { belowReviewBar, confidence, EM_DASH, money, REVIEW_THRESHOLD } from './format';
 
 // [value, currency, expected]
 const CASES: [string, string | null, string][] = [
@@ -46,4 +46,35 @@ describe('money', () => {
       expect(money(empty)).toBe(EM_DASH);
     });
   }
+});
+
+describe('confidence', () => {
+  // Same table as `TestConfidence` in tests/test_web_format.py.
+  const CONFIDENCE_CASES: [number, string][] = [
+    [0.78, '78%'],
+    [0.85, '85%'],
+    [0.9999, '100%'],
+    [0.0, '0%'],
+    [1.0, '100%'],
+  ];
+
+  for (const [value, expected] of CONFIDENCE_CASES) {
+    it(`renders ${value} as ${expected}`, () => {
+      expect(confidence(value)).toBe(expected);
+    });
+  }
+
+  it('renders nothing as a dash', () => {
+    expect(confidence(null)).toBe(EM_DASH);
+    expect(confidence(undefined)).toBe(EM_DASH);
+  });
+
+  it('marks a figure under the bar, and only under it', () => {
+    expect(belowReviewBar(REVIEW_THRESHOLD - 0.01)).toBeTrue();
+    // The bar itself is not below itself: `confidence < threshold` queues an
+    // item, so 0.85 is settled and must not wear the marker.
+    expect(belowReviewBar(REVIEW_THRESHOLD)).toBeFalse();
+    expect(belowReviewBar(null)).toBeFalse();
+    expect(belowReviewBar(undefined)).toBeFalse();
+  });
 });

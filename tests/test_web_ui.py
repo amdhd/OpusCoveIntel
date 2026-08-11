@@ -152,6 +152,31 @@ class TestPagesRender:
         assert (await api_client.get(f"/ui/instruments/{uuid.uuid4()}")).status_code == 404
 
 
+class TestConfidenceOnThePage:
+    async def test_a_confidence_is_a_percentage(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        await _pending(db_session, confidence=0.78)
+        response = await api_client.get("/ui/review")
+
+        assert "78%" in response.text
+        assert "0.78" not in response.text
+
+    async def test_only_a_figure_under_the_bar_is_marked(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The marker was unconditional here.
+
+        An item queued for a rules/LLM disagreement at 0.99 wore the
+        low-confidence underline, which says something untrue about it.
+        """
+        await _pending(db_session, confidence=0.99)
+        response = await api_client.get("/ui/review")
+
+        assert "99%" in response.text
+        assert "low-confidence" not in response.text
+
+
 class TestProvenancePage:
     async def test_the_highlight_wraps_the_quote(
         self, api_client: AsyncClient, db_session: AsyncSession, indexed_corpus: list[uuid.UUID]

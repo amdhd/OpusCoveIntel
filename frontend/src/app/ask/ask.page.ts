@@ -12,11 +12,12 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { Api } from '../api/api';
+import { ConfidencePipe } from '../format/format';
 import type { QueryResponse } from '../api/models';
 
 @Component({
   selector: 'app-ask',
-  imports: [FormsModule],
+  imports: [FormsModule, ConfidencePipe],
   templateUrl: './ask.page.html',
 })
 export class AskPage {

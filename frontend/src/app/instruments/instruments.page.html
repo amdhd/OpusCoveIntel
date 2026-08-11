@@ -67,8 +67,13 @@
               <td class="muted">{{ covenant.method }}</td>
               <td class="num">
                 <!-- Under the review threshold, a figure is not settled. -->
-                <span [class.low-confidence]="lowConfidence(covenant)">
-                  {{ covenant.confidence ?? '—' }}
+                <span
+                  [class.low-confidence]="lowConfidence(covenant)"
+                  [attr.title]="
+                    lowConfidence(covenant) ? 'below the ' + reviewBar + ' review threshold' : null
+                  "
+                >
+                  {{ covenant.confidence | confidence }}
                 </span>
               </td>
               <td>

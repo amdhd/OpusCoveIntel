@@ -24,7 +24,11 @@
     <div class="trigger">
       {{ item.trigger_reason.replace('_', ' ') }}
       {% if item.confidence is not none %}
-        · confidence <span class="low-confidence">{{ '%.2f'|format(item.confidence) }}</span>
+        {# The marker was unconditional here, so a 0.99 queued for a different
+           reason wore the low-confidence underline too. #}
+        · confidence <span {% if item.confidence < confidence_threshold %}class="low-confidence"
+              title="below the {{ confidence_threshold | confidence }} review threshold"{% endif %}
+          >{{ item.confidence | confidence }}</span>
       {% endif %}
       {% if item.page_number %} · page {{ item.page_number }}{% endif %}
     </div>

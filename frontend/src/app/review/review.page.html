@@ -33,7 +33,16 @@
         <strong>{{ item.entity_type }}.{{ item.field_name }}</strong>
         <span class="trigger">· {{ item.trigger_reason }}</span>
         @if (item.confidence !== null) {
-          <span class="trigger">· confidence {{ item.confidence }}</span>
+          <span class="trigger">
+            · confidence
+            <span
+              [class.low-confidence]="belowBar(item.confidence)"
+              [attr.title]="
+                belowBar(item.confidence) ? 'below the ' + reviewBar + ' review threshold' : null
+              "
+              >{{ item.confidence | confidence }}</span
+            >
+          </span>
         }
         @if (item.page_number !== null) {
           <span class="trigger">· page {{ item.page_number }}</span>

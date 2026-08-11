@@ -64,8 +64,9 @@
       <td>
         {% if c.confidence is none %}—
         {% else %}
-        <span {% if c.confidence < confidence_threshold %}class="low-confidence"{% endif %}
-              >{{ '%.2f'|format(c.confidence) }}</span>
+        <span {% if c.confidence < confidence_threshold %}class="low-confidence"
+                title="below the {{ confidence_threshold | confidence }} review threshold"{% endif %}
+              >{{ c.confidence | confidence }}</span>
         {% endif %}
       </td>
       {# Every covenant links to its evidence. A threshold with no reachable

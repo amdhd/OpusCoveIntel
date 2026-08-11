@@ -16,6 +16,9 @@ The convention:
 * Money never passes through a float, on either side. `HoldingRead` says why: a
   `Decimal` crosses the wire as a JSON string precisely so that a client cannot
   quietly turn RM300,000,000.05 into a double.
+* Confidence is a percentage. `0.78` is a number an analyst has to convert
+  before they can compare it to the 85% review bar; `78%` is one they can read
+  against it at a glance.
 * Anything that is not a bare decimal is returned verbatim. Review values are
   free text -- "RM30,000,000 or its equivalent" is a value someone typed, and a
   display helper does not get to reinterpret it as a number.
@@ -54,6 +57,18 @@ def money(value: Decimal | str | None, currency: str | None = None) -> str:
         amount = _trim(f"{sign}{int(whole):,}" + (f".{fraction}" if fraction else ""))
 
     return f"{currency} {amount}" if currency else amount
+
+
+def confidence(value: float | None) -> str:
+    """A model's confidence as a percentage, to the nearest point.
+
+    Not two decimal places: the third significant figure of a model's
+    self-reported confidence is not a real quantity, and printing it invites
+    people to read 0.78 against 0.77 as though the difference meant something.
+    """
+    if value is None:
+        return EM_DASH
+    return f"{round(value * 100)}%"
 
 
 def _trim(text: str) -> str:

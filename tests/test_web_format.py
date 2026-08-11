@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.web.format import money
+from app.web.format import confidence, money
 
 # (value, currency, expected)
 CASES: list[tuple[str, str | None, str]] = [
@@ -62,3 +62,15 @@ class TestMoney:
     @pytest.mark.parametrize("empty", [None, ""])
     def test_nothing_renders_as_a_dash(self, empty: str | None) -> None:
         assert money(empty) == "—"
+
+
+class TestConfidence:
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [(0.78, "78%"), (0.85, "85%"), (0.9999, "100%"), (0.0, "0%"), (1.0, "100%")],
+    )
+    def test_a_case(self, value: float, expected: str) -> None:
+        assert confidence(value) == expected
+
+    def test_nothing_renders_as_a_dash(self) -> None:
+        assert confidence(None) == "—"

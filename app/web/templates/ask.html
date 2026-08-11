@@ -26,7 +26,7 @@
     <div class="panel">
       <p class="muted" style="margin:0 0 0.6rem;font-size:0.82rem">
         {{ answer.intent.value.replace('_', ' ') }}
-        · confidence {{ '%.2f'|format(answer.confidence) }}
+        · confidence {{ answer.confidence | confidence }}
         · {{ answer.citations|length }} citation{{ '' if answer.citations|length == 1 else 's' }}
       </p>
       <div class="answer">{{ answer.answer }}</div>

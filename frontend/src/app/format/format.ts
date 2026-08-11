@@ -7,6 +7,9 @@
  * module; the case table in `format.spec.ts` is a copy of the one in
  * `tests/test_web_format.py` on purpose. Change one, change both.
  *
+ * Confidence is a percentage here too: `0.78` is a number an analyst has to
+ * convert before they can compare it against the review bar.
+ *
  * The rule that is not merely cosmetic: **money is never parsed through a
  * `number`.** `Decimal` crosses the wire as a JSON string (see `HoldingRead`)
  * so that a client cannot silently round RM300,000,000.05 into a double. That
@@ -40,6 +43,37 @@ export function money(value: string | number | null | undefined, currency?: stri
   const amount = `${sign}${grouped}${trimmed ? `.${trimmed}` : ''}`;
 
   return currency ? `${currency} ${amount}` : amount;
+}
+
+/**
+ * CLAUDE.md 5: below this a field is queued for a human.
+ *
+ * The server reads this from `DEFAULT_CONFIDENCE_THRESHOLD` and hands it to its
+ * templates. This app has no endpoint that publishes it, so it is a constant
+ * here -- if the setting is ever changed, this is the second place to change.
+ */
+export const REVIEW_THRESHOLD = 0.85;
+
+/** A model's confidence as a percentage, to the nearest point. */
+export function confidence(value: number | null | undefined): string {
+  // Not two decimal places: the third significant figure of a model's
+  // self-reported confidence is not a real quantity, and printing it invites
+  // people to read 0.78 against 0.77 as though the difference meant something.
+  return value == null ? EM_DASH : `${Math.round(value * 100)}%`;
+}
+
+/** Whether a figure is under the bar, and so not settled. */
+export function belowReviewBar(value: number | null | undefined): boolean {
+  // `!= null` rather than `!== null`: the generated type is optional as well as
+  // nullable, so a missing field is `undefined`, not `null`.
+  return value != null && value < REVIEW_THRESHOLD;
+}
+
+@Pipe({ name: 'confidence' })
+export class ConfidencePipe implements PipeTransform {
+  transform(value: number | null | undefined): string {
+    return confidence(value);
+  }
 }
 
 @Pipe({ name: 'money' })
