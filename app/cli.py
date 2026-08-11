@@ -27,6 +27,7 @@ import typer
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import check_database, dispose_engines
+from app.domain.enums import DocumentType
 
 app = typer.Typer(help="OpusCovIntel operator CLI", no_args_is_help=True)
 
@@ -64,8 +65,18 @@ def ingest(
     path: Path,
     process: bool = typer.Option(True, help="Parse and chunk now instead of only queueing."),
     uploaded_by: str | None = typer.Option(None, help="Recorded on the document row."),
+    document_type: DocumentType = typer.Option(
+        DocumentType.UNKNOWN, "--type", help="What the file is. Classification is not automatic."
+    ),
 ) -> None:
-    """Upload a PDF, then parse, score and chunk it. Idempotent by content hash."""
+    """Upload a PDF, then parse, score and chunk it. Idempotent by content hash.
+
+    `--type` is the only way a document gets classified. The upload endpoint has
+    taken one since it was written, but this command did not pass one, so every
+    document ingested from a terminal -- which is every document in a
+    development corpus -- was recorded as `unknown`, and the detection stage
+    that would fill it in is not built (CLAUDE.md 2).
+    """
     from app.ingest.service import IngestionService
     from app.ingest.storage import get_object_store
 
@@ -86,6 +97,7 @@ def ingest(
                     filename=path.name,
                     # Off the event loop: blocking file I/O in an async path.
                     data=await asyncio.to_thread(path.read_bytes),
+                    document_type=document_type,
                     uploaded_by=uploaded_by,
                 )
                 document_id = outcome.document.id
