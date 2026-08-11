@@ -1,0 +1,55 @@
+/* Global styles.
+ *
+ * The palette, panels, tables and status pills come from the server-rendered
+ * UI's stylesheet, which is *referenced* rather than copied -- see the `styles`
+ * array in angular.json. One stylesheet, two renderers: two copies would drift,
+ * and the drift would show up as the same product looking like two products.
+ *
+ * Only what the client app adds belongs here. */
+
+/* Native progress elements, styled to match the panels rather than the OS. */
+progress {
+  height: 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: #eceff3;
+  accent-color: var(--accent);
+}
+progress::-webkit-progress-bar {
+  background: #eceff3;
+  border-radius: 4px;
+}
+progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 4px;
+}
+/* Indeterminate: work is happening at the server and the client cannot say how
+   much is left. An invented percentage would be a lie with a number on it. */
+progress:not([value]) {
+  background: linear-gradient(90deg, #eceff3 0%, var(--accent) 50%, #eceff3 100%);
+  background-size: 200% 100%;
+  animation: sweep 1.4s linear infinite;
+}
+@keyframes sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  progress:not([value]) {
+    animation: none;
+  }
+}
+
+input[type='file'] {
+  font: inherit;
+  padding: 0.35rem 0;
+}
+
+.topbar nav a.on {
+  color: var(--ink);
+  border-bottom: 2px solid var(--accent);
+}

@@ -1,0 +1,50 @@
+{
+  "/auth": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/query": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/documents": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/instruments": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/covenants": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/portfolios": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/provenance": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/review": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/audit": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/health": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/ui": {
+    "target": "http://localhost:8000",
+    "secure": false
+  },
+  "/clauses": {
+    "target": "http://localhost:8000",
+    "secure": false
+  }
+}
