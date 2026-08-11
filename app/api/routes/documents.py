@@ -14,11 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import current_user
 from app.core.config import get_settings
+from app.db.repositories.documents import DocumentChunkRepository
+from app.db.repositories.ops import ExtractionJobRepository
 from app.db.session import get_session
 from app.domain.documents import (
     DocumentChunkRead,
     DocumentPageRead,
     DocumentRead,
+    DocumentStatusRead,
+    IngestionJobRead,
     IngestionResponse,
     UploadResponse,
 )
@@ -38,6 +42,20 @@ router = APIRouter(
     prefix="/documents",
     tags=["documents"],
     dependencies=[Depends(current_user)],
+)
+
+# Nothing further happens to a document in one of these without an operator.
+# `uploaded` and `parsing` are deliberately absent: the first is waiting for the
+# worker and the second is the worker holding it, and a client that stopped
+# polling at either would report a half-ingested document as finished.
+TERMINAL_STATUSES: frozenset[DocumentStatus] = frozenset(
+    {
+        DocumentStatus.CHUNKED,
+        DocumentStatus.EMBEDDED,
+        DocumentStatus.EXTRACTED,
+        DocumentStatus.FAILED,
+        DocumentStatus.BUDGET_EXCEEDED,
+    }
 )
 
 
@@ -149,6 +167,46 @@ async def list_chunks(
     await _require_document(service, document_id)
     chunks = await service.list_chunks(document_id, limit=min(limit, 1000))
     return [DocumentChunkRead.model_validate(chunk) for chunk in chunks]
+
+
+@router.get(
+    "/{document_id}/status",
+    response_model=DocumentStatusRead,
+    summary="Where a document has got to in the pipeline",
+)
+async def document_status(
+    document_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    service: IngestionService = Depends(get_ingestion_service),
+) -> DocumentStatusRead:
+    """Progress for a client that is watching an upload.
+
+    The worker has always recorded this -- `extraction_jobs` is the queue, and
+    it carries the status, the timings and the failure message -- but nothing
+    exposed it over HTTP, so the only way to know whether an upload had been
+    ingested was to look in the database (docs/review.md, finding 7).
+    """
+    document = await service.get_document(document_id)
+    if document is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found")
+
+    jobs = await ExtractionJobRepository(session).list_for_document(document_id)
+    chunks = await DocumentChunkRepository(session).count(document_id=document_id)
+    pages = await service.list_pages(document_id)
+
+    failed = next((job for job in jobs if job.error_message), None)
+    return DocumentStatusRead(
+        document_id=document.id,
+        filename=document.filename,
+        status=document.status,
+        page_count=document.page_count,
+        chunk_count=chunks,
+        pages_flagged_for_vlm=sum(1 for page in pages if page.vlm_reason),
+        parse_confidence=document.parse_confidence,
+        jobs=[IngestionJobRead.model_validate(job) for job in jobs],
+        terminal=document.status in TERMINAL_STATUSES,
+        error=failed.error_message if failed else None,
+    )
 
 
 @router.post(

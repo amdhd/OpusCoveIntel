@@ -80,6 +80,20 @@ class ExtractionJobRepository(BaseRepository[ExtractionJob]):
         )
         return Decimal(result.scalar_one())
 
+    async def list_for_document(self, document_id: uuid.UUID) -> Sequence[ExtractionJob]:
+        """Every job recorded against a document, oldest first.
+
+        Ordered by creation rather than by status so a reader sees the pipeline
+        in the order it ran. This is what the upload screen polls: the worker
+        writes progress here and nothing else exposed it.
+        """
+        result = await self.session.execute(
+            select(ExtractionJob)
+            .where(ExtractionJob.document_id == document_id)
+            .order_by(ExtractionJob.created_at)
+        )
+        return result.scalars().all()
+
 
 class LLMCallRepository(BaseRepository[LLMCall]):
     model = LLMCall

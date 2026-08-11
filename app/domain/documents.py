@@ -16,6 +16,8 @@ from app.domain.enums import (
     ChunkType,
     DocumentStatus,
     DocumentType,
+    JobStatus,
+    JobType,
     Language,
     ParseMethod,
     SourceType,
@@ -92,3 +94,47 @@ class IngestionResponse(BaseModel):
     pages_flagged_for_vlm: int
     # True when the extraction identity had already succeeded, so nothing ran.
     skipped: bool
+
+
+class IngestionJobRead(BaseModel):
+    """One row of `extraction_jobs`, as the upload screen needs to read it.
+
+    The failure message is included deliberately. A document that stops at
+    "failed" with no reason on screen sends the operator to the container logs,
+    and the reason is usually one sentence the service already wrote down.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    job_type: JobType
+    status: JobStatus
+    started_at: dt.datetime | None
+    finished_at: dt.datetime | None
+    error_message: str | None
+
+
+class DocumentStatusRead(BaseModel):
+    """Where a document has got to, for a client that is watching it.
+
+    Assembled rather than reflected: `documents.status` alone cannot say
+    whether the worker has picked the document up, and `extraction_jobs` alone
+    cannot say how many pages came out. Both are needed to answer "is it done,
+    and did it work?", which is the only question this endpoint exists for.
+    """
+
+    document_id: uuid.UUID
+    filename: str
+    status: DocumentStatus
+    page_count: int | None
+    chunk_count: int
+    pages_flagged_for_vlm: int
+    parse_confidence: float | None
+    jobs: list[IngestionJobRead]
+
+    # True when nothing further will happen without an operator. The client
+    # polls until this is set, so it must never be true of a document the
+    # worker is still going to touch -- a poller that stops early reports a
+    # half-ingested document as finished.
+    terminal: bool
+    # Set only when the document ended somewhere other than success.
+    error: str | None = None
