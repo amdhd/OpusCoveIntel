@@ -6,9 +6,9 @@
   (drop)="onDrop($event)"
   (dragover)="onDragOver($event)"
   (dragleave)="onDragLeave()"
-  [style.borderStyle]="dragging() ? 'dashed' : 'solid'"
+  [class.dropping]="dragging()"
 >
-  <h2 style="margin-top: 0">Upload a prospectus, trust deed or rating report</h2>
+  <h2>Upload a prospectus, trust deed or rating report</h2>
 
   @if (error()) {
     <p class="alert error">{{ error() }}</p>
@@ -17,7 +17,7 @@
     <p class="alert notice">{{ notice() }}</p>
   }
 
-  <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap">
+  <div class="field-row">
     <div>
       <label class="muted" for="file">PDF</label>
       <input id="file" type="file" accept="application/pdf,.pdf" (change)="onFileSelected($event)" />
@@ -40,15 +40,15 @@
     </button>
   </div>
 
-  <p class="muted" style="font-size: 0.82rem; margin-bottom: 0">
+  <p class="caption">
     Drag a file here, or choose one. Uploading the same bytes twice is not an error — documents
     are identified by SHA-256. For very large scans the CLI is still the calmer path:
     <code>opuscovintel ingest &lt;path&gt;</code>.
   </p>
 
   @if (transferPercent(); as percent) {
-    <p class="muted" style="margin-bottom: 0.2rem">Transferring — {{ percent }}%</p>
-    <progress [value]="percent" max="100" style="width: 100%"></progress>
+    <p class="caption">Transferring — {{ percent }}%</p>
+    <progress [value]="percent" max="100"></progress>
   }
 </section>
 
@@ -56,9 +56,9 @@
      status endpoint existed, none of it was visible outside the database. -->
 @if (watching(); as status) {
   <section class="panel">
-    <h2 style="margin-top: 0">
+    <h2>
       {{ status.filename }}
-      <span class="status {{ statusClass(status.status) }}">{{ status.status }}</span>
+      <span class="status {{ statusClass(status.status) }}">{{ status.status | label }}</span>
     </h2>
 
     @if (!status.terminal) {
@@ -69,7 +69,7 @@
           Parsing, scoring pages and chunking…
         }
       </p>
-      <progress style="width: 100%"></progress>
+      <progress></progress>
     }
 
     @if (status.error) {
@@ -90,17 +90,17 @@
     <table>
       <thead>
         <tr>
-          <th>job</th>
-          <th>status</th>
-          <th>started</th>
-          <th>finished</th>
+          <th>Job</th>
+          <th>Status</th>
+          <th>Started</th>
+          <th>Finished</th>
         </tr>
       </thead>
       <tbody>
         @for (job of status.jobs; track job.job_type) {
           <tr>
-            <td>{{ job.job_type }}</td>
-            <td><span class="status {{ statusClass(job.status) }}">{{ job.status }}</span></td>
+            <td>{{ job.job_type | label }}</td>
+            <td><span class="status {{ statusClass(job.status) }}">{{ job.status | label }}</span></td>
             <td>{{ job.started_at ?? '—' }}</td>
             <td>{{ job.finished_at ?? '—' }}</td>
           </tr>
@@ -109,7 +109,7 @@
     </table>
 
     @if (status.status === 'uploaded') {
-      <button type="button" (click)="processNow(status.document_id)" style="margin-top: 0.6rem">
+      <button type="button" class="actions" (click)="processNow(status.document_id)">
         Parse now
       </button>
     }
@@ -117,7 +117,7 @@
 }
 
 <section class="panel">
-  <h2 style="margin-top: 0">In the corpus</h2>
+  <h2>In the corpus</h2>
 
   @if (loading()) {
     <p class="muted">Loading…</p>
@@ -127,10 +127,10 @@
     <table>
       <thead>
         <tr>
-          <th>filename</th>
-          <th>type</th>
-          <th>status</th>
-          <th class="num">pages</th>
+          <th>Filename</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th class="num">Pages</th>
           <th></th>
         </tr>
       </thead>
@@ -142,7 +142,7 @@
                  document, and printing the enum makes it look like a finding. -->
             <td class="muted">{{ typeLabel(document.document_type) }}</td>
             <td>
-              <span class="status {{ statusClass(document.status) }}">{{ document.status }}</span>
+              <span class="status {{ statusClass(document.status) }}">{{ document.status | label }}</span>
             </td>
             <td class="num">{{ document.page_count ?? '—' }}</td>
             <!-- Named after what it opens, and marked while it is open: the

@@ -60,9 +60,9 @@ describe('DocumentsPage', () => {
 
     // The upload endpoint defaults to `unknown`, and `opuscovintel ingest`
     // has no way to say otherwise, so this is what most rows hold.
-    expect(page.typeLabel('unknown')).toBe('not classified');
-    expect(page.typeLabel('trust_deed')).toBe('trust deed');
-    expect(page.typeLabel('prospectus')).toBe('prospectus');
+    expect(page.typeLabel('unknown')).toBe('Not classified');
+    expect(page.typeLabel('trust_deed')).toBe('Trust deed');
+    expect(page.typeLabel('prospectus')).toBe('Prospectus');
   });
 
   it('says which row the detail panel is describing', fakeAsync(() => {

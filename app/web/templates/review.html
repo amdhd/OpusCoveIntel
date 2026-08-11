@@ -19,10 +19,10 @@
 {% for item in items %}
 <div class="panel review-item">
   <div>
-    <strong>{{ item.field_name }}</strong>
+    <strong>{{ item.field_name | label }}</strong>
     <span class="muted">on {{ item.entity_type }}</span>
     <div class="trigger">
-      {{ item.trigger_reason.replace('_', ' ') }}
+      {{ item.trigger_reason | label }}
       {% if item.confidence is not none %}
         {# The marker was unconditional here, so a 0.99 queued for a different
            reason wore the low-confidence underline too. #}
@@ -46,6 +46,10 @@
   {% endif %}
 
   {% if can_review %}
+  {# No filled primary in this row, deliberately. Approve, Correct and Reject
+     are three decisions with the same audit weight, and a blue fill on any one
+     of them is the screen expressing a preference about how a covenant should
+     be decided. #}
   <div class="review-actions">
     <form method="post" action="/ui/review/{{ item.id }}/approve">
       <button type="submit">Approve</button>
@@ -53,7 +57,7 @@
 
     <form method="post" action="/ui/review/{{ item.id }}/correct">
       <input type="text" name="new_value" placeholder="Corrected value" required>
-      <button type="submit" class="primary">Correct</button>
+      <button type="submit">Correct</button>
     </form>
 
     <form method="post" action="/ui/review/{{ item.id }}/reject">

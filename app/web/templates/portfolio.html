@@ -55,7 +55,7 @@
 </div>
 
 <h2>Covenant evaluations</h2>
-<p class="muted" style="font-size:0.82rem">
+<p class="caption">
   Computed by the deterministic rules engine, not by a model. Anything the engine could
   not evaluate is reported as <em>not reported</em> rather than as compliant — silence is
   not compliance.
@@ -64,13 +64,13 @@
   {% if row.evaluations %}
   <div class="panel">
     <strong>{{ row.holding.instrument.instrument_name }}</strong>
-    <table style="margin-top:0.5rem">
+    <table class="actions">
       <thead><tr><th>Covenant</th><th>Status</th><th>Explanation</th></tr></thead>
       <tbody>
         {% for e in row.evaluations %}
         <tr>
           <td>{{ e.covenant_type.replace('_', ' ') }}</td>
-          <td><span class="status {{ e.status }}">{{ e.status.replace('_', ' ') }}</span></td>
+          <td><span class="status {{ e.status }}">{{ e.status | label }}</span></td>
           <td class="muted">{{ e.explanation }}</td>
         </tr>
         {% endfor %}

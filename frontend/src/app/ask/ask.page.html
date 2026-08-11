@@ -11,7 +11,7 @@
     [(ngModel)]="question"
     placeholder="Which holdings would breach their rating trigger at the current rating?"
   ></textarea>
-  <button class="primary" type="submit" [disabled]="asking()" style="margin-top: 0.6rem">
+  <button class="primary actions" type="submit" [disabled]="asking()">
     {{ asking() ? 'Asking…' : 'Ask' }}
   </button>
 </form>
@@ -22,9 +22,9 @@
 
 @if (answer(); as result) {
   <section class="panel">
-    <h2 style="margin-top: 0">
+    <h2>
       {{ result.question }}
-      <span class="status ok">{{ result.intent }}</span>
+      <span class="status ok">{{ result.intent | label }}</span>
     </h2>
 
     @if (result.refused) {
@@ -34,7 +34,7 @@
       <p class="answer">{{ result.answer }}</p>
     }
 
-    <p class="muted" style="font-size: 0.82rem">
+    <p class="caption">
       confidence {{ result.confidence | confidence }} · {{ result.citations.length }} citation(s) · tools:
       {{ result.tools_used.join(', ') || 'none' }}
     </p>

@@ -13,17 +13,17 @@
     <table>
       <thead>
         <tr>
-          <th>instrument</th>
-          <th>issuer</th>
-          <th>rating</th>
-          <th>structure</th>
-          <th class="num">issue size</th>
-          <th>matures</th>
+          <th>Instrument</th>
+          <th>Issuer</th>
+          <th>Rating</th>
+          <th>Structure</th>
+          <th class="num">Issue size</th>
+          <th>Matures</th>
         </tr>
       </thead>
       <tbody>
         @for (instrument of instruments(); track instrument.id) {
-          <tr (click)="select(instrument)" style="cursor: pointer">
+          <tr class="clickable" (click)="select(instrument)">
             <td>{{ instrument.instrument_name }}</td>
             <td class="muted">{{ instrument.issuer_name }}</td>
             <!-- The agency is which scale the figure is on, not a footnote:
@@ -53,7 +53,7 @@
                 >
               }
             </td>
-            <td class="muted">{{ instrument.sukuk_structure }}</td>
+            <td class="muted">{{ instrument.sukuk_structure | label }}</td>
             <td class="num">{{ instrument.issue_size | money: instrument.currency }}</td>
             <td>{{ instrument.maturity_date ?? '—' }}</td>
           </tr>
@@ -65,7 +65,7 @@
 
 @if (selected(); as instrument) {
   <section class="panel">
-    <h2 style="margin-top: 0">{{ instrument.instrument_name }} — covenants</h2>
+    <h2>{{ instrument.instrument_name }} — covenants</h2>
 
     @if (covenants().length === 0) {
       <p class="empty">No covenants extracted for this instrument.</p>
@@ -73,21 +73,21 @@
       <table>
         <thead>
           <tr>
-            <th>type</th>
-            <th>summary</th>
-            <th class="num">threshold</th>
-            <th>method</th>
-            <th class="num">confidence</th>
-            <th>source</th>
+            <th>Type</th>
+            <th>Summary</th>
+            <th class="num">Threshold</th>
+            <th>Method</th>
+            <th class="num">Confidence</th>
+            <th>Source</th>
           </tr>
         </thead>
         <tbody>
           @for (covenant of covenants(); track covenant.id) {
             <tr>
-              <td>{{ covenant.covenant_type }}</td>
+              <td>{{ covenant.covenant_type | label }}</td>
               <td class="muted">{{ covenant.summary ?? '—' }}</td>
               <td class="num">{{ covenant.threshold_amount | money: covenant.threshold_currency }}</td>
-              <td class="muted">{{ covenant.method }}</td>
+              <td class="muted">{{ covenant.method | label }}</td>
               <td class="num">
                 <!-- Under the review threshold, a figure is not settled. -->
                 <span
