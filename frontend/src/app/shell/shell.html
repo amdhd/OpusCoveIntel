@@ -1,0 +1,32 @@
+<header class="topbar">
+  <a class="brand" routerLink="/documents">OpusCovIntel</a>
+  <nav>
+    <a routerLink="/ask" routerLinkActive="on">Ask</a>
+    <a routerLink="/instruments" routerLinkActive="on">Instruments</a>
+    <a routerLink="/documents" routerLinkActive="on">Documents</a>
+    <a routerLink="/review" routerLinkActive="on">
+      Review
+      @if (pending()) {
+        <span class="pill">{{ pending() }}</span>
+      }
+    </a>
+    <!-- Portfolios and the provenance viewer are still server-rendered; the
+         link leaves the app rather than pretending the screen exists here. -->
+    <a href="/ui/portfolios">Portfolios ↗</a>
+  </nav>
+  <div class="signout">
+    <span class="who">
+      {{ auth.user()?.display_name }} <em>{{ auth.user()?.role }}</em>
+    </span>
+    <button type="button" (click)="signOut()">Sign out</button>
+  </div>
+</header>
+
+<main>
+  <router-outlet />
+</main>
+
+<footer>
+  Decision support, not investment or legal advice. Every figure is machine-extracted
+  and intended for human review.
+</footer>
