@@ -141,6 +141,16 @@ reasons. In the order the remaining constraints actually bite:
 4. **Celery/Redis.** Last. `SKIP LOCKED` polling handles this volume, and a
    broker is a second thing that can be down.
 
+### The client app
+
+`/app` is the Angular build in `frontend/dist`, served by the API process from its own origin.
+The image builds it in a Node stage and copies only the static output, so no Node reaches the
+runtime container. A deployment that has not built it loses `/app` and nothing else — the API and
+`/ui` do not depend on it, and the process says so at startup.
+
+Keep it on the API's origin. Splitting them means CORS plus `SameSite=none`, which trades the CSRF
+property described above for a deployment convenience.
+
 ## 7. Backups
 
 Back up Postgres and `STORAGE_DIR` together, and restore them together. The

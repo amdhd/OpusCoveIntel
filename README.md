@@ -91,14 +91,20 @@ PDF
 | **Retrieval** | Hybrid: `pgvector` HNSW + Postgres `tsvector`, fused by Reciprocal Rank Fusion | Legal text needs exact keyword matching (`"RM30,000,000"`) *and* semantic search (`"gearing"` ≈ `"leverage ratio"`). Either alone misses. |
 | **Agent** | LangGraph | An explicit state graph, so the reasoning path is inspectable and each node testable — not a loop of opaque tool calls. |
 | **LLM** | Claude Opus (`claude-opus-5`) | Long-context legal reasoning with structured output. Routed through one module with hard budget caps. |
-| **UI** | Jinja templates + ~40 lines of JS | Four screens for internal users. A React SPA would add a build step, a second language and a second deployment for no gain. |
+| **UI** | Jinja templates for the read screens; **Angular 20** for the interactive ones | Reading a covenant needs no client-side state, and server rendering keeps the citation markup one hop from the database. Uploading a 500-page PDF does need state — transfer progress, then ingestion progress — and that is what the client app was added for. Both are served from one origin, so the session cookie stays `HttpOnly` and `SameSite=lax`. |
 | **Auth** | Server-side sessions, `hashlib.scrypt` | No dependency; sessions are revocable rows, which a signed cookie isn't. |
 | **Background work** | A Postgres table polled with `FOR UPDATE SKIP LOCKED` | At this volume a broker is operational surface with no benefit. Revisit when job volume justifies it. |
 | **Packaging** | `uv`, multi-stage Docker, non-root | Locked dependencies; the runtime image contains no build tooling. |
 
-**Deliberately not used:** Redis, Celery, MinIO, Kubernetes, a vector database, a frontend
-framework. Each was considered and declined — the reasoning is in [PLAN.md](PLAN.md). They can be
-added when something actually needs them.
+**Deliberately not used:** Redis, Celery, MinIO, Kubernetes, a vector database. Each was
+considered and declined — the reasoning is in [PLAN.md](PLAN.md). They can be added when
+something actually needs them.
+
+A frontend framework was on that list until the upload screen needed one. Read-only pages have
+no client-side state worth managing, so they stayed on Jinja; live upload and ingestion progress
+do, and rebuilding four working pages to get one new screen would have been the more expensive
+mistake. Both UIs share one stylesheet — the Angular build references
+[`app/web/static/app.css`](app/web/static/app.css) rather than copying it.
 
 ---
 
@@ -135,9 +141,9 @@ uv run opuscovintel ingest path/to/prospectus.pdf
 uv run opuscovintel index          # build the search indexes
 ```
 
-> **There is no upload button in the UI yet.** Documents are loaded via the CLI above or
-> `POST /documents/upload`. A browser upload screen is the next thing to build — see
-> [PLAN.md Phase 10](PLAN.md).
+Or upload from the browser: <http://localhost:8000/app/documents> (build it first with
+`make frontend`). The screen reports transfer progress, then polls ingestion until the worker
+is done, and shows the failure reason if a document cannot be parsed.
 
 Uploading the same file twice is not an error: documents are identified by SHA-256, so a repeat
 returns the existing record.
@@ -272,7 +278,8 @@ its first line.
 | Path | Purpose |
 |---|---|
 | `app/api/` | HTTP routes. No business logic, no SQL. |
-| `app/web/` | Server-rendered UI — Jinja templates, four screens. |
+| `app/web/` | Server-rendered UI — Jinja templates: ask, instruments, portfolios, provenance, review. |
+| `frontend/` | Angular 20 client app served at `/app` — upload with live ingestion progress, plus ask, instruments and review. Optional: the API runs without it. |
 | `app/core/` | Settings, structured logging, request-id middleware. |
 | `app/domain/` | Pydantic schemas and enums. Pure — imports nothing below it. |
 | `app/db/` | SQLAlchemy models, repositories, dual (read-write / read-only) engines. |
