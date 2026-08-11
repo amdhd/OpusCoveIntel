@@ -11,13 +11,11 @@ import { FormsModule } from '@angular/forms';
 
 import { Api } from '../api/api';
 import type { CovenantRead, InstrumentRead } from '../api/models';
-
-/** CLAUDE.md 5: below this a field is queued for a human. */
-const REVIEW_THRESHOLD = 0.85;
+import { belowReviewBar, ConfidencePipe, MoneyPipe, REVIEW_THRESHOLD } from '../format/format';
 
 @Component({
   selector: 'app-instruments',
-  imports: [FormsModule],
+  imports: [FormsModule, ConfidencePipe, MoneyPipe],
   templateUrl: './instruments.page.html',
 })
 export class InstrumentsPage {
@@ -52,8 +50,9 @@ export class InstrumentsPage {
   }
 
   protected lowConfidence(covenant: CovenantRead): boolean {
-    // `!= null` rather than `!== null`: the generated type is optional as
-    // well as nullable, so a missing field is `undefined`, not `null`.
-    return covenant.confidence != null && covenant.confidence < REVIEW_THRESHOLD;
+    return belowReviewBar(covenant.confidence);
   }
+
+  /** For the marker's tooltip, so the bar is named rather than remembered. */
+  protected readonly reviewBar = `${Math.round(REVIEW_THRESHOLD * 100)}%`;
 }

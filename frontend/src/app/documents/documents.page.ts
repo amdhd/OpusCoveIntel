@@ -26,6 +26,7 @@ import { FormsModule } from '@angular/forms';
 import { Subscription, exhaustMap, takeWhile, timer } from 'rxjs';
 
 import { Api } from '../api/api';
+import { ConfidencePipe } from '../format/format';
 import { FAILED_STATUSES } from '../api/models';
 import type { DocumentRead, DocumentStatusRead } from '../api/models';
 
@@ -37,7 +38,7 @@ const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'app-documents',
-  imports: [FormsModule],
+  imports: [FormsModule, ConfidencePipe],
   templateUrl: './documents.page.html',
 })
 export class DocumentsPage implements OnDestroy {

@@ -10,14 +10,15 @@
     <dt>Type</dt><dd>{{ i.instrument_type.value }} · {{ i.sukuk_structure.value }}</dd>
     <dt>Rating</dt>
     <dd>{{ i.current_rating or '—' }}
-      {% if i.rating_agency.value != 'unknown' %}({{ i.rating_agency.value }}){% endif %}
-      {% if i.current_rating_rank is not none %}
-        <span class="muted">· notch rank {{ i.current_rating_rank }}</span>
+      {% if i.rating_agency.value != 'unknown' %}
+        <span class="agency">{{ i.rating_agency.value }}</span>
+      {% endif %}
+      {% if i.current_rating_notch %}
+        <span class="notch">· notch {{ i.current_rating_notch }}, rank {{ i.current_rating_rank }}</span>
       {% endif %}
     </dd>
     <dt>Issue size</dt>
-    <dd>{% if i.issue_size is not none %}{{ i.currency }} {{ '{:,.2f}'.format(i.issue_size) }}
-        {% else %}—{% endif %}</dd>
+    <dd>{{ i.issue_size | money(i.currency) }}</dd>
     <dt>Maturity</dt><dd>{{ i.maturity_date or '—' }}</dd>
     {% if i.isin %}<dt>ISIN</dt><dd>{{ i.isin }}</dd>{% endif %}
   </dl>
@@ -56,8 +57,7 @@
     <tr>
       <td>{{ c.covenant_type.value.replace('_', ' ') }}</td>
       <td class="num">
-        {% if c.threshold_amount is not none %}
-          {{ c.threshold_currency or '' }} {{ '{:,.2f}'.format(c.threshold_amount) }}
+        {% if c.threshold_amount is not none %}{{ c.threshold_amount | money(c.threshold_currency) }}
         {% elif c.thresholds.get('ratio') is not none %}{{ c.thresholds['ratio'] }}×
         {% else %}—{% endif %}
       </td>
@@ -66,8 +66,9 @@
       <td>
         {% if c.confidence is none %}—
         {% else %}
-        <span {% if c.confidence < confidence_threshold %}class="low-confidence"{% endif %}
-              >{{ '%.2f'|format(c.confidence) }}</span>
+        <span {% if c.confidence < confidence_threshold %}class="low-confidence"
+                title="below the {{ confidence_threshold | confidence }} review threshold"{% endif %}
+              >{{ c.confidence | confidence }}</span>
         {% endif %}
       </td>
       {# Every covenant links to its evidence. A threshold with no reachable
@@ -119,8 +120,7 @@
     {% for c in i.call_schedules %}
     <tr>
       <td>{{ c.call_date }}</td>
-      <td class="num">{% if c.call_price is not none %}{{ '{:,.4f}'.format(c.call_price) }}
-          {% else %}—{% endif %}</td>
+      <td class="num">{{ c.call_price | money }}</td>
       <td>{{ c.call_type.value }}</td>
       <td>{% if c.source_clause_id %}
           <a href="/ui/clauses/{{ c.source_clause_id }}">source</a>{% else %}—{% endif %}</td>

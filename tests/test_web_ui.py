@@ -122,6 +122,36 @@ class TestPagesRender:
         assert response.status_code == 200
         assert "Green Ijarah" in response.text
 
+    async def test_an_amount_is_grouped_on_the_page(
+        self, api_client: AsyncClient, seeded_universe: None
+    ) -> None:
+        """A filter nobody applies is not a formatter.
+
+        `app/web/format.py` is unit-tested on its own; this asserts the
+        instrument table actually runs a figure through it, which is the half
+        that a template edit can silently undo.
+        """
+        response = await api_client.get("/ui/instruments")
+
+        assert "MYR 300,000,000" in response.text
+        assert "300000000" not in response.text, "an ungrouped figure reached the page"
+
+    async def test_a_rating_names_its_scale(
+        self, api_client: AsyncClient, seeded_universe: None
+    ) -> None:
+        """RAM's AA3 and MARC's AA- are one notch on two scales.
+
+        A column that shows the raw string alone invites the lexical comparison
+        CLAUDE.md 6 forbids, so it carries the agency and, where the raw string
+        is not already canonical, the notch it maps to.
+        """
+        response = await api_client.get("/ui/instruments")
+
+        assert 'class="agency">RAM' in response.text
+        assert "= AA-" in response.text, "AA3's canonical notch should be shown"
+        # A- is already the canonical notch; repeating it would be noise.
+        assert "= A-" not in response.text.replace("= AA-", "")
+
     async def test_a_portfolio_reports_its_as_of_date(
         self, api_client: AsyncClient, db_session: AsyncSession, seeded_universe: None
     ) -> None:
@@ -136,6 +166,31 @@ class TestPagesRender:
 
     async def test_an_unknown_instrument_is_404(self, api_client: AsyncClient) -> None:
         assert (await api_client.get(f"/ui/instruments/{uuid.uuid4()}")).status_code == 404
+
+
+class TestConfidenceOnThePage:
+    async def test_a_confidence_is_a_percentage(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        await _pending(db_session, confidence=0.78)
+        response = await api_client.get("/ui/review")
+
+        assert "78%" in response.text
+        assert "0.78" not in response.text
+
+    async def test_only_a_figure_under_the_bar_is_marked(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The marker was unconditional here.
+
+        An item queued for a rules/LLM disagreement at 0.99 wore the
+        low-confidence underline, which says something untrue about it.
+        """
+        await _pending(db_session, confidence=0.99)
+        response = await api_client.get("/ui/review")
+
+        assert "99%" in response.text
+        assert "low-confidence" not in response.text
 
 
 class TestProvenancePage:
@@ -246,8 +301,30 @@ class TestAnalystCannotDecide:
         response = await api_client.get("/ui/review")
 
         assert response.status_code == 200
-        assert "read-only" in response.text
+        # Anchored on the banner's own words. A bare "read-only" also occurs in
+        # the role chip's tooltip in every page's chrome, so it would pass with
+        # the banner deleted -- which it did, once.
+        assert "Read-only for your role" in response.text
         assert "Approve" not in response.text
+
+    async def test_an_item_says_who_acts_next(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """An item with no buttons and no explanation reads as a broken card."""
+        await _pending(db_session)
+        response = await api_client.get("/ui/review")
+
+        assert "Awaiting a reviewer's decision." in response.text
+
+    async def test_the_queue_badge_does_not_call_an_analyst_to_action(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The count is information for an analyst and a task for a reviewer."""
+        await _pending(db_session)
+        response = await api_client.get("/ui/review")
+
+        assert 'class="pill passive"' in response.text
+        assert "items awaiting a reviewer" in response.text
 
     async def test_the_server_refuses_the_post_anyway(
         self, api_client: AsyncClient, db_session: AsyncSession
@@ -259,3 +336,21 @@ class TestAnalystCannotDecide:
         assert response.status_code == 403
         await db_session.refresh(review)
         assert review.status is ReviewStatus.PENDING
+
+
+class TestReviewerChrome:
+    """The same chrome, weighted for the role that can act on it."""
+
+    async def test_the_queue_badge_is_a_call_to_action(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        await _pending(db_session)
+        response = await api_client.get("/ui/review")
+
+        assert 'class="pill "' in response.text, "no `passive` modifier for a reviewer"
+        assert "items awaiting your decision" in response.text
+
+    async def test_the_role_chip_says_what_the_role_may_do(self, api_client: AsyncClient) -> None:
+        response = await api_client.get("/ui/review")
+
+        assert "may approve, correct and reject queue items" in response.text

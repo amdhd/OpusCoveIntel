@@ -61,6 +61,10 @@ def _page(
     status_code: int = 200,
     headers: dict[str, str] | None = None,
 ) -> HTMLResponse:
+    # Every screen that prints a confidence needs the bar it is measured
+    # against, so it is supplied here rather than by each route -- a page that
+    # forgot it would render a figure with nothing to read it against.
+    context.setdefault("confidence_threshold", get_settings().DEFAULT_CONFIDENCE_THRESHOLD)
     return templates.TemplateResponse(
         request, name, context, status_code=status_code, headers=headers
     )

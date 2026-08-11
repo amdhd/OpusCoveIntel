@@ -14,9 +14,11 @@
 }
 
 @if (!auth.canReview()) {
-  <p class="alert notice">
-    You are signed in as an analyst. Items are shown for context; deciding them needs the reviewer
-    role.
+  <!-- `info`, not `notice`: green says "what you just did worked", and nothing
+       happened here. This is a standing fact about the screen. -->
+  <p class="alert info">
+    Read-only for your role. You can see every flagged item and its citation; approving,
+    correcting and rejecting need the reviewer role.
   </p>
 }
 
@@ -31,7 +33,16 @@
         <strong>{{ item.entity_type }}.{{ item.field_name }}</strong>
         <span class="trigger">· {{ item.trigger_reason }}</span>
         @if (item.confidence !== null) {
-          <span class="trigger">· confidence {{ item.confidence }}</span>
+          <span class="trigger">
+            · confidence
+            <span
+              [class.low-confidence]="belowBar(item.confidence)"
+              [attr.title]="
+                belowBar(item.confidence) ? 'below the ' + reviewBar + ' review threshold' : null
+              "
+              >{{ item.confidence | confidence }}</span
+            >
+          </span>
         }
         @if (item.page_number !== null) {
           <span class="trigger">· page {{ item.page_number }}</span>
@@ -40,10 +51,13 @@
 
       <dl class="kv">
         <dt>extracted value</dt>
-        <dd>{{ item.old_value ?? '—' }}</dd>
+        <!-- `money` groups a bare figure and passes anything else through: a
+             queue value can be free text, and reformatting that would be
+             editing evidence. -->
+        <dd>{{ item.old_value | money }}</dd>
         @if (item.new_value) {
           <dt>proposed</dt>
-          <dd>{{ item.new_value }}</dd>
+          <dd>{{ item.new_value | money }}</dd>
         }
       </dl>
 
@@ -85,6 +99,11 @@
             Reject
           </button>
         </div>
+      } @else {
+        <!-- Not a row of disabled buttons: a disabled control with no
+             explanation is the thing every reader misreads as a bug. Say who
+             acts next instead. -->
+        <p class="awaiting">Awaiting a reviewer's decision.</p>
       }
     </section>
   }

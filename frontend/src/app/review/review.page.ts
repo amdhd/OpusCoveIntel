@@ -15,11 +15,12 @@ import { FormsModule } from '@angular/forms';
 
 import { Api } from '../api/api';
 import type { ReviewItem } from '../api/models';
+import { belowReviewBar, ConfidencePipe, MoneyPipe, REVIEW_THRESHOLD } from '../format/format';
 import { Auth } from '../auth/auth';
 
 @Component({
   selector: 'app-review',
-  imports: [FormsModule],
+  imports: [FormsModule, ConfidencePipe, MoneyPipe],
   templateUrl: './review.page.html',
 })
 export class ReviewPage {
@@ -32,6 +33,10 @@ export class ReviewPage {
   protected readonly busy = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
   protected readonly error = signal<string | null>(null);
+
+  protected readonly belowBar = belowReviewBar;
+  /** For the marker's tooltip, so the bar is named rather than remembered. */
+  protected readonly reviewBar = `${Math.round(REVIEW_THRESHOLD * 100)}%`;
 
   /** Correction drafts, keyed by review id, so two open rows cannot collide. */
   protected corrections: Record<string, string> = {};

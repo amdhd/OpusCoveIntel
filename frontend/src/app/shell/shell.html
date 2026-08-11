@@ -7,7 +7,20 @@
     <a routerLink="/review" routerLinkActive="on">
       Review
       @if (pending()) {
-        <span class="pill">{{ pending() }}</span>
+        <!-- Same destination and same word for both roles: an analyst and a
+             reviewer talking about "Review" must mean the same screen. Only
+             the badge's weight changes, because only one of them can act. -->
+        <span
+          class="pill"
+          [class.passive]="!auth.canReview()"
+          [attr.aria-label]="
+            auth.canReview()
+              ? pending() + ' items awaiting your decision'
+              : pending() + ' items awaiting a reviewer'
+          "
+        >
+          {{ pending() }}
+        </span>
       }
     </a>
     <!-- Portfolios and the provenance viewer are still server-rendered; the
@@ -16,7 +29,19 @@
   </nav>
   <div class="signout">
     <span class="who">
-      {{ auth.user()?.display_name }} <em>{{ auth.user()?.role }}</em>
+      {{ auth.user()?.display_name }}
+      <!-- The role is the only thing that changes what this person may do, so
+           it says what that is rather than making them find out by clicking. -->
+      <em
+        [class.may-review]="auth.canReview()"
+        [title]="
+          auth.canReview()
+            ? 'Reviewer — may approve, correct and reject queue items'
+            : 'Analyst — read-only; may not decide queue items'
+        "
+      >
+        {{ auth.user()?.role }}
+      </em>
     </span>
     <button type="button" (click)="signOut()">Sign out</button>
   </div>

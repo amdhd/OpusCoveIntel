@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.db.models.clauses import CallSchedule, Clause, Covenant, RatingTrigger
+from app.db.models.instruments import Instrument
 from app.db.repositories.clauses import (
     CallScheduleRepository,
     ClauseRepository,
@@ -47,6 +48,7 @@ from app.domain.catalog import (
     SukukStructureRead,
 )
 from app.domain.enums import CovenantType
+from app.rules.ratings import NOTCH_BY_RANK
 
 logger = get_logger(__name__)
 
@@ -148,7 +150,7 @@ class CatalogService:
 
     async def list_instruments(self, *, limit: int = 100, offset: int = 0) -> list[InstrumentRead]:
         rows = await self.instruments.list(limit=limit, offset=offset)
-        return [InstrumentRead.model_validate(row) for row in rows]
+        return [_instrument(row) for row in rows]
 
     async def get_instrument(self, instrument_id: uuid.UUID) -> InstrumentDetail | None:
         instrument = await self.instruments.get(instrument_id)
@@ -160,7 +162,7 @@ class CatalogService:
         triggers = await self.rating_triggers.list_for_instrument(instrument_id)
 
         return InstrumentDetail(
-            **InstrumentRead.model_validate(instrument).model_dump(),
+            **_instrument(instrument).model_dump(),
             sukuk_structure_detail=(
                 SukukStructureRead(
                     id=structure.id,
@@ -267,7 +269,7 @@ class CatalogService:
             holdings.append(
                 HoldingRead(
                     id=row.id,
-                    instrument=InstrumentRead.model_validate(instrument),
+                    instrument=_instrument(instrument),
                     quantity=row.quantity,
                     market_value=row.market_value,
                     nav_weight=row.nav_weight,
@@ -288,6 +290,22 @@ class CatalogService:
             total_market_value=total,
             count=len(holdings),
         )
+
+
+def _instrument(row: Instrument) -> InstrumentRead:
+    """An instrument, with the canonical notch for its rating filled in.
+
+    Derived here rather than on the schema because `domain/` is a leaf that
+    imports nothing (CLAUDE.md 3) and the notch table lives in `rules/`. Derived
+    at all because the alternative is every client owning a copy of an ordering
+    that breach evaluation depends on.
+    """
+    instrument = InstrumentRead.model_validate(row)
+    if instrument.current_rating_rank is None:
+        return instrument
+    return instrument.model_copy(
+        update={"current_rating_notch": NOTCH_BY_RANK.get(instrument.current_rating_rank)}
+    )
 
 
 def _call_schedule(call: CallSchedule) -> CallScheduleRead:

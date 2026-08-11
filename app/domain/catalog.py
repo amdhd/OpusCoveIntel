@@ -141,7 +141,17 @@ class InstrumentRead(BaseModel):
     issue_size: Decimal | None = None
     maturity_date: dt.date | None = None
     current_rating: str | None = None
+    # The ordinal notch rank, exposed for the same reason as
+    # `RatingTriggerRead.trigger_rank`: sorting on the string puts 'AA-' below
+    # 'A+'. Sort on this instead.
     current_rating_rank: int | None = None
+    # The canonical notch for that rank. MARC writes AA- where RAM writes AA3
+    # and they are the same notch, so a screen that shows only the raw string
+    # asks a reader to compare two alphabets. Derived server-side: the notch
+    # table lives in `app/rules/ratings.py` and must not be reimplemented in a
+    # client, where it would become a second source of truth for an ordering
+    # every breach evaluation depends on.
+    current_rating_notch: str | None = None
     rating_agency: RatingAgency
     review_status: ReviewStatus
 

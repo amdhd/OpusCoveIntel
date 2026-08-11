@@ -11,9 +11,7 @@
     <dt>As of</dt><dd>{{ h.as_of_date or '—' }}</dd>
     <dt>Positions</dt><dd>{{ h.count }}</dd>
     <dt>Market value</dt>
-    <dd>{% if h.total_market_value is not none %}
-        {{ h.portfolio.base_currency }} {{ '{:,.2f}'.format(h.total_market_value) }}
-        {% else %}—{% endif %}</dd>
+    <dd>{{ h.total_market_value | money(h.portfolio.base_currency) }}</dd>
     <dt>Breaches</dt>
     <dd>{% if breach_total %}<span class="status breach">{{ breach_total }}</span>
         {% else %}<span class="status ok">none</span>{% endif %}
@@ -34,9 +32,12 @@
     <tr>
       <td><a href="/ui/instruments/{{ row.holding.instrument.id }}"
             >{{ row.holding.instrument.instrument_name }}</a></td>
-      <td>{{ row.holding.instrument.current_rating or '—' }}</td>
-      <td class="num">{% if row.holding.market_value is not none %}
-          {{ '{:,.2f}'.format(row.holding.market_value) }}{% else %}—{% endif %}</td>
+      <td>{{ row.holding.instrument.current_rating or '—' }}
+        {% if row.holding.instrument.rating_agency.value != 'unknown' %}
+          <span class="agency">{{ row.holding.instrument.rating_agency.value }}</span>
+        {% endif %}
+      </td>
+      <td class="num">{{ row.holding.market_value | money }}</td>
       <td class="num">{% if row.holding.nav_weight is not none %}
           {{ '{:.2%}'.format(row.holding.nav_weight) }}{% else %}—{% endif %}</td>
       <td>

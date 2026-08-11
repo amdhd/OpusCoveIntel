@@ -15,10 +15,10 @@
       {% if p.confidence is none %}—
       {% else %}
         <span {% if p.confidence < confidence_threshold %}class="low-confidence"{% endif %}>
-          {{ '%.2f'|format(p.confidence) }}
+          {{ p.confidence | confidence }}
         </span>
         {% if p.confidence < confidence_threshold %}
-          <span class="muted">— below the review threshold</span>
+          <span class="muted">— below the {{ confidence_threshold | confidence }} review threshold</span>
         {% endif %}
       {% endif %}
     </dd>
@@ -73,8 +73,7 @@
       <td>{{ c.covenant_type.value.replace('_', ' ') }}</td>
       <td>{{ c.summary or '—' }}</td>
       <td class="num">
-        {% if c.threshold_amount is not none %}
-          {{ c.threshold_currency or '' }} {{ '{:,.2f}'.format(c.threshold_amount) }}
+        {% if c.threshold_amount is not none %}{{ c.threshold_amount | money(c.threshold_currency) }}
         {% elif c.thresholds.get('ratio') is not none %}
           {{ c.thresholds['ratio'] }}×
         {% else %}—{% endif %}

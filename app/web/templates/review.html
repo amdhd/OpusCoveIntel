@@ -4,9 +4,11 @@
 <h1>Review queue <span class="muted">({{ total_pending }} pending)</span></h1>
 
 {% if not can_review %}
-<p class="alert notice">
-  You are signed in as an analyst, so these items are read-only. Deciding a queue item
-  needs the reviewer role.
+{# `info`, not `notice`: green means "what you just did worked", and nothing
+   happened here. This is a standing fact about the screen. #}
+<p class="alert info">
+  Read-only for your role. You can see every flagged item and its citation; approving,
+  correcting and rejecting need the reviewer role.
 </p>
 {% endif %}
 
@@ -22,7 +24,11 @@
     <div class="trigger">
       {{ item.trigger_reason.replace('_', ' ') }}
       {% if item.confidence is not none %}
-        · confidence <span class="low-confidence">{{ '%.2f'|format(item.confidence) }}</span>
+        {# The marker was unconditional here, so a 0.99 queued for a different
+           reason wore the low-confidence underline too. #}
+        · confidence <span {% if item.confidence < confidence_threshold %}class="low-confidence"
+              title="below the {{ confidence_threshold | confidence }} review threshold"{% endif %}
+          >{{ item.confidence | confidence }}</span>
       {% endif %}
       {% if item.page_number %} · page {{ item.page_number }}{% endif %}
     </div>
@@ -30,7 +36,9 @@
 
   <div>
     <span class="muted">Machine value:</span>
-    <strong>{{ item.old_value if item.old_value is not none else '—' }}</strong>
+    {# `money` groups a bare figure and passes anything else through: a queue
+       value can be free text, and reformatting that would be editing evidence. #}
+    <strong>{{ item.old_value | money }}</strong>
   </div>
 
   {% if item.source_quote %}
@@ -53,6 +61,10 @@
       <button type="submit" class="danger">Reject</button>
     </form>
   </div>
+  {% else %}
+  {# Not a row of disabled buttons: a disabled control with no explanation is
+     the thing every reader misreads as a bug. Say who acts next instead. #}
+  <p class="awaiting">Awaiting a reviewer's decision.</p>
   {% endif %}
 </div>
 {% endfor %}

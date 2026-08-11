@@ -13,10 +13,16 @@ from pathlib import Path
 
 from fastapi.templating import Jinja2Templates
 
+from app.web.format import confidence, money
+
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
+# Registered as filters rather than called in each template, so that a screen
+# cannot quietly invent its own way of printing a ringgit figure.
+templates.env.filters["money"] = money
+templates.env.filters["confidence"] = confidence
 # Explicit, not inherited. `select_autoescape` would also cover .html, but
 # stating it leaves no doubt for a reader deciding whether `|safe` is needed.
 templates.env.autoescape = True
