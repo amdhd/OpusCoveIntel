@@ -46,6 +46,11 @@ a { color: var(--accent); }
 .topbar nav { display: flex; gap: 1rem; margin-right: auto; }
 .topbar nav a { text-decoration: none; color: var(--muted); padding-bottom: 2px; }
 .topbar nav a.on { color: var(--ink); border-bottom: 2px solid var(--accent); }
+/* Some screens are server-rendered and some are in the client app. Both navs
+ * list all of them, and the marker says which links change renderer -- a
+ * full page load into a differently-built screen is worth a warning, and one
+ * definition of the marker beats a glyph typed into two templates. */
+.topbar nav a.leaves::after { content: " \2197"; font-size: 0.8em; color: var(--muted); }
 
 .signout { display: flex; align-items: center; gap: 0.6rem; }
 .who { font-size: 0.85rem; color: var(--muted); }

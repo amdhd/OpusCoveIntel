@@ -4,6 +4,12 @@
     <a routerLink="/ask" routerLinkActive="on">Ask</a>
     <a routerLink="/instruments" routerLinkActive="on">Instruments</a>
     <a routerLink="/documents" routerLinkActive="on">Documents</a>
+    <!-- Portfolios and the provenance viewer are still server-rendered, so this
+         link changes renderer: a full page load into a screen built by Jinja.
+         Marked rather than hidden, and in the same position and with the same
+         marker as the server-rendered nav's link back here, so the two chromes
+         list the same five destinations in the same order. -->
+    <a class="leaves" href="/ui/portfolios" title="Opens the server-rendered screen">Portfolios</a>
     <a routerLink="/review" routerLinkActive="on">
       Review
       @if (pending()) {
@@ -23,9 +29,6 @@
         </span>
       }
     </a>
-    <!-- Portfolios and the provenance viewer are still server-rendered; the
-         link leaves the app rather than pretending the screen exists here. -->
-    <a href="/ui/portfolios">Portfolios ↗</a>
   </nav>
   <div class="signout">
     <span class="who">

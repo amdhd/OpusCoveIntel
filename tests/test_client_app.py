@@ -94,3 +94,30 @@ def test_the_server_rendered_ui_is_untouched(built_client: Path) -> None:
 
     assert response.status_code == 200
     assert "Sign in" in response.text
+
+
+class TestWhetherTheClientIsThereIsRecorded:
+    """The server-rendered nav offers the screens the client app owns, so it
+    has to know whether that app was ever built. A nav item that 404s is worse
+    than one that is absent, and a Python-only checkout is a normal state.
+
+    The flag is asserted here; that the nav honours it is asserted in
+    `test_web_ui.py`, where there is a signed-in page to render.
+    """
+
+    def test_a_built_client_is_recorded_as_mounted(self, built_client: Path) -> None:
+        app = main_module.create_app()
+        assert app.state.client_app_mounted is True
+
+        with TestClient(app) as client:
+            assert client.get("/app/documents").status_code == 200
+
+    def test_an_unbuilt_client_is_recorded_as_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(main_module, "CLIENT_APP_DIR", tmp_path / "never-built")
+        app = main_module.create_app()
+        assert app.state.client_app_mounted is False
+
+        with TestClient(app) as client:
+            assert client.get("/app/documents").status_code == 404
