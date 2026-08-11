@@ -26,7 +26,7 @@
       <label class="muted" for="document-type">Type</label>
       <select id="document-type" name="document-type" [(ngModel)]="documentType">
         @for (type of documentTypes; track type) {
-          <option [value]="type">{{ type }}</option>
+          <option [value]="type">{{ typeLabel(type) }}</option>
         }
       </select>
     </div>
@@ -131,21 +131,33 @@
           <th>type</th>
           <th>status</th>
           <th class="num">pages</th>
-          <th>issuer (guess)</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         @for (document of documents(); track document.id) {
-          <tr>
+          <tr [class.selected]="watching()?.document_id === document.id">
             <td>{{ document.filename }}</td>
-            <td class="muted">{{ document.document_type }}</td>
+            <!-- `unknown` is the absence of a classification, not a kind of
+                 document, and printing the enum makes it look like a finding. -->
+            <td class="muted">{{ typeLabel(document.document_type) }}</td>
             <td>
               <span class="status {{ statusClass(document.status) }}">{{ document.status }}</span>
             </td>
             <td class="num">{{ document.page_count ?? '—' }}</td>
-            <td class="muted">{{ document.issuer_name_guess ?? '—' }}</td>
-            <td><button type="button" (click)="watch(document.id)">Progress</button></td>
+            <!-- Named after what it opens, and marked while it is open: the
+                 panel it fills is above the table, so with five identical
+                 buttons there was nothing to say which row you were reading. -->
+            <td>
+              <button
+                type="button"
+                (click)="watch(document.id)"
+                [attr.aria-pressed]="watching()?.document_id === document.id"
+                [class.on]="watching()?.document_id === document.id"
+              >
+                {{ watching()?.document_id === document.id ? 'Showing detail' : 'Ingestion detail' }}
+              </button>
+            </td>
           </tr>
         }
       </tbody>

@@ -28,7 +28,29 @@ import { Subscription, exhaustMap, takeWhile, timer } from 'rxjs';
 import { Api } from '../api/api';
 import { ConfidencePipe } from '../format/format';
 import { FAILED_STATUSES } from '../api/models';
-import type { DocumentRead, DocumentStatusRead } from '../api/models';
+import type { DocumentRead, DocumentStatusRead, DocumentType } from '../api/models';
+
+/**
+ * The types the upload form offers.
+ *
+ * `satisfies` rejects a member the API does not accept -- this list used to
+ * offer `financial_statement`, which is not a `DocumentType` and which the
+ * endpoint answers with a 422. `Missing` is the other direction: a document
+ * type added to the enum and not offered here fails the build rather than
+ * quietly becoming unreachable from the only screen that can set one.
+ */
+const DOCUMENT_TYPES = [
+  'unknown',
+  'prospectus',
+  'information_memorandum',
+  'trust_deed',
+  'rating_report',
+  'announcement',
+  'supplemental',
+] as const satisfies readonly DocumentType[];
+
+type Missing = Exclude<DocumentType, (typeof DOCUMENT_TYPES)[number]>;
+const _EVERY_TYPE_IS_OFFERED: Missing extends never ? true : never = true;
 
 /** How often to ask the server where a document has got to. */
 const POLL_MS = 1500;
@@ -49,7 +71,7 @@ export class DocumentsPage implements OnDestroy {
   protected readonly loading = signal(true);
 
   protected file: File | null = null;
-  protected documentType = 'unknown';
+  protected documentType: DocumentType = 'unknown';
 
   /** 0-100 while bytes are in flight, null when nothing is uploading. */
   protected readonly transferPercent = signal<number | null>(null);
@@ -66,14 +88,7 @@ export class DocumentsPage implements OnDestroy {
     this.polling?.unsubscribe();
   }
 
-  protected readonly documentTypes = [
-    'unknown',
-    'prospectus',
-    'trust_deed',
-    'rating_report',
-    'announcement',
-    'financial_statement',
-  ];
+  protected readonly documentTypes = DOCUMENT_TYPES;
 
   // -- picking a file ----------------------------------------------------
 
@@ -213,6 +228,19 @@ export class DocumentsPage implements OnDestroy {
 
   protected failed(status: string): boolean {
     return FAILED_STATUSES.has(status);
+  }
+
+  /**
+   * What to print in the `type` column.
+   *
+   * `unknown` is the default the upload endpoint applies when nobody said
+   * otherwise -- the absence of a classification rather than a kind of
+   * document. Printed as the enum it reads as a finding about the file.
+   * Underscores go the same way the server-rendered templates already send
+   * them, so `trust_deed` reads as a phrase on both.
+   */
+  protected typeLabel(documentType: string): string {
+    return documentType === 'unknown' ? 'not classified' : documentType.replace(/_/g, ' ');
   }
 
   protected statusClass(status: string): string {

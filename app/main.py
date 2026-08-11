@@ -104,7 +104,12 @@ def _mount_client_app(app: FastAPI) -> None:
     a broken application -- and saying so at startup beats a 404 nobody can
     explain.
     """
-    if not (CLIENT_APP_DIR / "index.html").is_file():
+    # Recorded so the server-rendered nav can offer the screens the client app
+    # owns without ever linking somewhere that is not there. A Python-only
+    # checkout is a normal state, not a broken one.
+    app.state.client_app_mounted = (CLIENT_APP_DIR / "index.html").is_file()
+
+    if not app.state.client_app_mounted:
         logger.info(
             "client app not built; /app is unavailable", extra={"path": str(CLIENT_APP_DIR)}
         )

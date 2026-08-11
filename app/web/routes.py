@@ -65,6 +65,10 @@ def _page(
     # against, so it is supplied here rather than by each route -- a page that
     # forgot it would render a figure with nothing to read it against.
     context.setdefault("confidence_threshold", get_settings().DEFAULT_CONFIDENCE_THRESHOLD)
+    # Whether the nav may offer the screens the client app owns. False in a
+    # Python-only checkout, where linking to /app would be a promise the
+    # process cannot keep.
+    context.setdefault("client_app", getattr(request.app.state, "client_app_mounted", False))
     return templates.TemplateResponse(
         request, name, context, status_code=status_code, headers=headers
     )

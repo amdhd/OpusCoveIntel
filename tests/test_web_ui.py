@@ -168,6 +168,35 @@ class TestPagesRender:
         assert (await api_client.get(f"/ui/instruments/{uuid.uuid4()}")).status_code == 404
 
 
+class TestTheNavCrossesRenderers:
+    """Both navs list the same destinations; each points at whichever renderer
+    owns that screen, and the links that change renderer say so.
+
+    Someone who followed `Portfolios` out of the client app used to have no way
+    back: every link in the server-rendered nav kept them in the server-rendered
+    UI, in screens that look almost but not quite the same.
+    """
+
+    async def test_the_client_app_is_offered_when_it_is_built(
+        self, api_client: AsyncClient, api_app: Any
+    ) -> None:
+        api_app.state.client_app_mounted = True
+
+        body = (await api_client.get("/ui/ask")).text
+
+        assert 'href="/app/documents"' in body
+        assert 'class="leaves"' in body, "a link that changes renderer is marked"
+
+    async def test_nothing_links_to_a_client_app_that_was_never_built(
+        self, api_client: AsyncClient, api_app: Any
+    ) -> None:
+        api_app.state.client_app_mounted = False
+
+        body = (await api_client.get("/ui/ask")).text
+
+        assert "/app/" not in body
+
+
 class TestConfidenceOnThePage:
     async def test_a_confidence_is_a_percentage(
         self, api_client: AsyncClient, db_session: AsyncSession

@@ -15,6 +15,13 @@
   <nav>
     <a href="/ui/ask" {% if active == 'ask' %}class="on"{% endif %}>Ask</a>
     <a href="/ui/instruments" {% if active == 'instruments' %}class="on"{% endif %}>Instruments</a>
+    {# Uploading is the client app's screen. Offered here so both navs list the
+       same five destinations, and omitted entirely when nobody has run
+       `make frontend` -- a nav item that 404s is worse than one that is absent. #}
+    {% if client_app %}
+    <a class="leaves" href="/app/documents"
+       title="Opens the client app">Documents</a>
+    {% endif %}
     <a href="/ui/portfolios" {% if active == 'portfolios' %}class="on"{% endif %}>Portfolios</a>
     <a href="/ui/review" {% if active == 'review' %}class="on"{% endif %}>
       {# Same word and same destination for both roles; only the badge's weight

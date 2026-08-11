@@ -55,6 +55,44 @@ describe('DocumentsPage', () => {
     return TestBed.createComponent(DocumentsPage).componentInstance;
   }
 
+  it('does not print an unset classification as a finding about the file', () => {
+    const page = create() as unknown as { typeLabel(type: string): string };
+
+    // The upload endpoint defaults to `unknown`, and `opuscovintel ingest`
+    // has no way to say otherwise, so this is what most rows hold.
+    expect(page.typeLabel('unknown')).toBe('not classified');
+    expect(page.typeLabel('trust_deed')).toBe('trust deed');
+    expect(page.typeLabel('prospectus')).toBe('prospectus');
+  });
+
+  it('says which row the detail panel is describing', fakeAsync(() => {
+    // The panel is above the table and every row's button is identical, so
+    // without this the screen shows one document's jobs beside five rows of
+    // buttons and no way to tell which one you pressed.
+    api.listDocuments.and.returnValue(
+      of([{ id: 'doc-1', filename: 'prospectus.pdf', document_type: 'unknown' } as DocumentRead]),
+    );
+    // Terminal, so the poll delivers once and completes rather than leaving a
+    // timer running past the end of the test.
+    api.documentStatus.and.returnValue(of(status({ terminal: true })));
+    const fixture = TestBed.createComponent(DocumentsPage);
+    fixture.detectChanges();
+
+    const row = (): HTMLElement => fixture.nativeElement.querySelector('tbody tr');
+    const button = (): HTMLButtonElement => row().querySelector('button')!;
+
+    expect(button().textContent?.trim()).toBe('Ingestion detail');
+    expect(row().classList).not.toContain('selected');
+
+    button().click();
+    tick();
+    fixture.detectChanges();
+
+    expect(button().textContent?.trim()).toBe('Showing detail');
+    expect(button().getAttribute('aria-pressed')).toBe('true');
+    expect(row().classList).toContain('selected');
+  }));
+
   it('reports transfer progress while bytes are in flight', () => {
     api.uploadDocument.and.returnValue(
       of({ type: HttpEventType.UploadProgress, loaded: 512, total: 1024 }),
