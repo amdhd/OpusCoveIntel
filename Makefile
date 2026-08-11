@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help install lint fmt type test test-live check run worker \
+        frontend frontend-install frontend-test frontend-types frontend-serve \
         up down down-volumes logs psql shell migrate migration migrate-down seed user-add \
         sample-pdf ingest-sample corpus ingest-corpus index extract-sample \
         extract-llm-dry-run extract-llm \
@@ -36,6 +37,27 @@ test-live:  ## Run tests INCLUDING billable provider calls. Costs real money.
 	RUN_LIVE_LLM_TESTS=1 $(UV) run pytest
 
 check: lint type test  ## lint + type + test
+
+# -- frontend (Angular client app, served at /app) -----------------------
+#
+# Optional: the API and the server-rendered UI at /ui work without any of
+# this. `app/main.py` mounts the build if it is there and says so if it is not.
+
+frontend-install:  ## Install the client app's dependencies
+	cd frontend && npm ci
+
+frontend: frontend-install  ## Build the client app into frontend/dist
+	cd frontend && npm run build
+
+frontend-test:  ## Run the client app's unit tests (headless Chrome)
+	cd frontend && npm run test:ci
+
+frontend-serve:  ## Dev server on :4200, proxying the API on :8000
+	cd frontend && npm start
+
+frontend-types:  ## Regenerate the client's types from the API's OpenAPI schema
+	$(UV) run python scripts/export_openapi.py
+	cd frontend && npm run gen:api
 
 run:  ## Run the API with autoreload
 	$(UV) run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
