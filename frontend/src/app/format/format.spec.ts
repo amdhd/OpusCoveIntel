@@ -6,7 +6,7 @@
  * only way to notice they have drifted is to assert the same table on both
  * sides.
  */
-import { belowReviewBar, confidence, EM_DASH, money, REVIEW_THRESHOLD } from './format';
+import { belowReviewBar, confidence, EM_DASH, label, money, REVIEW_THRESHOLD } from './format';
 
 // [value, currency, expected]
 const CASES: [string, string | null, string][] = [
@@ -77,4 +77,36 @@ describe('confidence', () => {
     expect(belowReviewBar(null)).toBeFalse();
     expect(belowReviewBar(undefined)).toBeFalse();
   });
+});
+
+describe('label', () => {
+  // Same table as `LABEL_CASES` in tests/test_web_format.py.
+  const LABEL_CASES: [string, string][] = [
+    ['financial_covenant', 'Financial covenant'],
+    ['rating_report', 'Rating report'],
+    ['at_risk', 'At risk'],
+    ['not_applicable', 'Not applicable'],
+    // Sentence case, not title case: 'Rating report', never 'Rating Report'.
+    ['trust_deed', 'Trust deed'],
+    // An initialism stays one. 'Llm' reads as a typo.
+    ['llm', 'LLM'],
+    ['vlm', 'VLM'],
+    ['spv', 'SPV'],
+    // A word the data already capitalised keeps its shape: sukuk structures are
+    // proper nouns (CLAUDE.md 6) and must not be flattened.
+    ['Ijarah', 'Ijarah'],
+    ['wakalah', 'Wakalah'],
+  ];
+
+  for (const [value, expected] of LABEL_CASES) {
+    it(`renders ${JSON.stringify(value)} as ${JSON.stringify(expected)}`, () => {
+      expect(label(value)).toBe(expected);
+    });
+  }
+
+  for (const empty of [null, undefined, '', '   ']) {
+    it(`renders ${JSON.stringify(empty)} as a dash`, () => {
+      expect(label(empty)).toBe(EM_DASH);
+    });
+  }
 });

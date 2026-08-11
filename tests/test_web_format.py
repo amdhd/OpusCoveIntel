@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.web.format import confidence, money
+from app.web.format import confidence, label, money
 
 # (value, currency, expected)
 CASES: list[tuple[str, str | None, str]] = [
@@ -74,3 +74,38 @@ class TestConfidence:
 
     def test_nothing_renders_as_a_dash(self) -> None:
         assert confidence(None) == "—"
+
+
+# Duplicated in `format.spec.ts`, same as the money table above.
+LABEL_CASES: list[tuple[str, str]] = [
+    ("financial_covenant", "Financial covenant"),
+    ("rating_report", "Rating report"),
+    ("at_risk", "At risk"),
+    ("not_applicable", "Not applicable"),
+    # Sentence case, not title case: "Rating report", never "Rating Report".
+    ("trust_deed", "Trust deed"),
+    # An initialism stays one. `Llm` reads as a typo.
+    ("llm", "LLM"),
+    ("vlm", "VLM"),
+    ("spv", "SPV"),
+    # A word the data already capitalised keeps its shape: sukuk structures are
+    # proper nouns (CLAUDE.md 6) and must not be flattened.
+    ("Ijarah", "Ijarah"),
+    ("wakalah", "Wakalah"),
+]
+
+
+class TestLabel:
+    @pytest.mark.parametrize(("value", "expected"), LABEL_CASES)
+    def test_a_case(self, value: str, expected: str) -> None:
+        assert label(value) == expected
+
+    def test_an_enum_member_reads_as_its_value(self) -> None:
+        """Templates hand this `SomeEnum.VALUE`, not always a bare string."""
+        from app.domain.enums import ExtractionMethod
+
+        assert label(ExtractionMethod.LLM) == "LLM"
+
+    @pytest.mark.parametrize("empty", [None, "", "   "])
+    def test_nothing_renders_as_a_dash(self, empty: str | None) -> None:
+        assert label(empty) == "—"

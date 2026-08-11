@@ -7,6 +7,10 @@
  * module; the case table in `format.spec.ts` is a copy of the one in
  * `tests/test_web_format.py` on purpose. Change one, change both.
  *
+ * An enum is a value, not a label: `financial_covenant` is what the database
+ * holds and `Financial covenant` is what a person reads. Acronyms survive the
+ * trip, because `Llm` is worse than `llm` was.
+ *
  * Confidence is a percentage here too: `0.78` is a number an analyst has to
  * convert before they can compare it against the review bar.
  *
@@ -43,6 +47,36 @@ export function money(value: string | number | null | undefined, currency?: stri
   const amount = `${sign}${grouped}${trimmed ? `.${trimmed}` : ''}`;
 
   return currency ? `${currency} ${amount}` : amount;
+}
+
+/**
+ * Words that are not words. Sentence-casing these gives `Llm`, `Spv`, `Isin`,
+ * which reads as a typo rather than as an initialism. Kept in step with
+ * `_ACRONYMS` in the Python twin.
+ */
+const ACRONYMS = new Set([
+  'llm', 'vlm', 'ocr', 'spv', 'isin', 'nav', 'id', 'pdf', 'fts', 'sql', 'api', 'url', 'vat',
+]);
+
+/** A controlled-vocabulary value, as a person would write it. */
+export function label(value: string | null | undefined): string {
+  if (value === null || value === undefined || value.trim() === '') {
+    return EM_DASH;
+  }
+  const words = value.trim().replace(/_/g, ' ').split(/\s+/);
+  const rendered = words.map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w));
+  const [first, ...rest] = rendered;
+  // Sentence case, not title case, and a word the data already capitalised
+  // (a proper noun such as Ijarah) keeps its shape.
+  const head = ACRONYMS.has(first.toLowerCase()) ? first : first[0].toUpperCase() + first.slice(1);
+  return [head, ...rest].join(' ');
+}
+
+@Pipe({ name: 'label' })
+export class LabelPipe implements PipeTransform {
+  transform(value: string | null | undefined): string {
+    return label(value);
+  }
 }
 
 /**
