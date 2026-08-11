@@ -9,9 +9,12 @@
   <link rel="icon" href="data:,">
 </head>
 <body>
+{# The rail renders only for a signed-in visitor. The login screen has no
+   navigation to offer, and an empty 15rem gutter beside it is worse than none;
+   the stylesheet keys the page indent off the rail's presence. #}
+{% if user %}
 <header class="topbar">
   <a class="brand" href="/ui/ask">OpusCovIntel</a>
-  {% if user %}
   <nav>
     <a href="/ui/ask" {% if active == 'ask' %}class="on"{% endif %}>Ask</a>
     <a href="/ui/instruments" {% if active == 'instruments' %}class="on"{% endif %}>Instruments</a>
@@ -19,8 +22,7 @@
        same five destinations, and omitted entirely when nobody has run
        `make frontend` -- a nav item that 404s is worse than one that is absent. #}
     {% if client_app %}
-    <a class="leaves" href="/app/documents"
-       title="Opens the client app">Documents</a>
+    <a class="leaves" href="/app/documents" title="Opens the client app">Documents</a>
     {% endif %}
     <a href="/ui/portfolios" {% if active == 'portfolios' %}class="on"{% endif %}>Portfolios</a>
     <a href="/ui/review" {% if active == 'review' %}class="on"{% endif %}>
@@ -33,14 +35,18 @@
     </a>
   </nav>
   <form class="signout" method="post" action="/ui/logout">
-    <span class="who">{{ user.display_name }}
+    <span class="who">
+      <strong>{{ user.display_name }}</strong>
+      {# The role is the only thing that changes what this person may do, so it
+         says what that is rather than making them find out by clicking. #}
       <em class="{% if user.role.may_review %}may-review{% endif %}"
           title="{{ 'Reviewer — may approve, correct and reject queue items' if user.role.may_review else 'Analyst — read-only; may not decide queue items' }}"
-      >{{ user.role.value }}</em></span>
+      >{{ user.role.value }}</em>
+    </span>
     <button type="submit">Sign out</button>
   </form>
-  {% endif %}
 </header>
+{% endif %}
 
 <main>
   {% if error %}<p class="alert error">{{ error }}</p>{% endif %}

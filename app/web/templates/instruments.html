@@ -35,7 +35,7 @@
       <td class="num">
         {{ i.issue_size | money(i.currency) }}
       </td>
-      <td>{{ i.maturity_date or '—' }}</td>
+      <td class="nowrap">{{ i.maturity_date or '—' }}</td>
     </tr>
     {% endfor %}
   </tbody>

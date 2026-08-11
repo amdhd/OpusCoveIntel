@@ -1,78 +1,77 @@
 /* One stylesheet, no framework, two renderers.
  *
- * The palette is deliberately quiet. This is a screen a credit analyst reads
- * for an hour at a time, and the only things that should catch the eye are a
- * breach, a low-confidence figure, and a highlighted quote. Everything below
- * exists to make those three loud by keeping everything else calm.
+ * Light only, on purpose. This is read next to a PDF of a prospectus, in an
+ * office, in daylight, and printed into audit packs. A dark theme here was
+ * solving a problem nobody has.
  *
- * The vocabulary is Fluent 2 -- Microsoft's ramp, because it was designed for
- * exactly this: dense, text-heavy, read-all-day enterprise screens. What that
- * buys us concretely is a neutral ramp with enough steps to build hierarchy
- * without colour, a 4px spacing grid, real elevation instead of borders
- * everywhere, and a focus indicator that is visible on every surface.
+ * The palette is deliberately quiet. A credit analyst reads this for an hour at
+ * a time, and the only things that should catch the eye are a breach, a
+ * low-confidence figure, and a highlighted quote. Everything below exists to
+ * make those three loud by keeping everything else calm.
  *
  * Rules for editing this file:
  *
  *   1. No raw hex outside `:root`. If a value is worth using twice it is worth
- *      a token, and a token is the only way the dark theme keeps working.
+ *      a token.
  *   2. Semantic colour (breach, warn, ok) is spent on meaning, never on
  *      decoration. A red that appears every day stops being read.
- *   3. Sizes come off the ramp. Eleven arbitrary font sizes is how the last
+ *   3. Sizes come off the ramp. Eleven arbitrary font sizes is how an earlier
  *      version of this file ended up looking like eleven different products.
  */
 
 /* -- tokens -------------------------------------------------------------- */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
-  /* Fluent 2 neutrals, light. */
-  --n-bg-1: #ffffff;
-  --n-bg-2: #fafafa;
-  --n-bg-3: #f5f5f5;
-  --n-bg-hover: #f5f5f5;
-  --n-bg-pressed: #e0e0e0;
-  --n-fg-1: #242424;
-  --n-fg-2: #424242;
-  --n-fg-3: #616161;
-  --n-stroke-1: #d1d1d1;
-  --n-stroke-2: #e0e0e0;
-  --n-stroke-3: #f0f0f0;
+  /* A neutral ramp with a trace of warmth. Pure greys go blue on an LCD and
+   * make a page of text look like a wireframe of itself. */
+  --white: #ffffff;
+  --n-25: #fcfcfd;
+  --n-50: #f8f9fb;
+  --n-100: #f1f2f5;
+  --n-200: #e7e8ec;
+  --n-300: #d5d7dd;
+  --n-500: #71747e;
+  --n-600: #565963;
+  --n-900: #14161c;
 
-  /* Brand. One accent, used for identity and for the primary action only. */
-  --brand: #0f6cbd;
-  --brand-hover: #115ea3;
-  --brand-pressed: #0c3b5e;
-  --brand-fg: #0f6cbd;
-  --brand-subtle: #ebf3fc;
+  /* One accent. Identity, links, the current page, and nothing else. */
+  --accent: #2c5fe0;
+  --accent-hover: #2450c4;
+  --accent-pressed: #1d419e;
+  --accent-subtle: #eef2fd;
 
-  /* Semantic. Reserved for state, never for emphasis. */
-  --breach: #b10e1c;
-  --breach-bg: #fdf3f4;
-  --breach-stroke: #f1bbbc;
-  --warn: #835b00;
-  --warn-bg: #fdf8e6;
-  --warn-stroke: #eddba1;
-  --ok: #0e700e;
-  --ok-bg: #f1faf1;
-  --ok-stroke: #bdda9b;
-  --highlight: #fdf2b3;
+  /* Semantic. Reserved for state. */
+  --breach: #b42318;
+  --breach-bg: #fef3f2;
+  --breach-stroke: #fecdc9;
+  --warn: #b54708;
+  --warn-bg: #fffaeb;
+  --warn-stroke: #fedf89;
+  --ok: #067647;
+  --ok-bg: #ecfdf3;
+  --ok-stroke: #abefc6;
+  --highlight: #fef0a6;
 
-  /* Names the rest of the sheet reads. Kept from the previous palette so a
-   * template written against `--ink` or `--line` still means what it meant. */
-  --ink: var(--n-fg-1);
-  --muted: var(--n-fg-3);
-  --line: var(--n-stroke-2);
-  --bg: var(--n-bg-3);
-  --panel: var(--n-bg-1);
-  --accent: var(--brand);
+  /* Names the rest of the sheet reads. */
+  --ink: var(--n-900);
+  --muted: var(--n-500);
+  --line: var(--n-200);
+  --bg: var(--white);
+  --panel: var(--white);
 
-  /* Type ramp: Fluent's, in rem. Nothing outside this list. */
-  --text-caption: 0.75rem; /* 12 */
+  /* Type ramp. Nothing outside this list.
+   *
+   * Display sizes carry negative tracking because at 20px and up the default
+   * spacing of a UI face reads as loose; body text does not, because tightening
+   * running text costs legibility. */
+  --text-caption: 0.8125rem; /* 13 */
   --text-body: 0.875rem; /* 14 -- the default */
-  --text-subtitle: 1rem; /* 16 */
-  --text-title-2: 1.25rem; /* 20 */
-  --text-title-1: 1.5rem; /* 24 */
+  --text-reading: 0.9375rem; /* 15 -- prose, answers */
+  --text-subtitle: 1.0625rem; /* 17 */
+  --text-title: 1.375rem; /* 22 */
+  --text-display: 1.75rem; /* 28 */
 
   /* 4px grid. */
   --s-1: 0.25rem;
@@ -83,68 +82,29 @@
   --s-6: 2rem;
   --s-7: 3rem;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 
-  /* Elevation, not outlines. A card that is only a 1px box reads as a wireframe. */
-  --shadow-2: 0 1px 2px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
-  --shadow-4: 0 2px 4px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
-  --shadow-8: 0 4px 8px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
+  /* Barely-there elevation. On white, a card is defined by its hairline; the
+   * shadow only lifts it off the page enough to read as a surface. */
+  --shadow-1: 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-2: 0 1px 3px rgb(16 24 40 / 0.07), 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-4: 0 4px 8px -2px rgb(16 24 40 / 0.08), 0 2px 4px -2px rgb(16 24 40 / 0.04);
+  --shadow-8: 0 12px 24px -6px rgb(16 24 40 / 0.1), 0 4px 8px -4px rgb(16 24 40 / 0.05);
 
-  --focus: var(--n-fg-1);
+  --focus: var(--accent);
 
-  --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont,
-    system-ui, Roboto, "Helvetica Neue", sans-serif;
-  --font-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI",
-    -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-mono: "Cascadia Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
+  /* The platform's own UI face, which is the most modern one on any machine
+   * that runs this: SF on macOS, Segoe UI Variable on Windows 11, Roboto on
+   * Android. No webfont -- a covenant table should not wait on a CDN, and this
+   * runs inside a bank. */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
+    system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+    monospace;
 
-/* Dark is not an inversion: Fluent lifts the *card* above the canvas in both
- * themes, so panels go lighter here while the page goes darker. Every semantic
- * colour is restated, because a foreground tuned for white is unreadable on
- * #292929 and a breach that cannot be read is worse than no colour at all. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --n-bg-1: #292929;
-    --n-bg-2: #1f1f1f;
-    --n-bg-3: #141414;
-    --n-bg-hover: #383838;
-    --n-bg-pressed: #444444;
-    --n-fg-1: #ffffff;
-    --n-fg-2: #d6d6d6;
-    --n-fg-3: #adadad;
-    --n-stroke-1: #666666;
-    --n-stroke-2: #4d4d4d;
-    --n-stroke-3: #3d3d3d;
-
-    --brand: #115ea3;
-    --brand-hover: #0f6cbd;
-    --brand-pressed: #0c3b5e;
-    --brand-fg: #479ef5;
-    --brand-subtle: #082338;
-
-    --breach: #e37d80;
-    --breach-bg: #3b1a1c;
-    --breach-stroke: #6e292c;
-    --warn: #e0b64a;
-    --warn-bg: #3a2e12;
-    --warn-stroke: #63501f;
-    --ok: #6dc36d;
-    --ok-bg: #16301a;
-    --ok-stroke: #2b5c2f;
-    --highlight: #6b5a00;
-
-    --bg: var(--n-bg-2);
-    --panel: var(--n-bg-1);
-
-    --shadow-2: 0 1px 2px rgb(0 0 0 / 0.28), 0 0 2px rgb(0 0 0 / 0.24);
-    --shadow-4: 0 2px 4px rgb(0 0 0 / 0.28), 0 0 2px rgb(0 0 0 / 0.24);
-    --shadow-8: 0 4px 8px rgb(0 0 0 / 0.28), 0 0 2px rgb(0 0 0 / 0.24);
-
-    --focus: #ffffff;
-  }
+  --sidebar-width: 15rem;
 }
 
 /* -- base ---------------------------------------------------------------- */
@@ -157,20 +117,25 @@ body {
   margin: 0;
   font-family: var(--font);
   font-size: var(--text-body);
-  line-height: 1.43;
+  line-height: 1.5;
   color: var(--ink);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Proportional figures in prose, lining figures in tables (set there). */
+  font-variant-numeric: proportional-nums;
 }
 
 a {
-  color: var(--brand-fg);
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
   text-underline-offset: 2px;
 }
 
-/* One indicator, on everything, in both themes. Fluent's is a 2px stroke
- * outside the control -- visible on a white card and on a dark canvas without
- * needing to know which one it landed on. */
+a:hover {
+  text-decoration-color: currentColor;
+}
+
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -186,27 +151,35 @@ a {
   }
 }
 
-/* -- chrome -------------------------------------------------------------- */
+/* -- app shell ------------------------------------------------------------
+ *
+ * A left rail, not a top strip. Five destinations and a queue count do not fit
+ * a horizontal row without wrapping the moment a window is half-width, and a
+ * rail gives each one a full line to be read on -- which is what a nav is for.
+ * It also puts the queue badge and the signed-in role in the same fixed place
+ * on every screen, so neither moves as the page under them changes. */
 
 .topbar {
-  display: flex;
-  align-items: center;
-  gap: var(--s-5);
-  padding: var(--s-2) var(--s-5);
-  background: var(--panel);
-  border-bottom: 1px solid var(--n-stroke-3);
-  /* Sticky because the tables below it are long, and a nav you have to scroll
-   * back to is a nav people stop using. */
-  position: sticky;
+  position: fixed;
   top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  padding: var(--s-5) var(--s-3);
+  background: var(--n-25);
+  border-right: 1px solid var(--line);
   z-index: 10;
 }
 
 .brand {
-  font-family: var(--font-display);
+  display: block;
+  padding: 0 var(--s-3);
   font-size: var(--text-subtitle);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 650;
+  letter-spacing: -0.021em;
   text-decoration: none;
   color: var(--ink);
   white-space: nowrap;
@@ -214,49 +187,40 @@ a {
 
 .topbar nav {
   display: flex;
-  align-items: center;
-  gap: var(--s-1);
-  margin-right: auto;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+  /* Pushes the account block to the foot of the rail. */
+  margin-bottom: auto;
 }
 
 .topbar nav a {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
   border-radius: var(--radius-sm);
+  font-weight: 500;
   text-decoration: none;
-  color: var(--n-fg-2);
-  transition: background-color 0.1s ease, color 0.1s ease;
+  color: var(--n-600);
+  transition: background-color 0.12s ease, color 0.12s ease;
 }
 
 .topbar nav a:hover {
-  background: var(--n-bg-hover);
+  background: var(--n-100);
   color: var(--ink);
 }
 
 .topbar nav a:active {
-  background: var(--n-bg-pressed);
+  background: var(--n-200);
 }
 
+/* The current page is a filled row, not an underline. On a vertical rail an
+ * underline reads as a divider between items. */
 .topbar nav a.on {
-  color: var(--ink);
+  background: var(--accent-subtle);
+  color: var(--accent);
   font-weight: 600;
-}
-
-/* The selected marker is a rounded bar under the label, not a full-width
- * border: it points at the word rather than at the padding. */
-.topbar nav a.on::before {
-  content: "";
-  position: absolute;
-  left: var(--s-3);
-  right: var(--s-3);
-  bottom: 1px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--brand-fg);
 }
 
 /* Some screens are server-rendered and some are in the client app. Both navs
@@ -265,44 +229,48 @@ a {
  * definition beats a glyph typed into two templates. */
 .topbar nav a.leaves::after {
   content: "\2197";
-  font-size: 0.85em;
+  margin-left: auto;
+  font-size: 0.8em;
   color: var(--muted);
 }
 
+/* Who you are, at the foot of the rail. */
 .signout {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
+  display: grid;
+  gap: var(--s-2);
   margin: 0;
+  padding: var(--s-3) var(--s-3) 0;
+  border-top: 1px solid var(--line);
 }
 
 .who {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: var(--text-body);
-  color: var(--n-fg-2);
+  display: grid;
+  gap: 1px;
+  font-size: var(--text-caption);
+  color: var(--ink);
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.who strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* A role, not a decoration: an outline badge, which reads as metadata rather
- * than as a status the reader has to act on. */
+/* A role, not a decoration. Lower case, because it is a description rather
+ * than a label on a form. */
 .who em {
   font-style: normal;
-  font-size: var(--text-caption);
-  font-weight: 600;
-  line-height: 1;
-  padding: 3px var(--s-2);
-  border: 1px solid var(--n-stroke-1);
-  border-radius: 999px;
   color: var(--muted);
 }
 
-/* A reviewer's badge says what they may do, so it carries the accent. An
+/* A reviewer's role says what they may do, so it carries the accent. An
  * analyst's says what they are, which is not a status worth colour. */
 .who em.may-review {
-  border-color: var(--brand-fg);
-  color: var(--brand-fg);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* The queue count. Accent, never --breach: red is spent on breaches, and a
@@ -313,32 +281,44 @@ a {
   justify-content: center;
   min-width: 1.25rem;
   height: 1.25rem;
+  margin-left: auto;
   padding: 0 var(--s-1);
   border-radius: 999px;
-  background: var(--brand);
+  background: var(--accent);
   color: #fff;
-  font-size: var(--text-caption);
+  font-size: 0.6875rem;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
 /* Same count, no call to action, for a role that cannot act on it. */
 .pill.passive {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--n-stroke-1);
+  background: var(--n-200);
+  color: var(--n-600);
+}
+
+/* Everything that is not the rail sits beside it. Indented on `body` rather
+ * than on `main`, so that `main` can still centre itself in what is left. */
+body {
+  padding-left: var(--sidebar-width);
+}
+
+/* The login screen has no rail, so it has nothing to sit beside. */
+body:not(:has(.topbar)) {
+  padding-left: 0;
 }
 
 main {
-  max-width: 72rem;
-  margin: var(--s-6) auto;
-  padding: 0 var(--s-5);
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: var(--s-6) var(--s-6) var(--s-7);
 }
 
 footer {
-  max-width: 72rem;
-  margin: var(--s-6) auto var(--s-7);
-  padding: 0 var(--s-5);
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0 var(--s-6) var(--s-6);
   color: var(--muted);
   font-size: var(--text-caption);
 }
@@ -346,44 +326,48 @@ footer {
 /* -- headings ------------------------------------------------------------ */
 
 h1 {
-  font-family: var(--font-display);
-  font-size: var(--text-title-1);
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
-  margin: 0 0 var(--s-4);
+  font-size: var(--text-display);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.024em;
+  margin: 0 0 var(--s-5);
 }
 
 h2 {
-  font-family: var(--font-display);
   font-size: var(--text-subtitle);
-  font-weight: 600;
+  font-weight: 620;
   line-height: 1.4;
-  margin: var(--s-5) 0 var(--s-3);
+  letter-spacing: -0.014em;
+  margin: var(--s-6) 0 var(--s-3);
+}
+
+h1 .muted {
+  font-weight: 500;
+  letter-spacing: -0.014em;
 }
 
 /* -- panels and tables --------------------------------------------------- */
 
 .panel {
   background: var(--panel);
-  border: 1px solid var(--n-stroke-3);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-2);
-  padding: var(--s-4) var(--s-5);
+  box-shadow: var(--shadow-1);
+  padding: var(--s-5);
   margin-bottom: var(--s-4);
 }
 
-/* A drop target under a dragged file. The accent tint says "let go here"; a
- * border style flicking between solid and dashed said almost nothing. */
-.panel.dropping {
-  border: 1px dashed var(--brand-fg);
-  background: var(--brand-subtle);
+/* A table is the one thing on these screens that cannot be made narrower, so
+ * it scrolls inside its own card rather than pushing the page sideways. It
+ * also loses the card's padding: a row should run the full width of the
+ * surface it sits on, and the header rule should meet both edges. */
+.panel:has(> table) {
+  padding: 0;
+  overflow-x: auto;
 }
 
-/* A table is the one thing on these screens that cannot be made narrower, so
- * it scrolls inside its own card rather than pushing the page sideways. */
-.panel:has(table) {
-  overflow-x: auto;
+.panel:has(> table) table {
+  margin: 0;
 }
 
 table {
@@ -391,23 +375,35 @@ table {
   min-width: 32rem;
   border-collapse: collapse;
   font-size: var(--text-body);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 th,
 td {
   text-align: left;
-  padding: var(--s-3) var(--s-3);
-  border-bottom: 1px solid var(--n-stroke-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--n-100);
 }
 
-/* Sentence case, not letterspaced capitals. A column heading is a label to be
- * read once, and small caps at 0.8rem is the least legible thing on the page. */
+/* Sentence case at reading size, not letterspaced 12px capitals -- which was
+ * the least legible text on the page. */
 th {
-  color: var(--n-fg-2);
+  padding-top: var(--s-3);
+  padding-bottom: var(--s-3);
+  background: var(--n-50);
+  color: var(--n-600);
   font-weight: 600;
+  font-size: var(--text-caption);
   white-space: nowrap;
-  border-bottom: 1px solid var(--n-stroke-1);
+  border-bottom: 1px solid var(--line);
+}
+
+thead tr:first-child th:first-child {
+  border-top-left-radius: var(--radius-lg);
+}
+
+thead tr:first-child th:last-child {
+  border-top-right-radius: var(--radius-lg);
 }
 
 tbody tr:last-child > td {
@@ -415,18 +411,41 @@ tbody tr:last-child > td {
 }
 
 tbody tr:hover > td {
-  background: var(--n-bg-hover);
+  background: var(--n-25);
 }
 
+/* The first column is what the row is; the rest are its attributes. */
+tbody td:first-child {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* A figure never wraps. "MYR 300,000," on one line and "000" on the next is
+ * not a smaller column, it is a different number. Prose cells opt back in. */
 td.num,
-th.num {
+th.num,
+td.nowrap {
   text-align: right;
-  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+td.nowrap {
+  text-align: left;
+}
+
+/* Cells that are sentences rather than values. */
+td.wrap {
+  white-space: normal;
+  min-width: 12rem;
 }
 
 /* The row a detail panel elsewhere on the page is describing. */
 tbody tr.selected > td {
-  background: var(--brand-subtle);
+  background: var(--accent-subtle);
+}
+
+tbody tr.clickable {
+  cursor: pointer;
 }
 
 .muted {
@@ -439,21 +458,6 @@ tbody tr.selected > td {
   margin: 0;
 }
 
-/* Command names and paths in running text. Not a block: every use of this is a
- * few words inside a sentence. */
-code {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  padding: 1px 4px;
-  border: 1px solid var(--n-stroke-2);
-  border-radius: var(--radius-sm);
-  background: var(--n-bg-2);
-  white-space: nowrap;
-}
-
-/* A panel sets its own edges, so the first and last things inside it must not
- * add more. This is what the two dozen `style="margin-top: 0"` attributes in
- * the templates were doing by hand, each one a decision nobody could reuse. */
 .panel > :first-child {
   margin-top: 0;
 }
@@ -462,14 +466,12 @@ code {
   margin-bottom: 0;
 }
 
-/* Secondary text: hints, counts, the line under a form. The templates carried
- * 0.78, 0.8, 0.82, 0.85 and 0.88rem inline for this same job. */
+/* Secondary text: hints, counts, the line under a form. */
 .caption {
   font-size: var(--text-caption);
   color: var(--muted);
 }
 
-/* A row of controls that sit on one baseline and wrap together. */
 .field-row {
   display: flex;
   gap: var(--s-3);
@@ -477,22 +479,24 @@ code {
   flex-wrap: wrap;
 }
 
-/* Controls that act as one, like a text field and the button that submits it. */
 .control-group {
   display: flex;
   gap: var(--s-2);
   align-items: flex-start;
 }
 
-/* What follows the thing it acts on. */
 .actions {
   margin-top: var(--s-4);
 }
 
-/* Rows that navigate. The pointer is the only affordance a table row gets, so
- * it belongs in the sheet with everything else, not in an attribute. */
-tbody tr.clickable {
-  cursor: pointer;
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--n-50);
+  white-space: nowrap;
 }
 
 /* -- progress -------------------------------------------------------------
@@ -507,29 +511,29 @@ progress {
   appearance: none;
   display: block;
   width: 100%;
-  height: 4px;
+  height: 6px;
   border: 0;
   border-radius: 999px;
-  background: var(--n-stroke-2);
+  background: var(--n-200);
   overflow: hidden;
 }
 
 progress::-webkit-progress-bar {
-  background: var(--n-stroke-2);
+  background: var(--n-200);
 }
 
 progress::-webkit-progress-value {
-  background: var(--brand-fg);
+  background: var(--accent);
   border-radius: 999px;
   transition: width 0.2s ease;
 }
 
 progress::-moz-progress-bar {
-  background: var(--brand-fg);
+  background: var(--accent);
 }
 
 progress:not([value]) {
-  background: linear-gradient(90deg, var(--n-stroke-2) 0 65%, var(--brand-fg) 65% 100%);
+  background: linear-gradient(90deg, var(--n-200) 0 65%, var(--accent) 65% 100%);
   background-size: 300% 100%;
   animation: indeterminate 1.6s ease-in-out infinite;
 }
@@ -546,8 +550,9 @@ progress:not([value]) {
 /* -- forms --------------------------------------------------------------- */
 
 label {
-  font-size: var(--text-body);
-  color: var(--n-fg-2);
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--n-600);
 }
 
 input[type="text"],
@@ -559,78 +564,82 @@ select {
   padding: var(--s-2) var(--s-3);
   font: inherit;
   color: var(--ink);
-  background: var(--panel);
-  border: 1px solid var(--n-stroke-1);
+  background: var(--white);
+  border: 1px solid var(--n-300);
   border-radius: var(--radius-sm);
-  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+  box-shadow: var(--shadow-1);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 input[type="text"]:hover,
 input[type="password"]:hover,
 textarea:hover,
 select:hover {
-  border-color: var(--n-fg-3);
+  border-color: var(--n-500);
 }
 
-/* Fluent's field signature: the resting border stays, and a 2px accent stroke
- * lands on the bottom edge. It reads as "this one is live" without the halo of
- * a glow, which on a page of fifteen fields is fifteen glows. */
 input[type="text"]:focus,
 input[type="password"]:focus,
 textarea:focus,
 select:focus {
   outline: none;
-  border-color: var(--n-stroke-1);
-  box-shadow: inset 0 -2px 0 0 var(--brand-fg);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+::placeholder {
+  color: var(--n-500);
 }
 
 textarea {
   resize: vertical;
-  min-height: 5rem;
-  line-height: 1.5;
+  min-height: 6rem;
+  line-height: 1.55;
 }
 
 button {
   font: inherit;
-  font-weight: 600;
+  font-weight: 550;
   padding: var(--s-2) var(--s-4);
-  min-height: 2rem;
+  min-height: 2.25rem;
   color: var(--ink);
-  background: var(--panel);
-  border: 1px solid var(--n-stroke-1);
+  background: var(--white);
+  border: 1px solid var(--n-300);
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 0.1s ease, border-color 0.1s ease;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
 button:hover {
-  background: var(--n-bg-hover);
+  background: var(--n-50);
+  border-color: var(--n-500);
 }
 
 button:active {
-  background: var(--n-bg-pressed);
+  background: var(--n-100);
 }
 
 button.primary {
-  background: var(--brand);
-  border-color: var(--brand);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
 button.primary:hover {
-  background: var(--brand-hover);
-  border-color: var(--brand-hover);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 button.primary:active {
-  background: var(--brand-pressed);
-  border-color: var(--brand-pressed);
+  background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
 }
 
 /* Destructive, and deliberately not filled red. A wall of red buttons is a
  * screen that shouts; the colour belongs on the word, and the fill arrives on
- * hover, when the pointer has already committed to the direction. */
+ * hover, when the pointer has already committed. */
 button.danger {
   color: var(--breach);
   border-color: var(--breach-stroke);
@@ -644,14 +653,16 @@ button.danger:hover {
 /* A button whose panel is currently open. Not `.primary`: this is a statement
  * about what you are looking at, not the action the screen wants next. */
 button.on {
-  border-color: var(--brand-fg);
-  color: var(--brand-fg);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
 }
 
 button:disabled {
   color: var(--muted);
-  background: var(--n-bg-3);
-  border-color: var(--n-stroke-2);
+  background: var(--n-100);
+  border-color: var(--n-200);
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -679,9 +690,9 @@ button:disabled {
 /* Standing facts about the screen -- "you cannot decide these" -- as opposed
  * to `.notice`, whose green means something you did just worked. */
 .alert.info {
-  background: var(--n-bg-3);
-  border-color: var(--n-stroke-2);
-  color: var(--n-fg-2);
+  background: var(--n-50);
+  border-color: var(--line);
+  color: var(--n-600);
 }
 
 /* -- status -------------------------------------------------------------- */
@@ -692,8 +703,8 @@ button:disabled {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-size: var(--text-caption);
-  font-weight: 600;
-  line-height: 1.34;
+  font-weight: 550;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
@@ -717,17 +728,17 @@ button:disabled {
 
 .status.insufficient_data,
 .status.not_applicable {
-  background: var(--n-bg-3);
-  border-color: var(--n-stroke-2);
-  color: var(--muted);
+  background: var(--n-100);
+  border-color: var(--n-200);
+  color: var(--n-600);
 }
 
 /* A figure the machine was unsure about must look different from one it was
  * confident about. CLAUDE.md 5 routes these to review; the UI should not
  * present them as settled while they sit in the queue. */
 .low-confidence {
-  border-bottom: 1px dashed var(--warn);
   color: var(--warn);
+  border-bottom: 1px dashed var(--warn-stroke);
 }
 
 /* A rating is only meaningful with the scale it is on: MARC writes AA- where
@@ -735,11 +746,12 @@ button:disabled {
  * the figure, not a footnote after it. */
 .agency {
   display: inline-block;
-  font-size: var(--text-caption);
+  font-size: 0.6875rem;
   font-weight: 600;
-  line-height: 1.34;
-  color: var(--muted);
-  border: 1px solid var(--n-stroke-2);
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  color: var(--n-600);
+  background: var(--n-100);
   border-radius: var(--radius-sm);
   padding: 0 var(--s-1);
   vertical-align: 1px;
@@ -755,11 +767,11 @@ button:disabled {
 
 .answer {
   white-space: pre-wrap;
-  font-size: var(--text-subtitle);
-  line-height: 1.6;
-  /* A paragraph wider than about 75 characters loses the reader's place on the
-   * carriage return, and answers here are prose, not table rows. */
-  max-width: 62ch;
+  font-size: var(--text-reading);
+  line-height: 1.65;
+  /* A line longer than about 75 characters loses the reader on the carriage
+   * return, and answers here are prose, not table rows. */
+  max-width: 68ch;
 }
 
 /* Refusal is a correct outcome (CLAUDE.md 5), so it is styled as an answer
@@ -767,22 +779,22 @@ button:disabled {
 .refusal {
   background: var(--warn-bg);
   border: 1px solid var(--warn-stroke);
-  border-left: 3px solid var(--warn);
   border-radius: var(--radius-md);
-  padding: var(--s-3) var(--s-4);
+  padding: var(--s-4);
 }
 
 .citation {
-  border-left: 3px solid var(--n-stroke-1);
+  border-left: 2px solid var(--n-300);
   padding: var(--s-2) var(--s-4);
   margin: var(--s-3) 0;
-  background: var(--n-bg-2);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
 .citation blockquote {
   margin: var(--s-1) 0 0;
-  color: var(--n-fg-2);
+  font-size: var(--text-reading);
+  line-height: 1.6;
+  color: var(--n-600);
+  max-width: 68ch;
 }
 
 .citation .meta {
@@ -797,8 +809,8 @@ button:disabled {
   font-family: var(--font-mono);
   font-size: var(--text-caption);
   line-height: 1.7;
-  background: var(--n-bg-2);
-  border: 1px solid var(--n-stroke-2);
+  background: var(--n-25);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: var(--s-4);
   max-height: 30rem;
@@ -815,8 +827,8 @@ button:disabled {
 
 .kv {
   display: grid;
-  grid-template-columns: minmax(6rem, 12rem) 1fr;
-  gap: var(--s-2) var(--s-4);
+  grid-template-columns: minmax(7rem, 13rem) 1fr;
+  gap: var(--s-3) var(--s-5);
   margin: 0;
 }
 
@@ -838,23 +850,27 @@ button:disabled {
   font-weight: 600;
 }
 
-/* -- login --------------------------------------------------------------- */
+/* -- login ----------------------------------------------------------------
+ *
+ * The one screen with no rail, so it centres in the window rather than beside
+ * anything. */
 
 .login {
-  max-width: 22.5rem;
-  margin: 12vh auto var(--s-7);
-  padding: var(--s-5) var(--s-5) var(--s-6);
+  max-width: 23rem;
+  margin: 14vh auto var(--s-7);
+  padding: var(--s-6);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-8);
 }
 
 .login h1 {
-  font-size: var(--text-title-2);
+  font-size: var(--text-title);
+  margin-bottom: var(--s-5);
 }
 
 .login label {
   display: block;
   margin: var(--s-4) 0 var(--s-1);
-  font-weight: 600;
 }
 
 .login button {
@@ -879,7 +895,7 @@ button:disabled {
 .awaiting {
   margin: 0;
   padding-top: var(--s-3);
-  border-top: 1px solid var(--n-stroke-3);
+  border-top: 1px solid var(--n-100);
   font-size: var(--text-caption);
   color: var(--muted);
 }
@@ -889,8 +905,8 @@ button:disabled {
   gap: var(--s-2);
   flex-wrap: wrap;
   align-items: flex-start;
-  padding-top: var(--s-3);
-  border-top: 1px solid var(--n-stroke-3);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--n-100);
 }
 
 .review-actions form {
@@ -900,44 +916,68 @@ button:disabled {
 }
 
 .review-actions input[type="text"] {
-  width: 14rem;
+  width: 13rem;
 }
 
 /* -- narrow ---------------------------------------------------------------
  *
  * Not a phone layout: nobody approves a covenant on a phone. This is enough
  * that a half-width window on a laptop, which is how these screens are
- * actually read beside a PDF, does not overlap or clip. */
+ * actually read beside a PDF, stays usable. The rail lies down across the top
+ * and the nav scrolls sideways rather than stacking six rows of chrome above
+ * the content. */
 
-@media (max-width: 48rem) {
+@media (max-width: 60rem) {
   .topbar {
-    flex-wrap: wrap;
-    gap: var(--s-2) var(--s-3);
-    padding: var(--s-2) var(--s-4);
+    position: static;
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-4);
+    padding: var(--s-3) var(--s-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
   }
 
   .topbar nav {
-    order: 3;
-    width: 100%;
-    margin-right: 0;
+    flex-direction: row;
+    margin-bottom: 0;
+    margin-right: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .topbar nav a.leaves::after {
+    margin-left: 0;
+  }
+
+  .pill {
+    margin-left: 0;
   }
 
   .signout {
-    margin-left: auto;
+    padding: 0;
+    border-top: 0;
+    grid-auto-flow: column;
+    align-items: center;
+    gap: var(--s-3);
   }
 
-  main,
+  body {
+    padding-left: 0;
+  }
+
+  main {
+    padding: var(--s-5) var(--s-4) var(--s-6);
+  }
+
   footer {
-    padding: 0 var(--s-4);
-  }
-
-  .panel {
-    padding: var(--s-4);
+    padding: 0 var(--s-4) var(--s-5);
   }
 
   .kv {
     grid-template-columns: 1fr;
-    gap: 0 0;
+    gap: 0;
   }
 
   .kv dd {
@@ -959,12 +999,16 @@ button:disabled {
   }
 
   body {
-    background: #fff;
+    padding-left: 0;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
   }
 
   .panel {
     box-shadow: none;
-    border-color: #ccc;
     break-inside: avoid;
   }
 
