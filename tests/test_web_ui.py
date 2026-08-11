@@ -246,8 +246,30 @@ class TestAnalystCannotDecide:
         response = await api_client.get("/ui/review")
 
         assert response.status_code == 200
-        assert "read-only" in response.text
+        # Anchored on the banner's own words. A bare "read-only" also occurs in
+        # the role chip's tooltip in every page's chrome, so it would pass with
+        # the banner deleted -- which it did, once.
+        assert "Read-only for your role" in response.text
         assert "Approve" not in response.text
+
+    async def test_an_item_says_who_acts_next(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """An item with no buttons and no explanation reads as a broken card."""
+        await _pending(db_session)
+        response = await api_client.get("/ui/review")
+
+        assert "Awaiting a reviewer's decision." in response.text
+
+    async def test_the_queue_badge_does_not_call_an_analyst_to_action(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The count is information for an analyst and a task for a reviewer."""
+        await _pending(db_session)
+        response = await api_client.get("/ui/review")
+
+        assert 'class="pill passive"' in response.text
+        assert "items awaiting a reviewer" in response.text
 
     async def test_the_server_refuses_the_post_anyway(
         self, api_client: AsyncClient, db_session: AsyncSession
@@ -259,3 +281,21 @@ class TestAnalystCannotDecide:
         assert response.status_code == 403
         await db_session.refresh(review)
         assert review.status is ReviewStatus.PENDING
+
+
+class TestReviewerChrome:
+    """The same chrome, weighted for the role that can act on it."""
+
+    async def test_the_queue_badge_is_a_call_to_action(
+        self, api_client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        await _pending(db_session)
+        response = await api_client.get("/ui/review")
+
+        assert 'class="pill "' in response.text, "no `passive` modifier for a reviewer"
+        assert "items awaiting your decision" in response.text
+
+    async def test_the_role_chip_says_what_the_role_may_do(self, api_client: AsyncClient) -> None:
+        response = await api_client.get("/ui/review")
+
+        assert "may approve, correct and reject queue items" in response.text

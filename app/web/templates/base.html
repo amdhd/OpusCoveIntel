@@ -17,11 +17,19 @@
     <a href="/ui/instruments" {% if active == 'instruments' %}class="on"{% endif %}>Instruments</a>
     <a href="/ui/portfolios" {% if active == 'portfolios' %}class="on"{% endif %}>Portfolios</a>
     <a href="/ui/review" {% if active == 'review' %}class="on"{% endif %}>
-      Review{% if pending_count %} <span class="pill">{{ pending_count }}</span>{% endif %}
+      {# Same word and same destination for both roles; only the badge's weight
+         differs, because only a reviewer can act on the count. #}
+      Review{% if pending_count %}
+      <span class="pill {% if not user.role.may_review %}passive{% endif %}"
+            aria-label="{{ pending_count }} items awaiting {{ 'your decision' if user.role.may_review else 'a reviewer' }}"
+      >{{ pending_count }}</span>{% endif %}
     </a>
   </nav>
   <form class="signout" method="post" action="/ui/logout">
-    <span class="who">{{ user.display_name }} <em>{{ user.role.value }}</em></span>
+    <span class="who">{{ user.display_name }}
+      <em class="{% if user.role.may_review %}may-review{% endif %}"
+          title="{{ 'Reviewer — may approve, correct and reject queue items' if user.role.may_review else 'Analyst — read-only; may not decide queue items' }}"
+      >{{ user.role.value }}</em></span>
     <button type="submit">Sign out</button>
   </form>
   {% endif %}

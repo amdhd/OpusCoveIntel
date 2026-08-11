@@ -14,9 +14,11 @@
 }
 
 @if (!auth.canReview()) {
-  <p class="alert notice">
-    You are signed in as an analyst. Items are shown for context; deciding them needs the reviewer
-    role.
+  <!-- `info`, not `notice`: green says "what you just did worked", and nothing
+       happened here. This is a standing fact about the screen. -->
+  <p class="alert info">
+    Read-only for your role. You can see every flagged item and its citation; approving,
+    correcting and rejecting need the reviewer role.
   </p>
 }
 
@@ -85,6 +87,11 @@
             Reject
           </button>
         </div>
+      } @else {
+        <!-- Not a row of disabled buttons: a disabled control with no
+             explanation is the thing every reader misreads as a bug. Say who
+             acts next instead. -->
+        <p class="awaiting">Awaiting a reviewer's decision.</p>
       }
     </section>
   }

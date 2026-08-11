@@ -11,7 +11,7 @@
  */
 import { Routes } from '@angular/router';
 
-import { authGuard } from './auth/auth-guard';
+import { authGuard, landingGuard } from './auth/auth-guard';
 
 export const routes: Routes = [
   {
@@ -45,7 +45,7 @@ export const routes: Routes = [
         loadComponent: () => import('./review/review.page').then((m) => m.ReviewPage),
         title: 'Review — OpusCovIntel',
       },
-      { path: '', pathMatch: 'full', redirectTo: 'documents' },
+      { path: '', pathMatch: 'full', canActivate: [landingGuard], children: [] },
     ],
   },
   { path: '**', redirectTo: '' },

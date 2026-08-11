@@ -5,6 +5,7 @@
  * signed out here, and `load()` asks once rather than per navigation.
  */
 import { TestBed } from '@angular/core/testing';
+import { Router, UrlTree } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
 import { HttpErrorResponse } from '@angular/common/http';
@@ -12,6 +13,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Api } from '../api/api';
 import type { UserRead } from '../api/models';
 import { Auth } from './auth';
+import { landingGuard } from './auth-guard';
 
 const REVIEWER = { username: 'aminah', display_name: 'Aminah', role: 'reviewer' } as UserRead;
 
@@ -52,6 +54,25 @@ describe('Auth', () => {
 
     expect(auth.signedIn()).toBeTrue();
     expect(auth.canReview()).toBeFalse();
+  });
+
+  it('lands a reviewer on the queue and everyone else on the corpus', async () => {
+    const router = TestBed.inject(Router);
+    const landing = async (role: string): Promise<string> => {
+      api.me.calls.reset();
+      api.me.and.returnValue(of({ ...REVIEWER, role } as UserRead));
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: api }] });
+      await TestBed.inject(Auth).load();
+      return router.serializeUrl(
+        TestBed.runInInjectionContext(() => landingGuard({} as never, {} as never)) as UrlTree,
+      );
+    };
+
+    // A reviewer is here to clear the queue, including on the day it is empty:
+    // "nothing pending" is the answer they came for.
+    expect(await landing('reviewer')).toBe('/review');
+    expect(await landing('analyst')).toBe('/documents');
   });
 
   it('forgets the user even when the logout request fails', async () => {

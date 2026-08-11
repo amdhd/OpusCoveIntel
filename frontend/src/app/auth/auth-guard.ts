@@ -22,3 +22,22 @@ export const authGuard: CanActivateFn = async (_route, state) => {
   // a default screen they did not ask for.
   return router.createUrlTree(['/login'], { queryParams: { next: state.url } });
 };
+
+/**
+ * Where `/app` with no path lands you: the screen your role is there to work.
+ *
+ * A reviewer exists to clear the queue, so the queue is their front page --
+ * including when it is empty, which is the answer they wanted. Everyone else
+ * lands on the corpus.
+ *
+ * A guard rather than a functional `redirectTo`, and deliberately: `redirectTo`
+ * is evaluated during route recognition, which happens *before* `authGuard`
+ * has awaited `/auth/me`, so it would read a role that is still null on a cold
+ * load. Child guards run after the parent's, by which point the role is known.
+ */
+export const landingGuard: CanActivateFn = () => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+
+  return router.createUrlTree([auth.canReview() ? '/review' : '/documents']);
+};

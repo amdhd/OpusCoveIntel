@@ -50,11 +50,18 @@ a { color: var(--accent); }
 .signout { display: flex; align-items: center; gap: 0.6rem; }
 .who { font-size: 0.85rem; color: var(--muted); }
 .who em { font-style: normal; padding: 1px 6px; border: 1px solid var(--line); border-radius: 10px; }
+/* A reviewer's badge says what they may do, so it carries the accent. An
+ * analyst's says what they are, which is not a status worth colour. */
+.who em.may-review { border-color: var(--accent); color: var(--accent); }
 
+/* The queue count. Accent, never --breach: red is spent on breaches, and a
+ * number that is red every day teaches people to stop reading red. */
 .pill {
-  background: var(--breach); color: #fff; border-radius: 10px;
+  background: var(--accent); color: #fff; border-radius: 10px;
   padding: 0 6px; font-size: 0.75rem;
 }
+/* Same count, no call to action, for a role that cannot act on it. */
+.pill.passive { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
 main { max-width: 68rem; margin: 1.5rem auto; padding: 0 1.25rem; }
 footer {
@@ -99,6 +106,9 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .alert { padding: 0.6rem 0.85rem; border-radius: 6px; margin: 0 0 1rem; }
 .alert.error { background: var(--breach-bg); color: var(--breach); }
 .alert.notice { background: var(--ok-bg); color: var(--ok); }
+/* Standing facts about the screen -- "you cannot decide these" -- as opposed
+ * to `.notice`, whose green means something you did just worked. */
+.alert.info { background: #eef2f7; color: var(--muted); border-left: 3px solid var(--line); }
 
 /* -- status ------------------------------------------------------------- */
 
@@ -151,6 +161,9 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 /* -- review ------------------------------------------------------------- */
 
 .review-item { display: grid; gap: 0.6rem; }
+/* What an analyst sets where a reviewer gets buttons. An item with nothing
+ * under it reads as broken; an item that says who acts next reads as pending. */
+.awaiting { font-size: 0.83rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 0.5rem; }
 .review-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-start; }
 .review-actions form { display: flex; gap: 0.4rem; align-items: flex-start; }
 .review-actions input[type=text] { width: 14rem; }
