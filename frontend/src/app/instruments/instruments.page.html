@@ -55,7 +55,7 @@
             </td>
             <td class="muted">{{ instrument.sukuk_structure | label }}</td>
             <td class="num">{{ instrument.issue_size | money: instrument.currency }}</td>
-            <td>{{ instrument.maturity_date ?? '—' }}</td>
+            <td class="nowrap">{{ instrument.maturity_date ?? '—' }}</td>
           </tr>
         }
       </tbody>

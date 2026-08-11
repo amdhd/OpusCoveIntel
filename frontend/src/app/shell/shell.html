@@ -1,5 +1,5 @@
 <header class="topbar">
-  <a class="brand" routerLink="/documents">OpusCovIntel</a>
+  <a class="brand" routerLink="/ask">OpusCovIntel</a>
   <nav>
     <a routerLink="/ask" routerLinkActive="on">Ask</a>
     <a routerLink="/instruments" routerLinkActive="on">Instruments</a>
@@ -30,9 +30,12 @@
       }
     </a>
   </nav>
+  <!-- The account block sits at the foot of the rail, in the same place on
+       every screen, so who you are signed in as does not move as the page
+       under it changes. -->
   <div class="signout">
     <span class="who">
-      {{ auth.user()?.display_name }}
+      <strong>{{ auth.user()?.display_name }}</strong>
       <!-- The role is the only thing that changes what this person may do, so
            it says what that is rather than making them find out by clicking. -->
       <em
@@ -42,9 +45,8 @@
             ? 'Reviewer — may approve, correct and reject queue items'
             : 'Analyst — read-only; may not decide queue items'
         "
+        >{{ auth.user()?.role }}</em
       >
-        {{ auth.user()?.role }}
-      </em>
     </span>
     <button type="button" (click)="signOut()">Sign out</button>
   </div>
