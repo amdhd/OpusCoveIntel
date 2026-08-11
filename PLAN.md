@@ -299,7 +299,13 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    more here than usual because the UI renders clause text lifted verbatim out of third-party
    PDFs — autoescaping is on and tested, and CSP is the layer that holds when an escaping bug
    slips through.
-10. **Batch the portfolio page's rule evaluation.** It calls `evaluate_covenant_rule` once per
+10. ✅ **Upload from the browser, and a client app to do it in.** `extraction_jobs` held the
+    ingestion progress and nothing exposed it, so `GET /documents/{id}/status` was added: document
+    status, page and chunk counts, per-job timings, failure message, and a `terminal` flag the
+    client polls on. The screen is Angular (`frontend/`, served at `/app` by the same process, so
+    the session cookie keeps `SameSite=lax`); the read-only pages stay server-rendered, and both
+    share one stylesheet. Closes finding 7.
+11. **Batch the portfolio page's rule evaluation.** It calls `evaluate_covenant_rule` once per
     holding, each issuing several queries — fine for two positions, hundreds of queries for a
     realistic 200-bond portfolio. Reusing the agent's tool was right; a second rules
     implementation would eventually disagree with the first. Batch the loading, not the logic.

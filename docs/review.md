@@ -26,7 +26,7 @@ so what was true at `dc30321` remains readable.
 | 4 | Per-document cost cap is too low for real documents | Cost | **High** | Open |
 | 5 | No security response headers | Security | Medium | Open |
 | 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Fixed |
-| 7 | No document upload in the UI | Gap | Medium | Open |
+| 7 | No document upload in the UI | Gap | Medium | Fixed |
 | 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Open |
 | 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Open |
 | 10 | Vision/OCR path has never run against a real provider | Coverage | Medium | Open |
@@ -391,6 +391,29 @@ user cannot get a document into the system from the interface they were given.
 
 **Fix:** an upload screen posting to the existing endpoint, with the ingestion job's progress
 visible — the worker already tracks status in `extraction_jobs`, so there is state to show.
+
+**Fixed**, and it needed a server change first: `extraction_jobs` held the progress and nothing
+exposed it, so the only way to know whether an upload had been ingested was to query the database.
+`GET /documents/{id}/status` now assembles the document's status, its page and chunk counts, the
+per-job timings and the failure message, plus a `terminal` flag. The flag is the contract: the
+client polls until the *server* says nothing further will happen, so a status added to the
+pipeline later cannot make a client report a half-parsed document as finished.
+
+The screen itself is Angular ([`frontend/`](../frontend)), served from `/app` by the same process,
+and shows the two phases separately because they fail differently — bytes leaving the browser
+(`HttpClient` progress events) and the worker parsing (polling). A duplicate is reported as a
+duplicate rather than an error, and a failure shows the reason the service already wrote down.
+
+Verified in a browser against the running stack, twice: upload → `uploaded`/queued → *Parse now* →
+`chunked`, with page and chunk counts, the VLM page count, and both job rows with timings. Ten
+client-side unit tests cover the polling contract, the duplicate path and the error text; six
+Python tests cover the endpoint, and six more cover the mount (deep links fall back to
+`index.html`; a missing bundle still 404s).
+
+**Why Angular rather than more Jinja.** The read screens have no client-side state worth managing
+and stay server-rendered; upload has two kinds of progress and an error path, which is where a
+client app earns its build step. Both are served from one origin, so the session cookie keeps
+`HttpOnly` and `SameSite=lax` — see [docs/deploy.md §6](deploy.md) before splitting them.
 
 ### 10. The vision/OCR path has never run live — Medium
 

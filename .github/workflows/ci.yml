@@ -226,7 +226,7 @@ jobs:
         # `eval-demo` is migrate + seed + ingest + index + extract + eval, so
         # this also proves the $0 pipeline still runs end to end from nothing.
         # `opuscovintel eval` exits non-zero when a read path misses its
-        # PLAN.md target (6/10 deterministic, 8/10 agent).
+        # PLAN.md target (9/13 deterministic, 11/13 agent).
         run: make eval-demo
 
       - name: Publish the report
@@ -236,6 +236,53 @@ jobs:
           name: eval-results
           path: evals/results/
           if-no-files-found: warn
+
+  frontend:
+    name: client app
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # A fifth job, for the fifth reason a build can be wrong: the client app
+    # compiles, its tests pass, and its types still match the server's. It
+    # needs no database and no Python beyond generating the schema.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - run: uv sync --all-groups --locked
+
+      - run: npm ci
+        working-directory: frontend
+
+      - name: Check the generated API types are current
+        # The client's types come from the server's OpenAPI document. If a
+        # Pydantic model changed and nobody ran `make frontend-types`, the
+        # client is compiling against a contract the server no longer serves --
+        # the same class of failure `alembic check` catches for the schema.
+        run: |
+          make frontend-types
+          git diff --exit-code -- frontend/openapi.json frontend/src/app/api/schema.d.ts \
+            || (echo "::error::run 'make frontend-types' and commit the result"; exit 1)
+
+      - name: Build
+        run: npm run build
+        working-directory: frontend
+
+      - name: Test
+        # Chrome is preinstalled on the runner; karma.conf.js adds --no-sandbox.
+        run: npm run test:ci
+        working-directory: frontend
 
   image:
     name: docker image

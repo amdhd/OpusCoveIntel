@@ -1,0 +1,3639 @@
+{
+  "components": {
+    "schemas": {
+      "ApproveRequest": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "ApproveRequest",
+        "type": "object"
+      },
+      "AuditEntry": {
+        "description": "One row from the audit log.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "actor_type": {
+            "title": "Actor Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "entity_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Type"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "actor_type",
+          "action"
+        ],
+        "title": "AuditEntry",
+        "type": "object"
+      },
+      "AuditTrailResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entity_type",
+          "entity_id",
+          "entries",
+          "count"
+        ],
+        "title": "AuditTrailResponse",
+        "type": "object"
+      },
+      "Body_upload_document_documents_upload_post": {
+        "properties": {
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType",
+            "default": "unknown"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "PDF to ingest",
+            "title": "File",
+            "type": "string"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType",
+            "default": "upload"
+          },
+          "uploaded_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded By"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_document_documents_upload_post",
+        "type": "object"
+      },
+      "CallScheduleRead": {
+        "properties": {
+          "call_date": {
+            "format": "date",
+            "title": "Call Date",
+            "type": "string"
+          },
+          "call_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Call Price"
+          },
+          "call_type": {
+            "$ref": "#/components/schemas/CallType"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ExtractionMethod"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          },
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          }
+        },
+        "required": [
+          "id",
+          "call_date",
+          "call_type",
+          "method",
+          "review_status"
+        ],
+        "title": "CallScheduleRead",
+        "type": "object"
+      },
+      "CallType": {
+        "enum": [
+          "optional",
+          "mandatory",
+          "make_whole",
+          "clean_up",
+          "tax",
+          "regulatory"
+        ],
+        "title": "CallType",
+        "type": "string"
+      },
+      "ChunkType": {
+        "enum": [
+          "paragraph",
+          "table",
+          "heading",
+          "list",
+          "footnote",
+          "unknown"
+        ],
+        "title": "ChunkType",
+        "type": "string"
+      },
+      "Citation": {
+        "description": "A pointer back to the text a claim came from (CLAUDE.md 1.2).",
+        "properties": {
+          "char_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char End"
+          },
+          "char_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char Start"
+          },
+          "chunk_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Id"
+          },
+          "clause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clause Id"
+          },
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "page_number": {
+            "minimum": 1.0,
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
+          }
+        },
+        "required": [
+          "document_id",
+          "page_number",
+          "quote"
+        ],
+        "title": "Citation",
+        "type": "object"
+      },
+      "ClauseProvenance": {
+        "description": "A clause plus the chunk text it was cut from.\n\nThis is what makes the citation chain inspectable rather than merely\nrecorded: `chunk_text` is the surrounding context, and\n`quote_start` / `quote_end` locate the quote *within that text* so a viewer\ncan highlight it without re-deriving offsets.\n\nThe offsets on `Clause` are relative to the document, not to the chunk, so\nthey cannot be used for that directly -- these are resolved by the service.",
+        "properties": {
+          "chunk_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Text"
+          },
+          "clause_text": {
+            "title": "Clause Text",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "covenants": {
+            "items": {
+              "$ref": "#/components/schemas/CovenantRead"
+            },
+            "title": "Covenants",
+            "type": "array"
+          },
+          "document_filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Filename"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ExtractionMethod"
+          },
+          "quote_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote End"
+          },
+          "quote_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Start"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ClauseSource"
+          }
+        },
+        "required": [
+          "source",
+          "clause_text",
+          "method",
+          "review_status"
+        ],
+        "title": "ClauseProvenance",
+        "type": "object"
+      },
+      "ClauseSource": {
+        "description": "Where a structured fact came from, in enough detail to go look.\n\n`char_start` / `char_end` are what let a viewer highlight the exact span\ninside the chunk rather than merely naming the page.",
+        "properties": {
+          "char_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char End"
+          },
+          "char_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char Start"
+          },
+          "chunk_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Id"
+          },
+          "citation_match_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation Match Score"
+          },
+          "citation_verified": {
+            "title": "Citation Verified",
+            "type": "boolean"
+          },
+          "clause_id": {
+            "format": "uuid",
+            "title": "Clause Id",
+            "type": "string"
+          },
+          "clause_type": {
+            "$ref": "#/components/schemas/ClauseType"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "page_number": {
+            "minimum": 1.0,
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
+          },
+          "source_quote": {
+            "title": "Source Quote",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clause_id",
+          "document_id",
+          "clause_type",
+          "page_number",
+          "source_quote",
+          "citation_verified"
+        ],
+        "title": "ClauseSource",
+        "type": "object"
+      },
+      "ClauseType": {
+        "enum": [
+          "negative_pledge",
+          "cross_default",
+          "change_of_control",
+          "financial_covenant",
+          "rating_trigger",
+          "call_option",
+          "put_option",
+          "profit_step_up",
+          "dissolution_event",
+          "purchase_undertaking",
+          "shariah_compliance",
+          "event_of_default",
+          "covenant_other"
+        ],
+        "title": "ClauseType",
+        "type": "string"
+      },
+      "CorrectRequest": {
+        "properties": {
+          "new_value": {
+            "minLength": 1,
+            "title": "New Value",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "new_value"
+        ],
+        "title": "CorrectRequest",
+        "type": "object"
+      },
+      "CovenantRead": {
+        "properties": {
+          "conditions": {
+            "additionalProperties": true,
+            "title": "Conditions",
+            "type": "object"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "covenant_type": {
+            "$ref": "#/components/schemas/CovenantType"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "instrument_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument Id"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ExtractionMethod"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ClauseSource"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "threshold_amount": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Amount"
+          },
+          "threshold_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Currency"
+          },
+          "thresholds": {
+            "additionalProperties": true,
+            "title": "Thresholds",
+            "type": "object"
+          },
+          "trigger_event": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger Event"
+          }
+        },
+        "required": [
+          "id",
+          "covenant_type",
+          "severity",
+          "method",
+          "review_status",
+          "source"
+        ],
+        "title": "CovenantRead",
+        "type": "object"
+      },
+      "CovenantType": {
+        "enum": [
+          "negative_pledge",
+          "cross_default",
+          "change_of_control",
+          "gearing_ratio",
+          "interest_cover",
+          "finance_service_cover",
+          "minimum_net_worth",
+          "rating_trigger",
+          "disposal_restriction",
+          "distribution_restriction",
+          "shariah_non_compliance",
+          "other"
+        ],
+        "title": "CovenantType",
+        "type": "string"
+      },
+      "DocumentChunkRead": {
+        "properties": {
+          "char_end": {
+            "title": "Char End",
+            "type": "integer"
+          },
+          "char_start": {
+            "title": "Char Start",
+            "type": "integer"
+          },
+          "chunk_text": {
+            "title": "Chunk Text",
+            "type": "string"
+          },
+          "chunk_type": {
+            "$ref": "#/components/schemas/ChunkType"
+          },
+          "fts_config": {
+            "title": "Fts Config",
+            "type": "string"
+          },
+          "hash": {
+            "title": "Hash",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "page_number": {
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "section_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Title"
+          }
+        },
+        "required": [
+          "id",
+          "page_number",
+          "ordinal",
+          "section_title",
+          "chunk_type",
+          "language",
+          "fts_config",
+          "char_start",
+          "char_end",
+          "hash",
+          "chunk_text"
+        ],
+        "title": "DocumentChunkRead",
+        "type": "object"
+      },
+      "DocumentPageRead": {
+        "properties": {
+          "char_count": {
+            "title": "Char Count",
+            "type": "integer"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "garbled_unicode_ratio": {
+            "title": "Garbled Unicode Ratio",
+            "type": "number"
+          },
+          "has_text_layer": {
+            "title": "Has Text Layer",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_area_ratio": {
+            "title": "Image Area Ratio",
+            "type": "number"
+          },
+          "page_number": {
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "parse_method": {
+            "$ref": "#/components/schemas/ParseMethod"
+          },
+          "vlm_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlm Reason"
+          },
+          "vlm_used": {
+            "title": "Vlm Used",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "page_number",
+          "char_count",
+          "image_area_ratio",
+          "has_text_layer",
+          "garbled_unicode_ratio",
+          "parse_method",
+          "vlm_used",
+          "vlm_reason",
+          "confidence"
+        ],
+        "title": "DocumentPageRead",
+        "type": "object"
+      },
+      "DocumentRead": {
+        "properties": {
+          "byte_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Byte Size"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issuer_name_guess": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer Name Guess"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Language"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "parse_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parse Confidence"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentStatus"
+          },
+          "storage_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Uri"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "uploaded_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded By"
+          }
+        },
+        "required": [
+          "id",
+          "sha256",
+          "filename",
+          "storage_uri",
+          "byte_size",
+          "source_type",
+          "document_type",
+          "status",
+          "language",
+          "issuer_name_guess",
+          "page_count",
+          "parse_confidence",
+          "uploaded_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DocumentRead",
+        "type": "object"
+      },
+      "DocumentStatus": {
+        "enum": [
+          "uploaded",
+          "parsing",
+          "parsed",
+          "chunked",
+          "embedded",
+          "extracting",
+          "extracted",
+          "failed",
+          "budget_exceeded"
+        ],
+        "title": "DocumentStatus",
+        "type": "string"
+      },
+      "DocumentStatusRead": {
+        "description": "Where a document has got to, for a client that is watching it.\n\nAssembled rather than reflected: `documents.status` alone cannot say\nwhether the worker has picked the document up, and `extraction_jobs` alone\ncannot say how many pages came out. Both are needed to answer \"is it done,\nand did it work?\", which is the only question this endpoint exists for.",
+        "properties": {
+          "chunk_count": {
+            "title": "Chunk Count",
+            "type": "integer"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/IngestionJobRead"
+            },
+            "title": "Jobs",
+            "type": "array"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Count"
+          },
+          "pages_flagged_for_vlm": {
+            "title": "Pages Flagged For Vlm",
+            "type": "integer"
+          },
+          "parse_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parse Confidence"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentStatus"
+          },
+          "terminal": {
+            "title": "Terminal",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document_id",
+          "filename",
+          "status",
+          "page_count",
+          "chunk_count",
+          "pages_flagged_for_vlm",
+          "parse_confidence",
+          "jobs",
+          "terminal"
+        ],
+        "title": "DocumentStatusRead",
+        "type": "object"
+      },
+      "DocumentType": {
+        "enum": [
+          "prospectus",
+          "information_memorandum",
+          "trust_deed",
+          "rating_report",
+          "announcement",
+          "supplemental",
+          "unknown"
+        ],
+        "title": "DocumentType",
+        "type": "string"
+      },
+      "ExtractionMethod": {
+        "description": "How a value was obtained. PLAN.md 3 -- rule and llm run in parallel.",
+        "enum": [
+          "rule",
+          "llm",
+          "vlm",
+          "human"
+        ],
+        "title": "ExtractionMethod",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "environment": {
+            "title": "Environment",
+            "type": "string"
+          },
+          "service": {
+            "title": "Service",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "service",
+          "version",
+          "environment"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "HoldingRead": {
+        "description": "A position, with the instrument resolved.\n\n`market_value` and `nav_weight` stay `Decimal` to the wire, where Pydantic\nrenders them as JSON **strings**. That is what keeps CLAUDE.md 6 true past\nthe boundary: a numeric literal would be parsed into a double by any\nbrowser, undoing the exactness Postgres and Python maintained. Clients must\nparse these with a decimal type, not `Number()`.",
+        "properties": {
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "instrument": {
+            "$ref": "#/components/schemas/InstrumentRead"
+          },
+          "market_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Value"
+          },
+          "nav_weight": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nav Weight"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "id",
+          "instrument",
+          "as_of_date"
+        ],
+        "title": "HoldingRead",
+        "type": "object"
+      },
+      "IngestionJobRead": {
+        "description": "One row of `extraction_jobs`, as the upload screen needs to read it.\n\nThe failure message is included deliberately. A document that stops at\n\"failed\" with no reason on screen sends the operator to the container logs,\nand the reason is usually one sentence the service already wrote down.",
+        "properties": {
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_type": {
+            "$ref": "#/components/schemas/JobType"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          }
+        },
+        "required": [
+          "job_type",
+          "status",
+          "started_at",
+          "finished_at",
+          "error_message"
+        ],
+        "title": "IngestionJobRead",
+        "type": "object"
+      },
+      "IngestionResponse": {
+        "properties": {
+          "chunk_count": {
+            "title": "Chunk Count",
+            "type": "integer"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "page_count": {
+            "title": "Page Count",
+            "type": "integer"
+          },
+          "pages_flagged_for_vlm": {
+            "title": "Pages Flagged For Vlm",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DocumentStatus"
+          }
+        },
+        "required": [
+          "document_id",
+          "status",
+          "page_count",
+          "chunk_count",
+          "pages_flagged_for_vlm",
+          "skipped"
+        ],
+        "title": "IngestionResponse",
+        "type": "object"
+      },
+      "InstrumentDetail": {
+        "description": "An instrument with everything that hangs off it.\n\nAssembled in one response because the screens that need an instrument need\nits covenants, calls and triggers together; four round trips to render one\npage is a worse contract than one slightly larger payload.",
+        "properties": {
+          "call_schedules": {
+            "items": {
+              "$ref": "#/components/schemas/CallScheduleRead"
+            },
+            "title": "Call Schedules",
+            "type": "array"
+          },
+          "covenants": {
+            "items": {
+              "$ref": "#/components/schemas/CovenantRead"
+            },
+            "title": "Covenants",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "current_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rating"
+          },
+          "current_rating_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rating Rank"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "instrument_name": {
+            "title": "Instrument Name",
+            "type": "string"
+          },
+          "instrument_type": {
+            "$ref": "#/components/schemas/InstrumentType"
+          },
+          "isin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isin"
+          },
+          "issue_size": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Size"
+          },
+          "issuer_name": {
+            "title": "Issuer Name",
+            "type": "string"
+          },
+          "maturity_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Date"
+          },
+          "rating_agency": {
+            "$ref": "#/components/schemas/RatingAgency"
+          },
+          "rating_triggers": {
+            "items": {
+              "$ref": "#/components/schemas/RatingTriggerRead"
+            },
+            "title": "Rating Triggers",
+            "type": "array"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          },
+          "sukuk_structure": {
+            "$ref": "#/components/schemas/SukukStructureType"
+          },
+          "sukuk_structure_detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SukukStructureRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          }
+        },
+        "required": [
+          "id",
+          "issuer_name",
+          "instrument_name",
+          "instrument_type",
+          "currency",
+          "sukuk_structure",
+          "rating_agency",
+          "review_status"
+        ],
+        "title": "InstrumentDetail",
+        "type": "object"
+      },
+      "InstrumentRead": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "current_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rating"
+          },
+          "current_rating_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Rating Rank"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "instrument_name": {
+            "title": "Instrument Name",
+            "type": "string"
+          },
+          "instrument_type": {
+            "$ref": "#/components/schemas/InstrumentType"
+          },
+          "isin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isin"
+          },
+          "issue_size": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Size"
+          },
+          "issuer_name": {
+            "title": "Issuer Name",
+            "type": "string"
+          },
+          "maturity_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Date"
+          },
+          "rating_agency": {
+            "$ref": "#/components/schemas/RatingAgency"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          },
+          "sukuk_structure": {
+            "$ref": "#/components/schemas/SukukStructureType"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          }
+        },
+        "required": [
+          "id",
+          "issuer_name",
+          "instrument_name",
+          "instrument_type",
+          "currency",
+          "sukuk_structure",
+          "rating_agency",
+          "review_status"
+        ],
+        "title": "InstrumentRead",
+        "type": "object"
+      },
+      "InstrumentType": {
+        "enum": [
+          "sukuk",
+          "conventional_bond",
+          "mtn",
+          "perpetual",
+          "unknown"
+        ],
+        "title": "InstrumentType",
+        "type": "string"
+      },
+      "JobStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "budget_exceeded",
+          "cancelled"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "JobType": {
+        "enum": [
+          "parse",
+          "chunk",
+          "embed",
+          "classify",
+          "extract_covenant",
+          "extract_sukuk_structure",
+          "extract_call_schedule",
+          "extract_rating_trigger",
+          "validate"
+        ],
+        "title": "JobType",
+        "type": "string"
+      },
+      "Language": {
+        "enum": [
+          "en",
+          "ms",
+          "mixed",
+          "unknown"
+        ],
+        "title": "Language",
+        "type": "string"
+      },
+      "LoginRequest": {
+        "properties": {
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "LoginResponse": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserRead"
+          }
+        },
+        "required": [
+          "user",
+          "expires_at"
+        ],
+        "title": "LoginResponse",
+        "type": "object"
+      },
+      "ParseMethod": {
+        "enum": [
+          "pymupdf",
+          "pdfplumber",
+          "vlm",
+          "none"
+        ],
+        "title": "ParseMethod",
+        "type": "string"
+      },
+      "PendingResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total_pending": {
+            "title": "Total Pending",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "count",
+          "total_pending"
+        ],
+        "title": "PendingResponse",
+        "type": "object"
+      },
+      "PortfolioHoldings": {
+        "description": "Holdings for one portfolio on one date.\n\n`as_of_date` is echoed because holdings are a time series and the default\nis \"latest available\" -- a caller that does not know which date it got\ncannot report the number responsibly.",
+        "properties": {
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingRead"
+            },
+            "title": "Holdings",
+            "type": "array"
+          },
+          "portfolio": {
+            "$ref": "#/components/schemas/PortfolioRead"
+          },
+          "total_market_value": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Market Value"
+          }
+        },
+        "required": [
+          "portfolio",
+          "count"
+        ],
+        "title": "PortfolioHoldings",
+        "type": "object"
+      },
+      "PortfolioRead": {
+        "properties": {
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mandate_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mandate Type"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_currency"
+        ],
+        "title": "PortfolioRead",
+        "type": "object"
+      },
+      "QueryIntent": {
+        "description": "PLAN.md 5 -- the LangGraph classifier's output space.",
+        "enum": [
+          "document_search",
+          "covenant_lookup",
+          "instrument_lookup",
+          "portfolio_query",
+          "covenant_breach_check",
+          "unsupported"
+        ],
+        "title": "QueryIntent",
+        "type": "string"
+      },
+      "QueryRequest": {
+        "description": "Just the question.\n\n`user_id` used to be a field here. It is now taken from the session, for\nthe same reason `reviewer_id` was removed from the review queue: a\n`query_logs` row that records whoever the caller claimed to be is not an\naudit trail, it is a suggestion.",
+        "properties": {
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "title": "QueryRequest",
+        "type": "object"
+      },
+      "QueryResponse": {
+        "description": "What the agent concluded, and everything needed to audit the conclusion.\n\n`citations` carries the provenance for claims drawn from document text; the\ngraph's verify node has already stripped any that did not trace to a chunk\nretrieved this turn (CLAUDE.md 1.2).\n\nIt is legitimately **empty** for intents answered from structured rows\nrather than prose -- `covenant_breach_check` and `portfolio_query` report\nwhat the rules engine computed over `covenants` and `portfolio_holdings`,\nand cite no span because they read none. Those rows trace to clauses of\ntheir own, so the provenance exists; this response just does not carry it\nyet. A UI should link through the instrument rather than assume a citation.",
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "chunk_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Chunk Ids",
+            "type": "array"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/QueryIntent"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "refused": {
+            "title": "Refused",
+            "type": "boolean"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "tools_used": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tools Used",
+            "type": "array"
+          }
+        },
+        "required": [
+          "question",
+          "intent",
+          "answer",
+          "citations",
+          "confidence",
+          "refused",
+          "tools_used",
+          "chunk_ids"
+        ],
+        "title": "QueryResponse",
+        "type": "object"
+      },
+      "RatingAgency": {
+        "enum": [
+          "MARC",
+          "RAM",
+          "SP",
+          "MOODYS",
+          "FITCH",
+          "unknown"
+        ],
+        "title": "RatingAgency",
+        "type": "string"
+      },
+      "RatingTriggerRead": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "consequence": {
+            "title": "Consequence",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "$ref": "#/components/schemas/ExtractionMethod"
+          },
+          "rating_agency": {
+            "$ref": "#/components/schemas/RatingAgency"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "source_clause_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Clause Id"
+          },
+          "trigger_direction": {
+            "$ref": "#/components/schemas/TriggerDirection"
+          },
+          "trigger_rank": {
+            "title": "Trigger Rank",
+            "type": "integer"
+          },
+          "trigger_rating": {
+            "title": "Trigger Rating",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rating_agency",
+          "trigger_rating",
+          "trigger_rank",
+          "trigger_direction",
+          "consequence",
+          "severity",
+          "method",
+          "review_status"
+        ],
+        "title": "RatingTriggerRead",
+        "type": "object"
+      },
+      "ReadyResponse": {
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Checks",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checks"
+        ],
+        "title": "ReadyResponse",
+        "type": "object"
+      },
+      "RejectRequest": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "reason": {
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "RejectRequest",
+        "type": "object"
+      },
+      "ReviewActionResponse": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "action",
+          "entity_type",
+          "entity_id",
+          "field_name"
+        ],
+        "title": "ReviewActionResponse",
+        "type": "object"
+      },
+      "ReviewItem": {
+        "description": "One item in the review queue.",
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "entity_type": {
+            "title": "Entity Type",
+            "type": "string"
+          },
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "review_notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Notes"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "reviewer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Id"
+          },
+          "source_quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Quote"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "trigger_reason": {
+            "title": "Trigger Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entity_type",
+          "entity_id",
+          "field_name",
+          "trigger_reason",
+          "status",
+          "created_at"
+        ],
+        "title": "ReviewItem",
+        "type": "object"
+      },
+      "ReviewStatus": {
+        "enum": [
+          "not_required",
+          "pending",
+          "approved",
+          "rejected",
+          "corrected"
+        ],
+        "title": "ReviewStatus",
+        "type": "string"
+      },
+      "Severity": {
+        "enum": [
+          "informational",
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "Severity",
+        "type": "string"
+      },
+      "SourceType": {
+        "enum": [
+          "upload",
+          "email",
+          "bursa",
+          "rating_agency",
+          "internal"
+        ],
+        "title": "SourceType",
+        "type": "string"
+      },
+      "SukukStructureRead": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "dissolution_events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Dissolution Events",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "originator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Originator"
+          },
+          "profit_payment_frequency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Payment Frequency"
+          },
+          "profit_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Rate"
+          },
+          "purchase_undertaking": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purchase Undertaking"
+          },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus"
+          },
+          "shariah_compliance_events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Shariah Compliance Events",
+            "type": "array"
+          },
+          "spv_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spv Name"
+          },
+          "structure_type": {
+            "$ref": "#/components/schemas/SukukStructureType"
+          },
+          "underlying_asset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Underlying Asset"
+          }
+        },
+        "required": [
+          "id",
+          "structure_type",
+          "review_status"
+        ],
+        "title": "SukukStructureRead",
+        "type": "object"
+      },
+      "SukukStructureType": {
+        "description": "Shariah contract underlying the issuance.",
+        "enum": [
+          "ijarah",
+          "wakalah",
+          "musharakah",
+          "mudharabah",
+          "murabahah",
+          "istisna",
+          "hybrid",
+          "unknown"
+        ],
+        "title": "SukukStructureType",
+        "type": "string"
+      },
+      "TriggerDirection": {
+        "enum": [
+          "downgrade_below",
+          "upgrade_above",
+          "withdrawal",
+          "any_change"
+        ],
+        "title": "TriggerDirection",
+        "type": "string"
+      },
+      "UploadResponse": {
+        "description": "Upload outcome.\n\n`duplicate` is a normal result, not an error: the same bytes uploaded twice\nare one document (CLAUDE.md 1.7), and the caller gets the existing row back.",
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DocumentRead"
+          },
+          "duplicate": {
+            "title": "Duplicate",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "duplicate",
+          "document"
+        ],
+        "title": "UploadResponse",
+        "type": "object"
+      },
+      "UserRead": {
+        "description": "A user, minus everything that would be unwise to serve.\n\nNo `password_hash`, and no way to add one by accident: the fields are\nlisted rather than inherited from the ORM row.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "display_name",
+          "role",
+          "is_active"
+        ],
+        "title": "UserRead",
+        "type": "object"
+      },
+      "UserRole": {
+        "description": "Who may do what.\n\nTwo roles, not a permission matrix. The only privileged action in the\nsystem is deciding a review-queue item -- that is the point at which a\nhuman overrides the machine and the audit trail records their name, so it\nis the one thing worth gating. Everything else is reading.\n\nDeliberately not OIDC groups or an RBAC table (CLAUDE.md 9 defers those).",
+        "enum": [
+          "analyst",
+          "reviewer"
+        ],
+        "title": "UserRole",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Sukuk & bond covenant intelligence platform",
+    "title": "OpusCovIntel",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/audit/{entity_type}/{entity_id}": {
+      "get": {
+        "description": "Return the full audit trail for an entity, newest first.\n\nEach entry records who did what and when, with a payload that captures the\nbefore/after state. This is the structural answer to \"how did this value get\nhere?\" \u2014 the question every compliance review asks.",
+        "operationId": "get_audit_trail_audit__entity_type___entity_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entity_type",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Entity Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entity_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Entity Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditTrailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Audit Trail",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "description": "Authenticate and issue a session cookie.\n\nEvery failure is the same 401 with the same message. Distinguishing \"no\nsuch user\" from \"wrong password\" would turn this endpoint into a directory\nof who works here.\n\nToo many recent failures answer 429 with `Retry-After` instead. That is\nvisible to an attacker by construction -- a rate limit that could not be\nobserved could not be obeyed either -- but it says nothing about whether\nthe username exists, because failed attempts are counted for usernames that\ndo not.",
+        "operationId": "login_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange credentials for a session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "description": "Revoke the session and clear the cookie.\n\nDeliberately 204 whether or not a live session was found. Logging out is\nidempotent, and reporting \"you were not logged in\" tells an unauthenticated\ncaller something about a token they hold.",
+        "operationId": "logout_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Revoke this session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "me_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "The authenticated user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/clauses/{clause_id}": {
+      "get": {
+        "description": "The provenance endpoint \u2014 what turns a citation into something checkable.\n\n`quote_start`/`quote_end` locate the quote inside `chunk_text`. They are\nnull when the quote could not be located, and a client must then render the\nquote without highlighting rather than falling back to an approximate span.",
+        "operationId": "get_clause_clauses__clause_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "clause_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Clause Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClauseProvenance"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "A clause with its chunk text and the quote's offsets within it",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/documents": {
+      "get": {
+        "operationId": "list_documents_documents_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status_filter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DocumentStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Filter"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentRead"
+                  },
+                  "title": "Response List Documents Documents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List documents",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/documents/upload": {
+      "post": {
+        "description": "Store the PDF and queue it for parsing.\n\nReturns 201 for a new document and 200 when the bytes were already known --\na duplicate is a correct outcome, not an error (CLAUDE.md 1.7).",
+        "operationId": "upload_document_documents_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_document_documents_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload a PDF for ingestion",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/documents/{document_id}": {
+      "get": {
+        "operationId": "get_document_documents__document_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/documents/{document_id}/chunks": {
+      "get": {
+        "operationId": "list_chunks_documents__document_id__chunks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentChunkRead"
+                  },
+                  "title": "Response List Chunks Documents  Document Id  Chunks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chunks with their character spans",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/documents/{document_id}/covenants": {
+      "get": {
+        "operationId": "list_document_covenants_documents__document_id__covenants_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CovenantRead"
+                  },
+                  "title": "Response List Document Covenants Documents  Document Id  Covenants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Covenants extracted from a document",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/documents/{document_id}/pages": {
+      "get": {
+        "operationId": "list_pages_documents__document_id__pages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentPageRead"
+                  },
+                  "title": "Response List Pages Documents  Document Id  Pages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Per-page parse telemetry",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/documents/{document_id}/process": {
+      "post": {
+        "description": "Run ingestion inline.\n\nThe worker picks queued documents up on its own; this exists for operators\nand demos that do not want to wait for a poll interval.",
+        "operationId": "process_document_documents__document_id__process_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Parse and chunk now, without waiting for the worker",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/documents/{document_id}/status": {
+      "get": {
+        "description": "Progress for a client that is watching an upload.\n\nThe worker has always recorded this -- `extraction_jobs` is the queue, and\nit carries the status, the timings and the failure message -- but nothing\nexposed it over HTTP, so the only way to know whether an upload had been\ningested was to look in the database (docs/review.md, finding 7).",
+        "operationId": "document_status_documents__document_id__status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Where a document has got to in the pipeline",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/instruments": {
+      "get": {
+        "operationId": "list_instruments_instruments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstrumentRead"
+                  },
+                  "title": "Response List Instruments Instruments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List instruments",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/instruments/{instrument_id}": {
+      "get": {
+        "operationId": "get_instrument_instruments__instrument_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instrument_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instrument Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstrumentDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One instrument with its covenants, calls and rating triggers",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/instruments/{instrument_id}/covenants": {
+      "get": {
+        "operationId": "list_instrument_covenants_instruments__instrument_id__covenants_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "instrument_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Instrument Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "covenant_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CovenantType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Covenant Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CovenantRead"
+                  },
+                  "title": "Response List Instrument Covenants Instruments  Instrument Id  Covenants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Covenants for an instrument, each with its source clause",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/portfolios": {
+      "get": {
+        "operationId": "list_portfolios_portfolios_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PortfolioRead"
+                  },
+                  "title": "Response List Portfolios Portfolios Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List portfolios",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/portfolios/{portfolio_id}/holdings": {
+      "get": {
+        "description": "Holdings for a date, defaulting to the most recent available.\n\nThe response echoes `as_of_date`, because holdings are a time series and a\ncaller that does not know which date it received cannot report the exposure\nresponsibly.",
+        "operationId": "get_portfolio_holdings_portfolios__portfolio_id__holdings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioHoldings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Positions and exposure for a portfolio",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/query": {
+      "post": {
+        "description": "Answer a question with citations, or refuse.\n\nThe agent logs every question to `query_logs` regardless of outcome, so a\nrefusal is as auditable as an answer.",
+        "operationId": "ask_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask the query agent",
+        "tags": [
+          "query"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/review/pending": {
+      "get": {
+        "description": "List items awaiting human review.",
+        "operationId": "list_pending_review_pending_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Pending",
+        "tags": [
+          "review"
+        ]
+      }
+    },
+    "/review/{review_id}/approve": {
+      "post": {
+        "description": "Accept the machine-extracted value.\n\nThe old_value stays as-is; the review is marked APPROVED. An audit log\nentry records who approved it and when.",
+        "operationId": "approve_review_review__review_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Review",
+        "tags": [
+          "review"
+        ]
+      }
+    },
+    "/review/{review_id}/correct": {
+      "post": {
+        "description": "Replace the machine-extracted value with a human-corrected one.\n\nThe original `old_value` is preserved so the audit trail can reconstruct\nwhat the machine said. `new_value` records the human correction. An audit\nlog entry captures all three states (old, new, corrected).",
+        "operationId": "correct_review_review__review_id__correct_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Correct Review",
+        "tags": [
+          "review"
+        ]
+      }
+    },
+    "/review/{review_id}/reject": {
+      "post": {
+        "description": "Reject a review item (false positive, not applicable, etc.).\n\nThe original value is preserved in the audit trail. A reason is required\nso the rejection can be audited and the extractor can be improved.",
+        "operationId": "reject_review_review__review_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reject Review",
+        "tags": [
+          "review"
+        ]
+      }
+    }
+  }
+}

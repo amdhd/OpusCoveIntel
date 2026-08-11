@@ -11,6 +11,8 @@ import uuid
 
 import pytest
 from httpx import AsyncClient, Response
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.fixtures.synthetic_pdf import build_mixed_document, build_prospectus
 
@@ -168,3 +170,92 @@ async def test_the_openapi_document_advertises_the_upload_endpoint(
     schema = (await api_client.get("/openapi.json")).json()
 
     assert "/documents/upload" in schema["paths"]
+
+
+# -- progress ----------------------------------------------------------------
+#
+# What the upload screen polls. Everything here was already in the database and
+# none of it was reachable over HTTP, which is why the UI had no upload screen
+# worth building (docs/review.md, finding 7).
+
+
+async def test_a_fresh_upload_is_queued_and_not_terminal(api_client: AsyncClient) -> None:
+    """`uploaded` means the worker has not picked it up yet.
+
+    A poller that treated this as finished would report an unparsed document as
+    ingested, which is the one thing this endpoint must not allow.
+    """
+    document_id = (await upload(api_client)).json()["document"]["id"]
+
+    status = (await api_client.get(f"/documents/{document_id}/status")).json()
+
+    assert status["status"] == "uploaded"
+    assert status["terminal"] is False
+    assert status["chunk_count"] == 0
+    assert status["error"] is None
+    assert [job["job_type"] for job in status["jobs"]] == ["parse"]
+    assert status["jobs"][0]["status"] == "queued"
+
+
+async def test_a_processed_document_reports_terminal_with_its_counts(
+    api_client: AsyncClient,
+) -> None:
+    document_id = (await upload(api_client)).json()["document"]["id"]
+    await api_client.post(f"/documents/{document_id}/process")
+
+    status = (await api_client.get(f"/documents/{document_id}/status")).json()
+
+    assert status["terminal"] is True
+    assert status["status"] == "chunked"
+    assert status["page_count"] and status["page_count"] > 0
+    assert status["chunk_count"] > 0
+    assert status["jobs"][0]["status"] == "succeeded"
+    assert status["jobs"][0]["finished_at"] is not None
+    assert status["error"] is None
+
+
+async def test_a_flagged_page_is_counted_for_the_screen(api_client: AsyncClient) -> None:
+    """The VLM count is on this response so the operator sees the cost coming."""
+    document_id = (await upload(api_client, build_mixed_document())).json()["document"]["id"]
+    await api_client.post(f"/documents/{document_id}/process")
+
+    status = (await api_client.get(f"/documents/{document_id}/status")).json()
+
+    assert status["pages_flagged_for_vlm"] == 1
+
+
+async def test_a_failure_reports_its_reason_rather_than_just_failing(
+    api_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A document stuck at "failed" with no reason sends someone to the logs.
+
+    The service already writes the message down; this is the assertion that it
+    reaches the screen.
+    """
+    from app.db.models.documents import Document
+    from app.db.models.ops import ExtractionJob
+    from app.domain.enums import DocumentStatus, JobStatus
+
+    document_id = (await upload(api_client)).json()["document"]["id"]
+    document = await db_session.get(Document, uuid.UUID(document_id))
+    assert document is not None
+    document.status = DocumentStatus.FAILED
+    job = (
+        await db_session.execute(
+            select(ExtractionJob).where(ExtractionJob.document_id == uuid.UUID(document_id))
+        )
+    ).scalar_one()
+    job.status = JobStatus.FAILED
+    job.error_message = "page 3: no text layer and the VLM cap is 0"
+    await db_session.flush()
+
+    status = (await api_client.get(f"/documents/{document_id}/status")).json()
+
+    assert status["terminal"] is True
+    assert status["error"] == "page 3: no text layer and the VLM cap is 0"
+
+
+async def test_status_is_404_for_a_document_that_does_not_exist(
+    api_client: AsyncClient,
+) -> None:
+    assert (await api_client.get(f"/documents/{uuid.uuid4()}/status")).status_code == 404

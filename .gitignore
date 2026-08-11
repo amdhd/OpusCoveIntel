@@ -41,6 +41,13 @@ data/real/
 *.pdf
 !tests/fixtures/**/*.pdf
 
+# -- frontend ------------------------------------------------------------
+# `package-lock.json` is deliberately NOT ignored, for the same reason as
+# uv.lock: it is what makes the client build reproducible.
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
 # -- editors / os --------------------------------------------------------
 .vscode/
 .idea/

@@ -94,7 +94,24 @@ app/
   agent/      LangGraph query graph + tools + SQL guardrail
   review/     human review queue service
   evals/      golden set + metrics harness
+  web/        Jinja templates + static CSS. The read screens, server-rendered.
+
+frontend/     Angular 20 client app, served at /app by the same process. The
+              screens that need client-side state: upload with transfer and
+              ingestion progress, ask, instruments, review. Optional -- the API
+              and /ui run without a build. Its TypeScript types are generated
+              from the API's OpenAPI schema (`make frontend-types`), so the
+              wire contract has one source; CI fails on drift.
 ```
+
+**One stylesheet, two renderers.** `app/web/static/app.css` is referenced by the
+Angular build, never copied. Two copies would drift, and the drift would show up
+as the same product looking like two products.
+
+**Same origin, deliberately.** The client app is mounted on the API's own origin
+so the session cookie keeps `HttpOnly` and `SameSite=lax`. Serving it separately
+means CORS plus `SameSite=none`, which gives up the CSRF property that comes for
+free today.
 
 **Dependency direction is one-way:** `api → services → repositories → models`.
 `domain/` and `rules/` are leaves and import nothing from the layers above them.

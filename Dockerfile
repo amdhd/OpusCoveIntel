@@ -28,6 +28,23 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 
 
+# The client app, built in its own stage so Node never reaches the runtime
+# image. `npm ci` installs exactly what package-lock.json pins, for the same
+# reason `uv sync --locked` does.
+FROM node:22-slim AS client
+
+WORKDIR /client
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+COPY frontend/ ./
+# The build references the served stylesheet, so the one copy of it that exists
+# has to be here too (see the `styles` array in angular.json).
+COPY app/web/static/app.css /app/web/static/app.css
+RUN npm run build
+
+
 FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
@@ -48,6 +65,8 @@ WORKDIR /app
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app app/ ./app/
 COPY --chown=app:app pyproject.toml ./
+# Static output only -- no Node, no node_modules, no build tooling.
+COPY --from=client --chown=app:app /client/dist /app/frontend/dist
 
 RUN mkdir -p /app/var/storage && chown -R app:app /app/var
 

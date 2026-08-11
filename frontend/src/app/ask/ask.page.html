@@ -1,0 +1,57 @@
+<h1>Ask</h1>
+
+<form class="panel" (ngSubmit)="ask()">
+  <label for="question" class="muted">
+    A question the corpus can answer — a covenant, a threshold, a rating trigger, an exposure.
+  </label>
+  <textarea
+    id="question"
+    name="question"
+    rows="3"
+    [(ngModel)]="question"
+    placeholder="Which holdings would breach their rating trigger at the current rating?"
+  ></textarea>
+  <button class="primary" type="submit" [disabled]="asking()" style="margin-top: 0.6rem">
+    {{ asking() ? 'Asking…' : 'Ask' }}
+  </button>
+</form>
+
+@if (error()) {
+  <p class="alert error">{{ error() }}</p>
+}
+
+@if (answer(); as result) {
+  <section class="panel">
+    <h2 style="margin-top: 0">
+      {{ result.question }}
+      <span class="status ok">{{ result.intent }}</span>
+    </h2>
+
+    @if (result.refused) {
+      <!-- A refusal is an answer, not a fault. Quiet treatment, not red. -->
+      <p class="refusal">{{ result.answer }}</p>
+    } @else {
+      <p class="answer">{{ result.answer }}</p>
+    }
+
+    <p class="muted" style="font-size: 0.82rem">
+      confidence {{ result.confidence }} · {{ result.citations.length }} citation(s) · tools:
+      {{ result.tools_used.join(', ') || 'none' }}
+    </p>
+
+    @for (citation of result.citations; track citation.chunk_id) {
+      <div class="citation">
+        <div class="meta">
+          page {{ citation.page_number }}
+          @if (citation.section_title) {
+            · {{ citation.section_title }}
+          }
+          @if (citation.clause_id) {
+            · <a href="/ui/provenance/{{ citation.clause_id }}">source ↗</a>
+          }
+        </div>
+        <blockquote>{{ citation.quote }}</blockquote>
+      </div>
+    }
+  </section>
+}
