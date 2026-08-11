@@ -55,6 +55,16 @@ describe('DocumentsPage', () => {
     return TestBed.createComponent(DocumentsPage).componentInstance;
   }
 
+  it('does not print an unset classification as a finding about the file', () => {
+    const page = create() as unknown as { typeLabel(type: string): string };
+
+    // The upload endpoint defaults to `unknown`, and `opuscovintel ingest`
+    // has no way to say otherwise, so this is what most rows hold.
+    expect(page.typeLabel('unknown')).toBe('not classified');
+    expect(page.typeLabel('trust_deed')).toBe('trust deed');
+    expect(page.typeLabel('prospectus')).toBe('prospectus');
+  });
+
   it('reports transfer progress while bytes are in flight', () => {
     api.uploadDocument.and.returnValue(
       of({ type: HttpEventType.UploadProgress, loaded: 512, total: 1024 }),

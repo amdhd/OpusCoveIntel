@@ -131,7 +131,6 @@
           <th>type</th>
           <th>status</th>
           <th class="num">pages</th>
-          <th>issuer (guess)</th>
           <th></th>
         </tr>
       </thead>
@@ -139,12 +138,13 @@
         @for (document of documents(); track document.id) {
           <tr>
             <td>{{ document.filename }}</td>
-            <td class="muted">{{ document.document_type }}</td>
+            <!-- `unknown` is the absence of a classification, not a kind of
+                 document, and printing the enum makes it look like a finding. -->
+            <td class="muted">{{ typeLabel(document.document_type) }}</td>
             <td>
               <span class="status {{ statusClass(document.status) }}">{{ document.status }}</span>
             </td>
             <td class="num">{{ document.page_count ?? '—' }}</td>
-            <td class="muted">{{ document.issuer_name_guess ?? '—' }}</td>
             <td><button type="button" (click)="watch(document.id)">Progress</button></td>
           </tr>
         }

@@ -215,6 +215,19 @@ export class DocumentsPage implements OnDestroy {
     return FAILED_STATUSES.has(status);
   }
 
+  /**
+   * What to print in the `type` column.
+   *
+   * `unknown` is the default the upload endpoint applies when nobody said
+   * otherwise -- the absence of a classification rather than a kind of
+   * document. Printed as the enum it reads as a finding about the file.
+   * Underscores go the same way the server-rendered templates already send
+   * them, so `trust_deed` reads as a phrase on both.
+   */
+  protected typeLabel(documentType: string): string {
+    return documentType === 'unknown' ? 'not classified' : documentType.replace(/_/g, ' ');
+  }
+
   protected statusClass(status: string): string {
     if (this.failed(status)) {
       return 'breach';
