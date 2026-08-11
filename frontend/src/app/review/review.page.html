@@ -1,0 +1,91 @@
+<h1>Review queue</h1>
+
+<p class="muted">
+  {{ totalPending() }} item(s) awaiting a decision. Every field here was flagged by a rule, not by
+  a mood: low confidence, a rules/LLM disagreement, a failed citation check, or a threshold over
+  RM100m.
+</p>
+
+@if (error()) {
+  <p class="alert error">{{ error() }}</p>
+}
+@if (notice()) {
+  <p class="alert notice">{{ notice() }}</p>
+}
+
+@if (!auth.canReview()) {
+  <p class="alert notice">
+    You are signed in as an analyst. Items are shown for context; deciding them needs the reviewer
+    role.
+  </p>
+}
+
+@if (loading()) {
+  <p class="muted">Loading…</p>
+} @else if (items().length === 0) {
+  <p class="empty">Nothing pending. </p>
+} @else {
+  @for (item of items(); track item.id) {
+    <section class="panel review-item">
+      <div>
+        <strong>{{ item.entity_type }}.{{ item.field_name }}</strong>
+        <span class="trigger">· {{ item.trigger_reason }}</span>
+        @if (item.confidence !== null) {
+          <span class="trigger">· confidence {{ item.confidence }}</span>
+        }
+        @if (item.page_number !== null) {
+          <span class="trigger">· page {{ item.page_number }}</span>
+        }
+      </div>
+
+      <dl class="kv">
+        <dt>extracted value</dt>
+        <dd>{{ item.old_value ?? '—' }}</dd>
+        @if (item.new_value) {
+          <dt>proposed</dt>
+          <dd>{{ item.new_value }}</dd>
+        }
+      </dl>
+
+      @if (item.source_quote) {
+        <div class="citation">
+          <blockquote>{{ item.source_quote }}</blockquote>
+        </div>
+      }
+
+      @if (auth.canReview()) {
+        <div class="review-actions">
+          <button
+            class="primary"
+            type="button"
+            (click)="approve(item)"
+            [disabled]="busy() === item.id"
+          >
+            Approve
+          </button>
+
+          <span style="display: flex; gap: 0.4rem">
+            <input
+              type="text"
+              name="correction-{{ item.id }}"
+              placeholder="Corrected value"
+              [(ngModel)]="corrections[item.id]"
+            />
+            <button type="button" (click)="correct(item)" [disabled]="busy() === item.id">
+              Correct
+            </button>
+          </span>
+
+          <button
+            class="danger"
+            type="button"
+            (click)="reject(item)"
+            [disabled]="busy() === item.id"
+          >
+            Reject
+          </button>
+        </div>
+      }
+    </section>
+  }
+}
