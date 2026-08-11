@@ -7,10 +7,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import Scope
 
 from app.api.routes import audit, auth, catalog, documents, health, query, review
 from app.core.config import Settings, get_settings
@@ -22,6 +25,10 @@ from app.web.deps import RedirectToLogin, login_redirect
 from app.web.templates import STATIC_DIR
 
 logger = get_logger(__name__)
+
+# The Angular build output (`make frontend`). Not committed and not required:
+# the API and the server-rendered UI work without it.
+CLIENT_APP_DIR = Path(__file__).resolve().parents[1] / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -64,6 +71,7 @@ def create_app() -> FastAPI:
     # -- UI ---------------------------------------------------------------
     app.include_router(web_routes.router)
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    _mount_client_app(app)
 
     @app.exception_handler(RedirectToLogin)
     async def _to_login(request: Request, exc: RedirectToLogin) -> Response:
@@ -79,6 +87,52 @@ def create_app() -> FastAPI:
         return RedirectResponse("/ui/ask")
 
     return app
+
+
+def _mount_client_app(app: FastAPI) -> None:
+    """Serve the Angular build at `/app`, if it has been built.
+
+    **Same origin, deliberately.** The client app shares this process's origin,
+    so the session cookie keeps `HttpOnly` and `SameSite=lax` and the CSRF
+    property that comes with them. Serving it from its own host would mean CORS
+    plus `SameSite=none`, trading a real defence for a deployment convenience
+    (docs/deploy.md 6).
+
+    Absent when nobody has run `make frontend`, which is the normal state of a
+    Python-only checkout and of the test suite. The API and the server-rendered
+    UI do not depend on it, so a missing build is a missing screen rather than
+    a broken application -- and saying so at startup beats a 404 nobody can
+    explain.
+    """
+    if not (CLIENT_APP_DIR / "index.html").is_file():
+        logger.info(
+            "client app not built; /app is unavailable", extra={"path": str(CLIENT_APP_DIR)}
+        )
+        return
+
+    app.mount("/app", _ClientApp(directory=str(CLIENT_APP_DIR), html=True), name="client")
+
+
+class _ClientApp(StaticFiles):
+    """Static files, with the client router's paths falling back to `index.html`.
+
+    `/app/documents` is a route in the browser, not a file on disk, so a plain
+    static mount answers 404 to a reload or a shared link. Handled inside the
+    mount rather than as a route in front of it: a route registered before the
+    mount would shadow the bundles too, and one registered after would never be
+    reached.
+
+    A missing *asset* must still be a 404 -- a JavaScript request answered with
+    HTML fails later and less legibly than one answered honestly.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404 or "." in Path(path).name:
+                raise
+            return await super().get_response("index.html", scope)
 
 
 app = create_app()
