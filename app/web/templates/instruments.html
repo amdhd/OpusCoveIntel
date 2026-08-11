@@ -24,8 +24,7 @@
       <td>{{ i.current_rating or '—' }}{% if i.rating_agency.value != 'unknown' %}
             <span class="muted">({{ i.rating_agency.value }})</span>{% endif %}</td>
       <td class="num">
-        {% if i.issue_size is not none %}{{ i.currency }} {{ '{:,.0f}'.format(i.issue_size) }}
-        {% else %}—{% endif %}
+        {{ i.issue_size | money(i.currency) }}
       </td>
       <td>{{ i.maturity_date or '—' }}</td>
     </tr>

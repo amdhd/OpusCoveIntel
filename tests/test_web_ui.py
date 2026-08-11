@@ -122,6 +122,20 @@ class TestPagesRender:
         assert response.status_code == 200
         assert "Green Ijarah" in response.text
 
+    async def test_an_amount_is_grouped_on_the_page(
+        self, api_client: AsyncClient, seeded_universe: None
+    ) -> None:
+        """A filter nobody applies is not a formatter.
+
+        `app/web/format.py` is unit-tested on its own; this asserts the
+        instrument table actually runs a figure through it, which is the half
+        that a template edit can silently undo.
+        """
+        response = await api_client.get("/ui/instruments")
+
+        assert "MYR 300,000,000" in response.text
+        assert "300000000" not in response.text, "an ungrouped figure reached the page"
+
     async def test_a_portfolio_reports_its_as_of_date(
         self, api_client: AsyncClient, db_session: AsyncSession, seeded_universe: None
     ) -> None:

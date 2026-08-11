@@ -31,7 +31,7 @@
               <span class="muted">{{ instrument.rating_agency }}</span>
             </td>
             <td class="muted">{{ instrument.sukuk_structure }}</td>
-            <td class="num">{{ instrument.issue_size ?? '—' }}</td>
+            <td class="num">{{ instrument.issue_size | money: instrument.currency }}</td>
             <td>{{ instrument.maturity_date ?? '—' }}</td>
           </tr>
         }
@@ -52,7 +52,7 @@
           <tr>
             <th>type</th>
             <th>summary</th>
-            <th>threshold</th>
+            <th class="num">threshold</th>
             <th>method</th>
             <th class="num">confidence</th>
             <th>source</th>
@@ -63,7 +63,7 @@
             <tr>
               <td>{{ covenant.covenant_type }}</td>
               <td class="muted">{{ covenant.summary ?? '—' }}</td>
-              <td>{{ covenant.threshold_amount ?? '—' }}</td>
+              <td class="num">{{ covenant.threshold_amount | money: covenant.threshold_currency }}</td>
               <td class="muted">{{ covenant.method }}</td>
               <td class="num">
                 <!-- Under the review threshold, a figure is not settled. -->

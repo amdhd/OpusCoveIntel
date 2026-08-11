@@ -16,8 +16,7 @@
       {% endif %}
     </dd>
     <dt>Issue size</dt>
-    <dd>{% if i.issue_size is not none %}{{ i.currency }} {{ '{:,.2f}'.format(i.issue_size) }}
-        {% else %}—{% endif %}</dd>
+    <dd>{{ i.issue_size | money(i.currency) }}</dd>
     <dt>Maturity</dt><dd>{{ i.maturity_date or '—' }}</dd>
     {% if i.isin %}<dt>ISIN</dt><dd>{{ i.isin }}</dd>{% endif %}
   </dl>
@@ -56,8 +55,7 @@
     <tr>
       <td>{{ c.covenant_type.value.replace('_', ' ') }}</td>
       <td class="num">
-        {% if c.threshold_amount is not none %}
-          {{ c.threshold_currency or '' }} {{ '{:,.2f}'.format(c.threshold_amount) }}
+        {% if c.threshold_amount is not none %}{{ c.threshold_amount | money(c.threshold_currency) }}
         {% elif c.thresholds.get('ratio') is not none %}{{ c.thresholds['ratio'] }}×
         {% else %}—{% endif %}
       </td>
@@ -119,8 +117,7 @@
     {% for c in i.call_schedules %}
     <tr>
       <td>{{ c.call_date }}</td>
-      <td class="num">{% if c.call_price is not none %}{{ '{:,.4f}'.format(c.call_price) }}
-          {% else %}—{% endif %}</td>
+      <td class="num">{{ c.call_price | money }}</td>
       <td>{{ c.call_type.value }}</td>
       <td>{% if c.source_clause_id %}
           <a href="/ui/clauses/{{ c.source_clause_id }}">source</a>{% else %}—{% endif %}</td>

@@ -15,11 +15,12 @@ import { FormsModule } from '@angular/forms';
 
 import { Api } from '../api/api';
 import type { ReviewItem } from '../api/models';
+import { MoneyPipe } from '../format/format';
 import { Auth } from '../auth/auth';
 
 @Component({
   selector: 'app-review',
-  imports: [FormsModule],
+  imports: [FormsModule, MoneyPipe],
   templateUrl: './review.page.html',
 })
 export class ReviewPage {

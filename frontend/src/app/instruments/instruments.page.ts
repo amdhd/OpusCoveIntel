@@ -11,13 +11,14 @@ import { FormsModule } from '@angular/forms';
 
 import { Api } from '../api/api';
 import type { CovenantRead, InstrumentRead } from '../api/models';
+import { MoneyPipe } from '../format/format';
 
 /** CLAUDE.md 5: below this a field is queued for a human. */
 const REVIEW_THRESHOLD = 0.85;
 
 @Component({
   selector: 'app-instruments',
-  imports: [FormsModule],
+  imports: [FormsModule, MoneyPipe],
   templateUrl: './instruments.page.html',
 })
 export class InstrumentsPage {

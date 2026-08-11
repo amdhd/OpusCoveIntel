@@ -42,10 +42,13 @@
 
       <dl class="kv">
         <dt>extracted value</dt>
-        <dd>{{ item.old_value ?? '—' }}</dd>
+        <!-- `money` groups a bare figure and passes anything else through: a
+             queue value can be free text, and reformatting that would be
+             editing evidence. -->
+        <dd>{{ item.old_value | money }}</dd>
         @if (item.new_value) {
           <dt>proposed</dt>
-          <dd>{{ item.new_value }}</dd>
+          <dd>{{ item.new_value | money }}</dd>
         }
       </dl>
 
