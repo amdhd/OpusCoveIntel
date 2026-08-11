@@ -26,7 +26,7 @@ import { FormsModule } from '@angular/forms';
 import { Subscription, exhaustMap, takeWhile, timer } from 'rxjs';
 
 import { Api } from '../api/api';
-import { ConfidencePipe } from '../format/format';
+import { ConfidencePipe, LabelPipe, label } from '../format/format';
 import { FAILED_STATUSES } from '../api/models';
 import type { DocumentRead, DocumentStatusRead, DocumentType } from '../api/models';
 
@@ -60,7 +60,7 @@ const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'app-documents',
-  imports: [FormsModule, ConfidencePipe],
+  imports: [FormsModule, ConfidencePipe, LabelPipe],
   templateUrl: './documents.page.html',
 })
 export class DocumentsPage implements OnDestroy {
@@ -240,7 +240,7 @@ export class DocumentsPage implements OnDestroy {
    * them, so `trust_deed` reads as a phrase on both.
    */
   protected typeLabel(documentType: string): string {
-    return documentType === 'unknown' ? 'not classified' : documentType.replace(/_/g, ' ');
+    return documentType === 'unknown' ? 'Not classified' : label(documentType);
   }
 
   protected statusClass(status: string): string {

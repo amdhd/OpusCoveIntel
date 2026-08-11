@@ -30,8 +30,9 @@
   @for (item of items(); track item.id) {
     <section class="panel review-item">
       <div>
-        <strong>{{ item.entity_type }}.{{ item.field_name }}</strong>
-        <span class="trigger">· {{ item.trigger_reason }}</span>
+        <strong>{{ item.field_name | label }}</strong>
+        <span class="muted">on {{ item.entity_type }}</span>
+        <span class="trigger">· {{ item.trigger_reason | label }}</span>
         @if (item.confidence !== null) {
           <span class="trigger">
             · confidence
@@ -69,16 +70,15 @@
 
       @if (auth.canReview()) {
         <div class="review-actions">
-          <button
-            class="primary"
-            type="button"
-            (click)="approve(item)"
-            [disabled]="busy() === item.id"
-          >
+          <!-- No filled primary in this row, deliberately. Approve, Correct
+               and Reject are three decisions with the same audit weight, and a
+               blue fill on any one of them is the screen expressing a
+               preference about how a covenant should be decided. -->
+          <button type="button" (click)="approve(item)" [disabled]="busy() === item.id">
             Approve
           </button>
 
-          <span style="display: flex; gap: 0.4rem">
+          <span class="control-group">
             <input
               type="text"
               name="correction-{{ item.id }}"

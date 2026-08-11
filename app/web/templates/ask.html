@@ -8,7 +8,7 @@
   <textarea id="question" name="question" rows="3" required
             placeholder="Which holdings would breach their rating trigger at the current rating?"
             >{{ question or "" }}</textarea>
-  <p style="margin:0.7rem 0 0"><button class="primary" type="submit">Ask</button></p>
+  <p class="actions"><button class="primary" type="submit">Ask</button></p>
 </form>
 
 {% if answer %}
@@ -17,15 +17,15 @@
        presented as an answer rather than as an error banner. #}
     <div class="panel refusal">
       <strong>No supporting evidence in the corpus.</strong>
-      <p class="answer" style="margin:0.5rem 0 0">{{ answer.answer }}</p>
-      <p class="muted" style="margin:0.6rem 0 0;font-size:0.82rem">
+      <p class="answer">{{ answer.answer }}</p>
+      <p class="caption">
         The agent declines rather than inferring an answer. Confidence 0.0.
       </p>
     </div>
   {% else %}
     <div class="panel">
-      <p class="muted" style="margin:0 0 0.6rem;font-size:0.82rem">
-        {{ answer.intent.value.replace('_', ' ') }}
+      <p class="caption">
+        {{ answer.intent.value | label }}
         · confidence {{ answer.confidence | confidence }}
         · {{ answer.citations|length }} citation{{ '' if answer.citations|length == 1 else 's' }}
       </p>
@@ -57,7 +57,7 @@
     {% endif %}
 
     {% if answer.tools_used %}
-    <p class="muted" style="font-size:0.8rem">
+    <p class="caption">
       Tools: {{ answer.tools_used|join(', ') }}
     </p>
     {% endif %}

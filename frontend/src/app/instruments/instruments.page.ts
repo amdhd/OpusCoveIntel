@@ -11,11 +11,11 @@ import { FormsModule } from '@angular/forms';
 
 import { Api } from '../api/api';
 import type { CovenantRead, InstrumentRead } from '../api/models';
-import { belowReviewBar, ConfidencePipe, MoneyPipe, REVIEW_THRESHOLD } from '../format/format';
+import { ConfidencePipe, LabelPipe, MoneyPipe, REVIEW_THRESHOLD, belowReviewBar } from '../format/format';
 
 @Component({
   selector: 'app-instruments',
-  imports: [FormsModule, ConfidencePipe, MoneyPipe],
+  imports: [FormsModule, ConfidencePipe, MoneyPipe, LabelPipe],
   templateUrl: './instruments.page.html',
 })
 export class InstrumentsPage {

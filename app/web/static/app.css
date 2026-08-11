@@ -1,191 +1,975 @@
-/* One stylesheet, no framework.
+/* One stylesheet, no framework, two renderers.
  *
  * The palette is deliberately quiet. This is a screen a credit analyst reads
  * for an hour at a time, and the only things that should catch the eye are a
- * breach, a low-confidence figure, and a highlighted quote. */
+ * breach, a low-confidence figure, and a highlighted quote. Everything below
+ * exists to make those three loud by keeping everything else calm.
+ *
+ * The vocabulary is Fluent 2 -- Microsoft's ramp, because it was designed for
+ * exactly this: dense, text-heavy, read-all-day enterprise screens. What that
+ * buys us concretely is a neutral ramp with enough steps to build hierarchy
+ * without colour, a 4px spacing grid, real elevation instead of borders
+ * everywhere, and a focus indicator that is visible on every surface.
+ *
+ * Rules for editing this file:
+ *
+ *   1. No raw hex outside `:root`. If a value is worth using twice it is worth
+ *      a token, and a token is the only way the dark theme keeps working.
+ *   2. Semantic colour (breach, warn, ok) is spent on meaning, never on
+ *      decoration. A red that appears every day stops being read.
+ *   3. Sizes come off the ramp. Eleven arbitrary font sizes is how the last
+ *      version of this file ended up looking like eleven different products.
+ */
+
+/* -- tokens -------------------------------------------------------------- */
 
 :root {
-  --ink: #1b1f24;
-  --muted: #5b6672;
-  --line: #d8dee6;
-  --bg: #f7f8fa;
-  --panel: #ffffff;
-  --accent: #1f4e79;
-  --breach: #a4243b;
-  --breach-bg: #fbeaed;
-  --warn: #8a6100;
-  --warn-bg: #fdf4e0;
-  --ok: #1e6b46;
-  --ok-bg: #e8f4ed;
-  --highlight: #fff3b0;
+  color-scheme: light dark;
+
+  /* Fluent 2 neutrals, light. */
+  --n-bg-1: #ffffff;
+  --n-bg-2: #fafafa;
+  --n-bg-3: #f5f5f5;
+  --n-bg-hover: #f5f5f5;
+  --n-bg-pressed: #e0e0e0;
+  --n-fg-1: #242424;
+  --n-fg-2: #424242;
+  --n-fg-3: #616161;
+  --n-stroke-1: #d1d1d1;
+  --n-stroke-2: #e0e0e0;
+  --n-stroke-3: #f0f0f0;
+
+  /* Brand. One accent, used for identity and for the primary action only. */
+  --brand: #0f6cbd;
+  --brand-hover: #115ea3;
+  --brand-pressed: #0c3b5e;
+  --brand-fg: #0f6cbd;
+  --brand-subtle: #ebf3fc;
+
+  /* Semantic. Reserved for state, never for emphasis. */
+  --breach: #b10e1c;
+  --breach-bg: #fdf3f4;
+  --breach-stroke: #f1bbbc;
+  --warn: #835b00;
+  --warn-bg: #fdf8e6;
+  --warn-stroke: #eddba1;
+  --ok: #0e700e;
+  --ok-bg: #f1faf1;
+  --ok-stroke: #bdda9b;
+  --highlight: #fdf2b3;
+
+  /* Names the rest of the sheet reads. Kept from the previous palette so a
+   * template written against `--ink` or `--line` still means what it meant. */
+  --ink: var(--n-fg-1);
+  --muted: var(--n-fg-3);
+  --line: var(--n-stroke-2);
+  --bg: var(--n-bg-3);
+  --panel: var(--n-bg-1);
+  --accent: var(--brand);
+
+  /* Type ramp: Fluent's, in rem. Nothing outside this list. */
+  --text-caption: 0.75rem; /* 12 */
+  --text-body: 0.875rem; /* 14 -- the default */
+  --text-subtitle: 1rem; /* 16 */
+  --text-title-2: 1.25rem; /* 20 */
+  --text-title-1: 1.5rem; /* 24 */
+
+  /* 4px grid. */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.5rem;
+  --s-6: 2rem;
+  --s-7: 3rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Elevation, not outlines. A card that is only a 1px box reads as a wireframe. */
+  --shadow-2: 0 1px 2px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
+  --shadow-4: 0 2px 4px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
+  --shadow-8: 0 4px 8px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
+
+  --focus: var(--n-fg-1);
+
+  --font: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    system-ui, Roboto, "Helvetica Neue", sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI",
+    -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-* { box-sizing: border-box; }
+/* Dark is not an inversion: Fluent lifts the *card* above the canvas in both
+ * themes, so panels go lighter here while the page goes darker. Every semantic
+ * colour is restated, because a foreground tuned for white is unreadable on
+ * #292929 and a breach that cannot be read is worse than no colour at all. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --n-bg-1: #292929;
+    --n-bg-2: #1f1f1f;
+    --n-bg-3: #141414;
+    --n-bg-hover: #383838;
+    --n-bg-pressed: #444444;
+    --n-fg-1: #ffffff;
+    --n-fg-2: #d6d6d6;
+    --n-fg-3: #adadad;
+    --n-stroke-1: #666666;
+    --n-stroke-2: #4d4d4d;
+    --n-stroke-3: #3d3d3d;
+
+    --brand: #115ea3;
+    --brand-hover: #0f6cbd;
+    --brand-pressed: #0c3b5e;
+    --brand-fg: #479ef5;
+    --brand-subtle: #082338;
+
+    --breach: #e37d80;
+    --breach-bg: #3b1a1c;
+    --breach-stroke: #6e292c;
+    --warn: #e0b64a;
+    --warn-bg: #3a2e12;
+    --warn-stroke: #63501f;
+    --ok: #6dc36d;
+    --ok-bg: #16301a;
+    --ok-stroke: #2b5c2f;
+    --highlight: #6b5a00;
+
+    --bg: var(--n-bg-2);
+    --panel: var(--n-bg-1);
+
+    --shadow-2: 0 1px 2px rgb(0 0 0 / 0.28), 0 0 2px rgb(0 0 0 / 0.24);
+    --shadow-4: 0 2px 4px rgb(0 0 0 / 0.28), 0 0 2px rgb(0 0 0 / 0.24);
+    --shadow-8: 0 4px 8px rgb(0 0 0 / 0.28), 0 0 2px rgb(0 0 0 / 0.24);
+
+    --focus: #ffffff;
+  }
+}
+
+/* -- base ---------------------------------------------------------------- */
+
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
-  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font);
+  font-size: var(--text-body);
+  line-height: 1.43;
   color: var(--ink);
   background: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--accent); }
+a {
+  color: var(--brand-fg);
+  text-underline-offset: 2px;
+}
 
-/* -- chrome ------------------------------------------------------------- */
+/* One indicator, on everything, in both themes. Fluent's is a 2px stroke
+ * outside the control -- visible on a white card and on a dark canvas without
+ * needing to know which one it landed on. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* -- chrome -------------------------------------------------------------- */
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  padding: 0.65rem 1.25rem;
+  gap: var(--s-5);
+  padding: var(--s-2) var(--s-5);
   background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--n-stroke-3);
+  /* Sticky because the tables below it are long, and a nav you have to scroll
+   * back to is a nav people stop using. */
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
-.brand { font-weight: 650; text-decoration: none; color: var(--ink); letter-spacing: -0.01em; }
-.topbar nav { display: flex; gap: 1rem; margin-right: auto; }
-.topbar nav a { text-decoration: none; color: var(--muted); padding-bottom: 2px; }
-.topbar nav a.on { color: var(--ink); border-bottom: 2px solid var(--accent); }
-/* Some screens are server-rendered and some are in the client app. Both navs
- * list all of them, and the marker says which links change renderer -- a
- * full page load into a differently-built screen is worth a warning, and one
- * definition of the marker beats a glyph typed into two templates. */
-.topbar nav a.leaves::after { content: " \2197"; font-size: 0.8em; color: var(--muted); }
+.brand {
+  font-family: var(--font-display);
+  font-size: var(--text-subtitle);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--ink);
+  white-space: nowrap;
+}
 
-.signout { display: flex; align-items: center; gap: 0.6rem; }
-.who { font-size: 0.85rem; color: var(--muted); }
-.who em { font-style: normal; padding: 1px 6px; border: 1px solid var(--line); border-radius: 10px; }
+.topbar nav {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-right: auto;
+  flex-wrap: wrap;
+}
+
+.topbar nav a {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: var(--n-fg-2);
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.topbar nav a:hover {
+  background: var(--n-bg-hover);
+  color: var(--ink);
+}
+
+.topbar nav a:active {
+  background: var(--n-bg-pressed);
+}
+
+.topbar nav a.on {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The selected marker is a rounded bar under the label, not a full-width
+ * border: it points at the word rather than at the padding. */
+.topbar nav a.on::before {
+  content: "";
+  position: absolute;
+  left: var(--s-3);
+  right: var(--s-3);
+  bottom: 1px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--brand-fg);
+}
+
+/* Some screens are server-rendered and some are in the client app. Both navs
+ * list all of them, and the marker says which links change renderer -- a full
+ * page load into a differently-built screen is worth a warning, and one
+ * definition beats a glyph typed into two templates. */
+.topbar nav a.leaves::after {
+  content: "\2197";
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.signout {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: 0;
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-body);
+  color: var(--n-fg-2);
+  white-space: nowrap;
+}
+
+/* A role, not a decoration: an outline badge, which reads as metadata rather
+ * than as a status the reader has to act on. */
+.who em {
+  font-style: normal;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px var(--s-2);
+  border: 1px solid var(--n-stroke-1);
+  border-radius: 999px;
+  color: var(--muted);
+}
+
 /* A reviewer's badge says what they may do, so it carries the accent. An
  * analyst's says what they are, which is not a status worth colour. */
-.who em.may-review { border-color: var(--accent); color: var(--accent); }
+.who em.may-review {
+  border-color: var(--brand-fg);
+  color: var(--brand-fg);
+}
 
 /* The queue count. Accent, never --breach: red is spent on breaches, and a
  * number that is red every day teaches people to stop reading red. */
 .pill {
-  background: var(--accent); color: #fff; border-radius: 10px;
-  padding: 0 6px; font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 var(--s-1);
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1;
 }
+
 /* Same count, no call to action, for a role that cannot act on it. */
-.pill.passive { background: transparent; color: var(--muted); border: 1px solid var(--line); }
-
-main { max-width: 68rem; margin: 1.5rem auto; padding: 0 1.25rem; }
-footer {
-  max-width: 68rem; margin: 2.5rem auto 3rem; padding: 0 1.25rem;
-  color: var(--muted); font-size: 0.8rem;
+.pill.passive {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--n-stroke-1);
 }
 
-h1 { font-size: 1.35rem; margin: 0 0 1rem; }
-h2 { font-size: 1.05rem; margin: 1.6rem 0 0.6rem; }
+main {
+  max-width: 72rem;
+  margin: var(--s-6) auto;
+  padding: 0 var(--s-5);
+}
+
+footer {
+  max-width: 72rem;
+  margin: var(--s-6) auto var(--s-7);
+  padding: 0 var(--s-5);
+  color: var(--muted);
+  font-size: var(--text-caption);
+}
+
+/* -- headings ------------------------------------------------------------ */
+
+h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-title-1);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--s-4);
+}
+
+h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-subtitle);
+  font-weight: 600;
+  line-height: 1.4;
+  margin: var(--s-5) 0 var(--s-3);
+}
 
 /* -- panels and tables --------------------------------------------------- */
 
 .panel {
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: 8px; padding: 1rem 1.15rem; margin-bottom: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--n-stroke-3);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  padding: var(--s-4) var(--s-5);
+  margin-bottom: var(--s-4);
 }
 
-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--line); }
-th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
-td.num { text-align: right; font-variant-numeric: tabular-nums; }
-/* The row a detail panel elsewhere on the page is describing. */
-tr.selected > td { background: #f2f6fb; }
+/* A drop target under a dragged file. The accent tint says "let go here"; a
+ * border style flicking between solid and dashed said almost nothing. */
+.panel.dropping {
+  border: 1px dashed var(--brand-fg);
+  background: var(--brand-subtle);
+}
 
-.muted { color: var(--muted); }
-.empty { color: var(--muted); font-style: italic; padding: 1rem 0; }
+/* A table is the one thing on these screens that cannot be made narrower, so
+ * it scrolls inside its own card rather than pushing the page sideways. */
+.panel:has(table) {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  min-width: 32rem;
+  border-collapse: collapse;
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--s-3) var(--s-3);
+  border-bottom: 1px solid var(--n-stroke-3);
+}
+
+/* Sentence case, not letterspaced capitals. A column heading is a label to be
+ * read once, and small caps at 0.8rem is the least legible thing on the page. */
+th {
+  color: var(--n-fg-2);
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--n-stroke-1);
+}
+
+tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+tbody tr:hover > td {
+  background: var(--n-bg-hover);
+}
+
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The row a detail panel elsewhere on the page is describing. */
+tbody tr.selected > td {
+  background: var(--brand-subtle);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.empty {
+  color: var(--muted);
+  padding: var(--s-4) 0;
+  margin: 0;
+}
+
+/* Command names and paths in running text. Not a block: every use of this is a
+ * few words inside a sentence. */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border: 1px solid var(--n-stroke-2);
+  border-radius: var(--radius-sm);
+  background: var(--n-bg-2);
+  white-space: nowrap;
+}
+
+/* A panel sets its own edges, so the first and last things inside it must not
+ * add more. This is what the two dozen `style="margin-top: 0"` attributes in
+ * the templates were doing by hand, each one a decision nobody could reuse. */
+.panel > :first-child {
+  margin-top: 0;
+}
+
+.panel > :last-child {
+  margin-bottom: 0;
+}
+
+/* Secondary text: hints, counts, the line under a form. The templates carried
+ * 0.78, 0.8, 0.82, 0.85 and 0.88rem inline for this same job. */
+.caption {
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+/* A row of controls that sit on one baseline and wrap together. */
+.field-row {
+  display: flex;
+  gap: var(--s-3);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+/* Controls that act as one, like a text field and the button that submits it. */
+.control-group {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+}
+
+/* What follows the thing it acts on. */
+.actions {
+  margin-top: var(--s-4);
+}
+
+/* Rows that navigate. The pointer is the only affordance a table row gets, so
+ * it belongs in the sheet with everything else, not in an attribute. */
+tbody tr.clickable {
+  cursor: pointer;
+}
+
+/* -- progress -------------------------------------------------------------
+ *
+ * Two states and they mean different things: a determinate bar for bytes
+ * leaving the browser, and an indeterminate one for a worker whose remaining
+ * time nobody knows. Faking a percentage for the second is a lie that gets
+ * found out at 99%. */
+
+progress {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--n-stroke-2);
+  overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+  background: var(--n-stroke-2);
+}
+
+progress::-webkit-progress-value {
+  background: var(--brand-fg);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+progress::-moz-progress-bar {
+  background: var(--brand-fg);
+}
+
+progress:not([value]) {
+  background: linear-gradient(90deg, var(--n-stroke-2) 0 65%, var(--brand-fg) 65% 100%);
+  background-size: 300% 100%;
+  animation: indeterminate 1.6s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
 
 /* -- forms --------------------------------------------------------------- */
 
-input[type=text], input[type=password], textarea, select {
-  width: 100%; padding: 0.5rem 0.6rem; font: inherit;
-  border: 1px solid var(--line); border-radius: 6px; background: #fff;
+label {
+  font-size: var(--text-body);
+  color: var(--n-fg-2);
 }
-textarea { resize: vertical; }
+
+input[type="text"],
+input[type="password"],
+input[type="file"],
+textarea,
+select {
+  width: 100%;
+  padding: var(--s-2) var(--s-3);
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--n-stroke-1);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+input[type="text"]:hover,
+input[type="password"]:hover,
+textarea:hover,
+select:hover {
+  border-color: var(--n-fg-3);
+}
+
+/* Fluent's field signature: the resting border stays, and a 2px accent stroke
+ * lands on the bottom edge. It reads as "this one is live" without the halo of
+ * a glow, which on a page of fifteen fields is fifteen glows. */
+input[type="text"]:focus,
+input[type="password"]:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--n-stroke-1);
+  box-shadow: inset 0 -2px 0 0 var(--brand-fg);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 5rem;
+  line-height: 1.5;
+}
 
 button {
-  font: inherit; padding: 0.42rem 0.85rem; border-radius: 6px;
-  border: 1px solid var(--line); background: #fff; cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: var(--s-2) var(--s-4);
+  min-height: 2rem;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--n-stroke-1);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
 }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.danger { color: var(--breach); border-color: #e3b9c1; }
-button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+button:hover {
+  background: var(--n-bg-hover);
+}
+
+button:active {
+  background: var(--n-bg-pressed);
+}
+
+button.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+button.primary:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+
+button.primary:active {
+  background: var(--brand-pressed);
+  border-color: var(--brand-pressed);
+}
+
+/* Destructive, and deliberately not filled red. A wall of red buttons is a
+ * screen that shouts; the colour belongs on the word, and the fill arrives on
+ * hover, when the pointer has already committed to the direction. */
+button.danger {
+  color: var(--breach);
+  border-color: var(--breach-stroke);
+}
+
+button.danger:hover {
+  background: var(--breach-bg);
+  border-color: var(--breach);
+}
+
 /* A button whose panel is currently open. Not `.primary`: this is a statement
  * about what you are looking at, not the action the screen wants next. */
-button.on { border-color: var(--accent); color: var(--accent); }
+button.on {
+  border-color: var(--brand-fg);
+  color: var(--brand-fg);
+}
 
-.alert { padding: 0.6rem 0.85rem; border-radius: 6px; margin: 0 0 1rem; }
-.alert.error { background: var(--breach-bg); color: var(--breach); }
-.alert.notice { background: var(--ok-bg); color: var(--ok); }
+button:disabled {
+  color: var(--muted);
+  background: var(--n-bg-3);
+  border-color: var(--n-stroke-2);
+  cursor: not-allowed;
+}
+
+/* -- messages ------------------------------------------------------------ */
+
+.alert {
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  margin: 0 0 var(--s-4);
+}
+
+.alert.error {
+  background: var(--breach-bg);
+  border-color: var(--breach-stroke);
+  color: var(--breach);
+}
+
+.alert.notice {
+  background: var(--ok-bg);
+  border-color: var(--ok-stroke);
+  color: var(--ok);
+}
+
 /* Standing facts about the screen -- "you cannot decide these" -- as opposed
  * to `.notice`, whose green means something you did just worked. */
-.alert.info { background: #eef2f7; color: var(--muted); border-left: 3px solid var(--line); }
+.alert.info {
+  background: var(--n-bg-3);
+  border-color: var(--n-stroke-2);
+  color: var(--n-fg-2);
+}
 
-/* -- status ------------------------------------------------------------- */
+/* -- status -------------------------------------------------------------- */
 
-.status { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.78rem; }
-.status.breach { background: var(--breach-bg); color: var(--breach); }
-.status.at_risk { background: var(--warn-bg); color: var(--warn); }
-.status.ok { background: var(--ok-bg); color: var(--ok); }
-.status.insufficient_data, .status.not_applicable { background: #eceff3; color: var(--muted); }
+.status {
+  display: inline-block;
+  padding: 2px var(--s-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1.34;
+  white-space: nowrap;
+}
+
+.status.breach {
+  background: var(--breach-bg);
+  border-color: var(--breach-stroke);
+  color: var(--breach);
+}
+
+.status.at_risk {
+  background: var(--warn-bg);
+  border-color: var(--warn-stroke);
+  color: var(--warn);
+}
+
+.status.ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-stroke);
+  color: var(--ok);
+}
+
+.status.insufficient_data,
+.status.not_applicable {
+  background: var(--n-bg-3);
+  border-color: var(--n-stroke-2);
+  color: var(--muted);
+}
 
 /* A figure the machine was unsure about must look different from one it was
  * confident about. CLAUDE.md 5 routes these to review; the UI should not
  * present them as settled while they sit in the queue. */
-.low-confidence { border-bottom: 1px dotted var(--warn); }
+.low-confidence {
+  border-bottom: 1px dashed var(--warn);
+  color: var(--warn);
+}
 
 /* A rating is only meaningful with the scale it is on: MARC writes AA- where
- * RAM writes AA3, and those are the same notch. The agency is therefore a
- * qualifier on the figure, not a footnote after it, and the canonical notch is
- * shown whenever the raw string is not already it. */
+ * RAM writes AA3, and those are the same notch. The agency is a qualifier on
+ * the figure, not a footnote after it. */
 .agency {
-  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em;
-  color: var(--muted); border: 1px solid var(--line); border-radius: 3px;
-  padding: 0 4px; vertical-align: 1px;
+  display: inline-block;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  line-height: 1.34;
+  color: var(--muted);
+  border: 1px solid var(--n-stroke-2);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--s-1);
+  vertical-align: 1px;
 }
-.notch { font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
 
-/* -- ask ---------------------------------------------------------------- */
+.notch {
+  font-size: var(--text-caption);
+  color: var(--muted);
+  white-space: nowrap;
+}
 
-.answer { white-space: pre-wrap; font-size: 0.95rem; }
-.refusal { background: var(--warn-bg); border-left: 3px solid var(--warn); padding: 0.8rem 1rem; }
+/* -- ask ----------------------------------------------------------------- */
+
+.answer {
+  white-space: pre-wrap;
+  font-size: var(--text-subtitle);
+  line-height: 1.6;
+  /* A paragraph wider than about 75 characters loses the reader's place on the
+   * carriage return, and answers here are prose, not table rows. */
+  max-width: 62ch;
+}
+
+/* Refusal is a correct outcome (CLAUDE.md 5), so it is styled as an answer
+ * with a caveat rather than as an error. */
+.refusal {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-stroke);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-md);
+  padding: var(--s-3) var(--s-4);
+}
 
 .citation {
-  border-left: 3px solid var(--line); padding: 0.5rem 0.85rem; margin: 0.6rem 0;
-  background: #fbfcfd;
+  border-left: 3px solid var(--n-stroke-1);
+  padding: var(--s-2) var(--s-4);
+  margin: var(--s-3) 0;
+  background: var(--n-bg-2);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
-.citation blockquote { margin: 0.35rem 0 0; font-size: 0.88rem; color: #2c3138; }
-.citation .meta { font-size: 0.78rem; color: var(--muted); }
 
-/* -- provenance --------------------------------------------------------- */
+.citation blockquote {
+  margin: var(--s-1) 0 0;
+  color: var(--n-fg-2);
+}
+
+.citation .meta {
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+/* -- provenance ---------------------------------------------------------- */
 
 .chunk {
-  white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.82rem; line-height: 1.65; background: #fbfcfd;
-  border: 1px solid var(--line); border-radius: 6px; padding: 0.9rem;
-  max-height: 30rem; overflow: auto;
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  line-height: 1.7;
+  background: var(--n-bg-2);
+  border: 1px solid var(--n-stroke-2);
+  border-radius: var(--radius-md);
+  padding: var(--s-4);
+  max-height: 30rem;
+  overflow: auto;
 }
-.chunk mark { background: var(--highlight); padding: 1px 0; }
 
-.kv { display: grid; grid-template-columns: 11rem 1fr; gap: 0.3rem 1rem; font-size: 0.88rem; }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; }
+/* The one place on these screens where a highlight is the point. */
+.chunk mark {
+  background: var(--highlight);
+  color: var(--ink);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
 
-.verified { color: var(--ok); }
-.unverified { color: var(--breach); font-weight: 600; }
+.kv {
+  display: grid;
+  grid-template-columns: minmax(6rem, 12rem) 1fr;
+  gap: var(--s-2) var(--s-4);
+  margin: 0;
+}
 
-/* -- login -------------------------------------------------------------- */
+.kv dt {
+  color: var(--muted);
+}
 
-.login { max-width: 22rem; margin: 4rem auto; }
-.login label { display: block; margin: 0.75rem 0 0.25rem; font-size: 0.85rem; color: var(--muted); }
-.login button { width: 100%; margin-top: 1.1rem; }
+.kv dd {
+  margin: 0;
+}
 
-/* -- review ------------------------------------------------------------- */
+.verified {
+  color: var(--ok);
+  font-weight: 600;
+}
 
-.review-item { display: grid; gap: 0.6rem; }
-/* What an analyst sets where a reviewer gets buttons. An item with nothing
+.unverified {
+  color: var(--breach);
+  font-weight: 600;
+}
+
+/* -- login --------------------------------------------------------------- */
+
+.login {
+  max-width: 22.5rem;
+  margin: 12vh auto var(--s-7);
+  padding: var(--s-5) var(--s-5) var(--s-6);
+  box-shadow: var(--shadow-8);
+}
+
+.login h1 {
+  font-size: var(--text-title-2);
+}
+
+.login label {
+  display: block;
+  margin: var(--s-4) 0 var(--s-1);
+  font-weight: 600;
+}
+
+.login button {
+  width: 100%;
+  margin-top: var(--s-5);
+}
+
+/* -- review -------------------------------------------------------------- */
+
+.review-item {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.trigger {
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+/* What an analyst gets where a reviewer gets buttons. An item with nothing
  * under it reads as broken; an item that says who acts next reads as pending. */
-.awaiting { font-size: 0.83rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 0.5rem; }
-.review-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-start; }
-.review-actions form { display: flex; gap: 0.4rem; align-items: flex-start; }
-.review-actions input[type=text] { width: 14rem; }
-.trigger { font-size: 0.78rem; color: var(--muted); }
+.awaiting {
+  margin: 0;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--n-stroke-3);
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+.review-actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--n-stroke-3);
+}
+
+.review-actions form {
+  display: flex;
+  gap: var(--s-2);
+  align-items: flex-start;
+}
+
+.review-actions input[type="text"] {
+  width: 14rem;
+}
+
+/* -- narrow ---------------------------------------------------------------
+ *
+ * Not a phone layout: nobody approves a covenant on a phone. This is enough
+ * that a half-width window on a laptop, which is how these screens are
+ * actually read beside a PDF, does not overlap or clip. */
+
+@media (max-width: 48rem) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-3);
+    padding: var(--s-2) var(--s-4);
+  }
+
+  .topbar nav {
+    order: 3;
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .signout {
+    margin-left: auto;
+  }
+
+  main,
+  footer {
+    padding: 0 var(--s-4);
+  }
+
+  .panel {
+    padding: var(--s-4);
+  }
+
+  .kv {
+    grid-template-columns: 1fr;
+    gap: 0 0;
+  }
+
+  .kv dd {
+    margin-bottom: var(--s-3);
+  }
+}
+
+/* -- print ----------------------------------------------------------------
+ *
+ * A covenant summary printed into an audit pack should carry the figures and
+ * the evidence, and none of the navigation. */
+
+@media print {
+  .topbar,
+  footer,
+  button,
+  .review-actions {
+    display: none;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .panel {
+    box-shadow: none;
+    border-color: #ccc;
+    break-inside: avoid;
+  }
+
+  .chunk {
+    max-height: none;
+    overflow: visible;
+  }
+}

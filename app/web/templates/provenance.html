@@ -8,8 +8,8 @@
     <dt>Document</dt><dd>{{ p.document_filename or '—' }}</dd>
     <dt>Page</dt><dd>{{ p.source.page_number }}</dd>
     <dt>Section</dt><dd>{{ p.source.section_title or '—' }}</dd>
-    <dt>Clause type</dt><dd>{{ p.source.clause_type.value.replace('_', ' ') }}</dd>
-    <dt>Extracted by</dt><dd>{{ p.method.value }}</dd>
+    <dt>Clause type</dt><dd>{{ p.source.clause_type.value | label }}</dd>
+    <dt>Extracted by</dt><dd>{{ p.method.value | label }}</dd>
     <dt>Confidence</dt>
     <dd>
       {% if p.confidence is none %}—
@@ -50,7 +50,7 @@
     {%- endif -%}
   </div>
   {% if p.quote_start is none %}
-    <p class="muted" style="font-size:0.82rem">
+    <p class="caption">
       The quote could not be located within this chunk, so nothing is highlighted.
       The verbatim quote recorded against the clause is below.
     </p>
@@ -70,7 +70,7 @@
   <tbody>
     {% for c in p.covenants %}
     <tr>
-      <td>{{ c.covenant_type.value.replace('_', ' ') }}</td>
+      <td>{{ c.covenant_type.value | label }}</td>
       <td>{{ c.summary or '—' }}</td>
       <td class="num">
         {% if c.threshold_amount is not none %}{{ c.threshold_amount | money(c.threshold_currency) }}
@@ -78,7 +78,7 @@
           {{ c.thresholds['ratio'] }}×
         {% else %}—{% endif %}
       </td>
-      <td>{{ c.severity.value }}</td>
+      <td>{{ c.severity.value | label }}</td>
     </tr>
     {% endfor %}
   </tbody>

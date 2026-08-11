@@ -16,6 +16,9 @@ The convention:
 * Money never passes through a float, on either side. `HoldingRead` says why: a
   `Decimal` crosses the wire as a JSON string precisely so that a client cannot
   quietly turn RM300,000,000.05 into a double.
+* An enum is a value, not a label. `financial_covenant` is what the database
+  holds; `Financial covenant` is what a person reads. Acronyms survive the
+  trip, because `Llm` is worse than `llm` was.
 * Confidence is a percentage. `0.78` is a number an analyst has to convert
   before they can compare it to the 85% review bar; `78%` is one they can read
   against it at a glance.
@@ -57,6 +60,40 @@ def money(value: Decimal | str | None, currency: str | None = None) -> str:
         amount = _trim(f"{sign}{int(whole):,}" + (f".{fraction}" if fraction else ""))
 
     return f"{currency} {amount}" if currency else amount
+
+
+# Words that are not words. Sentence-casing these produces `Llm`, `Spv`,
+# `Isin` -- which reads as a typo rather than as an initialism.
+_ACRONYMS = frozenset(
+    {"llm", "vlm", "ocr", "spv", "isin", "nav", "id", "pdf", "fts", "sql", "api", "url", "vat"}
+)
+
+
+def label(value: object) -> str:
+    """A controlled-vocabulary value, as a person would write it.
+
+    >>> label("financial_covenant")
+    'Financial covenant'
+    >>> label("llm")
+    'LLM'
+    >>> label("rating_report")
+    'Rating report'
+    """
+    if value is None:
+        return EM_DASH
+    # `StrEnum` members stringify to their value, which is what we want here.
+    words = str(value).strip().replace("_", " ").split()
+    if not words:
+        return EM_DASH
+
+    rendered = [w.upper() if w.lower() in _ACRONYMS else w for w in words]
+    first = rendered[0]
+    if first.lower() not in _ACRONYMS:
+        # Sentence case, not title case: "Rating report", not "Rating Report".
+        # Only the first word is lifted, and a word that is already capitalised
+        # (a proper noun the data carries, like Ijarah) keeps its shape.
+        first = first[0].upper() + first[1:]
+    return " ".join([first, *rendered[1:]])
 
 
 def confidence(value: float | None) -> str:

@@ -18,7 +18,7 @@
     <tr>
       <td><a href="/ui/instruments/{{ i.id }}">{{ i.instrument_name }}</a></td>
       <td>{{ i.issuer_name }}</td>
-      <td>{{ i.sukuk_structure.value }}</td>
+      <td>{{ i.sukuk_structure.value | label }}</td>
       {# Sorted by rank elsewhere, never by this string: 'AA-' < 'A+' lexically
          and the reverse ordinally (CLAUDE.md 6). The agency and the canonical
          notch are shown for the same reason -- AA3 and AA- are one notch on

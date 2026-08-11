@@ -7,7 +7,7 @@
 <div class="panel">
   <dl class="kv">
     <dt>Issuer</dt><dd>{{ i.issuer_name }}</dd>
-    <dt>Type</dt><dd>{{ i.instrument_type.value }} · {{ i.sukuk_structure.value }}</dd>
+    <dt>Type</dt><dd>{{ i.instrument_type.value | label }} · {{ i.sukuk_structure.value | label }}</dd>
     <dt>Rating</dt>
     <dd>{{ i.current_rating or '—' }}
       {% if i.rating_agency.value != 'unknown' %}
@@ -29,7 +29,7 @@
 <h2>Sukuk structure</h2>
 <div class="panel">
   <dl class="kv">
-    <dt>Structure</dt><dd>{{ s.structure_type.value }}</dd>
+    <dt>Structure</dt><dd>{{ s.structure_type.value | label }}</dd>
     <dt>SPV</dt><dd>{{ s.spv_name or '—' }}</dd>
     <dt>Originator</dt><dd>{{ s.originator or '—' }}</dd>
     <dt>Underlying asset</dt><dd>{{ s.underlying_asset or '—' }}</dd>
@@ -37,7 +37,7 @@
        undertaking (CLAUDE.md 6), so these are shown as linked but distinct. #}
     <dt>Purchase undertaking</dt>
     <dd>{% if s.purchase_undertaking is none %}—
-        {% elif s.purchase_undertaking %}yes{% else %}no{% endif %}</dd>
+        {% elif s.purchase_undertaking %}Yes{% else %}No{% endif %}</dd>
     <dt>Dissolution events</dt><dd>{{ s.dissolution_events|length }}</dd>
     <dt>Shariah compliance events</dt><dd>{{ s.shariah_compliance_events|length }}</dd>
   </dl>
@@ -55,14 +55,14 @@
   <tbody>
     {% for c in i.covenants %}
     <tr>
-      <td>{{ c.covenant_type.value.replace('_', ' ') }}</td>
+      <td>{{ c.covenant_type.value | label }}</td>
       <td class="num">
         {% if c.threshold_amount is not none %}{{ c.threshold_amount | money(c.threshold_currency) }}
         {% elif c.thresholds.get('ratio') is not none %}{{ c.thresholds['ratio'] }}×
         {% else %}—{% endif %}
       </td>
-      <td>{{ c.severity.value }}</td>
-      <td>{{ c.method.value }}</td>
+      <td>{{ c.severity.value | label }}</td>
+      <td>{{ c.method.value | label }}</td>
       <td>
         {% if c.confidence is none %}—
         {% else %}
@@ -98,7 +98,7 @@
       <td>{{ t.rating_agency.value }}</td>
       <td>{{ t.trigger_rating }}</td>
       <td>{{ t.trigger_rank }}</td>
-      <td>{{ t.trigger_direction.value.replace('_', ' ') }}</td>
+      <td>{{ t.trigger_direction.value | label }}</td>
       <td>{{ t.consequence }}</td>
       <td>{% if t.source_clause_id %}
           <a href="/ui/clauses/{{ t.source_clause_id }}">source</a>{% else %}—{% endif %}</td>
@@ -121,7 +121,7 @@
     <tr>
       <td>{{ c.call_date }}</td>
       <td class="num">{{ c.call_price | money }}</td>
-      <td>{{ c.call_type.value }}</td>
+      <td>{{ c.call_type.value | label }}</td>
       <td>{% if c.source_clause_id %}
           <a href="/ui/clauses/{{ c.source_clause_id }}">source</a>{% else %}—{% endif %}</td>
     </tr>
