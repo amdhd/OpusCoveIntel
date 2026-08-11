@@ -1,0 +1,89 @@
+<h1>Instruments</h1>
+
+@if (error()) {
+  <p class="alert error">{{ error() }}</p>
+}
+
+<section class="panel">
+  @if (loading()) {
+    <p class="muted">Loading…</p>
+  } @else if (instruments().length === 0) {
+    <p class="empty">No instruments. Run <code>make seed</code> or ingest a document.</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>instrument</th>
+          <th>issuer</th>
+          <th>rating</th>
+          <th>structure</th>
+          <th class="num">issue size</th>
+          <th>matures</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (instrument of instruments(); track instrument.id) {
+          <tr (click)="select(instrument)" style="cursor: pointer">
+            <td>{{ instrument.instrument_name }}</td>
+            <td class="muted">{{ instrument.issuer_name }}</td>
+            <td>
+              {{ instrument.current_rating ?? '—' }}
+              <span class="muted">{{ instrument.rating_agency }}</span>
+            </td>
+            <td class="muted">{{ instrument.sukuk_structure }}</td>
+            <td class="num">{{ instrument.issue_size ?? '—' }}</td>
+            <td>{{ instrument.maturity_date ?? '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>
+
+@if (selected(); as instrument) {
+  <section class="panel">
+    <h2 style="margin-top: 0">{{ instrument.instrument_name }} — covenants</h2>
+
+    @if (covenants().length === 0) {
+      <p class="empty">No covenants extracted for this instrument.</p>
+    } @else {
+      <table>
+        <thead>
+          <tr>
+            <th>type</th>
+            <th>summary</th>
+            <th>threshold</th>
+            <th>method</th>
+            <th class="num">confidence</th>
+            <th>source</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (covenant of covenants(); track covenant.id) {
+            <tr>
+              <td>{{ covenant.covenant_type }}</td>
+              <td class="muted">{{ covenant.summary ?? '—' }}</td>
+              <td>{{ covenant.threshold_amount ?? '—' }}</td>
+              <td class="muted">{{ covenant.method }}</td>
+              <td class="num">
+                <!-- Under the review threshold, a figure is not settled. -->
+                <span [class.low-confidence]="lowConfidence(covenant)">
+                  {{ covenant.confidence ?? '—' }}
+                </span>
+              </td>
+              <td>
+                @if (covenant.source.clause_id) {
+                  <a href="/ui/provenance/{{ covenant.source.clause_id }}">
+                    page {{ covenant.source.page_number }} ↗
+                  </a>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+}
