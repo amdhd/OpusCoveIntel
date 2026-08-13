@@ -116,3 +116,41 @@ export class MoneyPipe implements PipeTransform {
     return money(value, currency);
   }
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * An ISO-8601 instant, as `2026-08-07T09:06:01.509898Z`. The microseconds and
+ * the `Z` are the whole value; the date and time are pulled out by group.
+ */
+const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/;
+
+/**
+ * A stored timestamp as a person reads it: `7 Aug 2026, 09:06:01 UTC`.
+ *
+ * These are `TIMESTAMPTZ` values, always UTC, and the raw ISO string with its
+ * microseconds and trailing `Z` is unreadable in a table. Rendered by string
+ * surgery rather than `Date`/`toLocaleString` for the same reason `money` is:
+ * the output must not shift with the host's timezone or locale. An audit reads
+ * the same instant on every machine, and UTC is named so nobody has to guess.
+ */
+export function timestamp(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === '') {
+    return EM_DASH;
+  }
+  const match = ISO_INSTANT.exec(value.trim());
+  if (match === null) {
+    // Not an instant we recognise -- show it rather than swallowing it.
+    return value.trim();
+  }
+  const [, year, month, day, hour, minute, second] = match;
+  const monthName = MONTHS[Number(month) - 1];
+  return `${Number(day)} ${monthName} ${year}, ${hour}:${minute}:${second} UTC`;
+}
+
+@Pipe({ name: 'timestamp' })
+export class TimestampPipe implements PipeTransform {
+  transform(value: string | null | undefined): string {
+    return timestamp(value);
+  }
+}

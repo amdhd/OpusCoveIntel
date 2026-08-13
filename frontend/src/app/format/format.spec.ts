@@ -6,7 +6,15 @@
  * only way to notice they have drifted is to assert the same table on both
  * sides.
  */
-import { belowReviewBar, confidence, EM_DASH, label, money, REVIEW_THRESHOLD } from './format';
+import {
+  belowReviewBar,
+  confidence,
+  EM_DASH,
+  label,
+  money,
+  REVIEW_THRESHOLD,
+  timestamp,
+} from './format';
 
 // [value, currency, expected]
 const CASES: [string, string | null, string][] = [
@@ -107,6 +115,27 @@ describe('label', () => {
   for (const empty of [null, undefined, '', '   ']) {
     it(`renders ${JSON.stringify(empty)} as a dash`, () => {
       expect(label(empty)).toBe(EM_DASH);
+    });
+  }
+});
+
+describe('timestamp', () => {
+  // The defect this landed for: a raw TIMESTAMPTZ off the status endpoint.
+  it('reads a stored instant as a person would, in UTC', () => {
+    expect(timestamp('2026-08-07T09:06:01.509898Z')).toBe('7 Aug 2026, 09:06:01 UTC');
+  });
+
+  it('does not shift with microseconds or a missing fraction', () => {
+    expect(timestamp('2026-12-25T00:00:00Z')).toBe('25 Dec 2026, 00:00:00 UTC');
+  });
+
+  it('leaves something it does not recognise alone rather than swallowing it', () => {
+    expect(timestamp('not a date')).toBe('not a date');
+  });
+
+  for (const empty of [null, undefined, '']) {
+    it(`renders ${JSON.stringify(empty)} as a dash`, () => {
+      expect(timestamp(empty)).toBe(EM_DASH);
     });
   }
 });

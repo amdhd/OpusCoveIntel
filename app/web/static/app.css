@@ -466,7 +466,7 @@ button.link {
   cursor: pointer;
 }
 
-button.link:hover {
+button.link:not(:disabled):hover {
   background: none;
   text-decoration-color: currentColor;
 }
@@ -605,7 +605,6 @@ label {
 
 input[type="text"],
 input[type="password"],
-input[type="file"],
 textarea,
 select {
   width: 100%;
@@ -624,6 +623,21 @@ input[type="password"]:hover,
 textarea:hover,
 select:hover {
   border-color: var(--n-500);
+}
+
+/* Hidden from the layout and from assistive technology, but still in the DOM
+ * and still clickable in script. The file input uses this: the native picker
+ * dialog is worth keeping, the native button beside it is not. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 input[type="text"]:focus,
@@ -660,12 +674,18 @@ button {
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
-button:hover {
+/* Every interactive state is scoped away from `:disabled`, and that is not
+ * belt-and-braces. `button.primary:hover` is (0,2,1) and `button:disabled` is
+ * (0,1,1), so hover won the background while `:disabled` still won the colour:
+ * a disabled Upload button turned solid accent with muted grey text under the
+ * pointer -- illegible, and it looked live while refusing the click. The same
+ * trap caught `.danger:hover` and the ask screen's example chips. */
+button:not(:disabled):hover {
   background: var(--n-50);
   border-color: var(--n-500);
 }
 
-button:active {
+button:not(:disabled):active {
   background: var(--n-100);
 }
 
@@ -675,12 +695,12 @@ button.primary {
   color: #fff;
 }
 
-button.primary:hover {
+button.primary:not(:disabled):hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
 
-button.primary:active {
+button.primary:not(:disabled):active {
   background: var(--accent-pressed);
   border-color: var(--accent-pressed);
 }
@@ -693,7 +713,7 @@ button.danger {
   border-color: var(--breach-stroke);
 }
 
-button.danger:hover {
+button.danger:not(:disabled):hover {
   background: var(--breach-bg);
   border-color: var(--breach);
 }
@@ -706,6 +726,7 @@ button.on {
   background: var(--accent-subtle);
 }
 
+/* One appearance for every disabled button, whatever else it is wearing. */
 button:disabled {
   color: var(--muted);
   background: var(--n-100);
@@ -878,7 +899,7 @@ button:disabled {
   text-align: left;
 }
 
-.examples button:hover {
+.examples button:not(:disabled):hover {
   color: var(--ink);
   border-color: var(--accent);
 }
