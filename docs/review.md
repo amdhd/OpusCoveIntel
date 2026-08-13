@@ -30,15 +30,16 @@ so what was true at `dc30321` remains readable.
 | 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Open |
 | 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Open |
 | 10 | Vision/OCR path has never run against a real provider | Coverage | Medium | Open |
-| 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Open |
+| 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Part-fixed |
 | 12 | No dependency vulnerability scanning in CI | Security | Low | Open |
 | 13 | Review-queue pages are unbounded | Performance | Low | Open |
 | 14 | Agent answers a question about one instrument with all of them | Correctness | Medium | Fixed |
 | 15 | A covenant question about one document is answered from every document | Correctness | **High** | Fixed |
+| 16 | Ingesting a document does not make it searchable | Correctness | **High** | Fixed |
 
-Findings 14 and 15 were found after the original audit — 14 on 2026-08-10 while fixing 6, and 15 on
-2026-08-13 by a user asking an ordinary question about a document they had uploaded. Their entries
-are at the end of the Correctness section.
+Findings 14, 15 and 16 were found after the original audit — 14 on 2026-08-10 while fixing 6, and
+15 and 16 on 2026-08-13, both from one user asking an ordinary question about a document they had
+uploaded. Their entries are at the end of the Correctness section.
 
 ---
 
@@ -405,6 +406,44 @@ did not.
 A question that names nothing still returns the whole corpus, which is what makes "what
 cross-default thresholds do we have?" answerable.
 
+### 16. Ingesting a document does not make it searchable — High
+
+*Found 2026-08-13, alongside finding 15 and by the same user. It is why finding 15 was reachable
+at all.*
+
+**Checked:** the corpus, against the columns retrieval actually reads.
+
+```
+Dubai_12B_Project_Drive_-_Base_Prospectus_1.pdf   870 chunks   0 embedded   0 fts
+2021-trust-certificate-prospectus.pdf            2677 chunks   0 embedded   0 fts
+2025-gmtn-prospectus.pdf                         2620 chunks   0 embedded   0 fts
+```
+
+Every real document in the corpus was invisible to every question asked about it. Not
+under-ranked — **absent**: the vector leg reads `embedding` and the keyword leg reads `fts`, and
+both were null for 6,167 of 6,200 chunks.
+
+Ingestion stopped at `chunked`. Indexing was `opuscovintel index`, a separate command, and the
+Documents screen reported those documents with a healthy status and no hint that nothing could
+find them. So the user asked about a document that was, as far as retrieval was concerned, not
+there — and finding 15 answered from the synthetic fixtures instead.
+
+Two failures compounding: a pipeline with a manual step in the middle, and an interface that
+called the step before it "done".
+
+**Fixed.** `ingest_and_index` parses, chunks and indexes as one operation, used by the worker and
+by `POST /documents/{id}/process` alike — the endpoint matters because a document ingested through
+it leaves no queued parse job for the worker to claim, so it would never have been indexed at all.
+
+The status endpoint gained `searchable`, and `terminal` now also requires that no job is still
+queued or running: a document whose `embed` job is pending is not finished, and the client polls
+until the server says it is. The Documents screen says which of the two a document is, and the
+corpus list marks the ones that are ingested and unfindable — the three above stay marked until
+someone runs `opuscovintel index`, which is the honest thing for it to say.
+
+Asserted on the columns rather than the status: a test that checked `status == "embedded"` would
+pass against a pipeline that set the status and indexed nothing.
+
 ---
 
 ## Performance
@@ -484,6 +523,26 @@ This now matters more: the real corpus is ~6,000 chunks rather than ~20.
 **Fix:** close [PLAN.md §9 Q2](../PLAN.md) (endpoint region and dimensionality) *before* indexing.
 1024 dimensions is baked into the schema; changing it later means re-embedding everything and
 rebuilding the HNSW index.
+
+**Half fixed — the decision, not the key.** §9 Q2 is closed: international endpoint, 1024
+dimensions, keep both. The schema, the HNSW index and `VECTOR_DIMENSION` already agree on 1024, and
+nothing measured argues for a wider vector at ~6,000 chunks. What remains is a funded
+`QWEN_API_KEY`, a re-index, and a re-baseline — which is Phase 10.4 and is not something a code
+change can close.
+
+**What did change is that running on the placeholder is no longer silent**, which is what made this
+finding cost a user an hour. Asking about a real prospectus returned a page of legal advisers and
+two director biographies above the negative-pledge clause, and nothing anywhere said that only the
+keyword leg was answering. Now:
+
+* the fallback logs once per process, naming the reason and the consequence — *"the vector leg of
+  hybrid retrieval carries no semantic signal; only keyword matching is answering"*;
+* a query whose vector leg matched **nothing** because the corpus was indexed by a different model
+  says so, and names both models. That is the trap waiting for the day the key is added:
+  `search_by_vector` filters to chunks embedded by the same model, correctly, and the failure mode
+  of that filter is silence.
+
+Neither is retrieval quality. They are the difference between a known limitation and a mystery.
 
 ---
 
