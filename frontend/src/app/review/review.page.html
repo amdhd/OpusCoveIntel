@@ -23,9 +23,12 @@
 }
 
 @if (loading()) {
-  <p class="muted">Loading…</p>
+  <div class="loading" role="status">
+      <progress></progress>
+      <span>Loading the queue…</span>
+    </div>
 } @else if (items().length === 0) {
-  <p class="empty">Nothing pending. </p>
+  <p class="empty">Nothing is waiting for review. Every extracted field has been decided.</p>
 } @else {
   @for (item of items(); track item.id) {
     <section class="panel review-item">
@@ -90,14 +93,26 @@
             </button>
           </span>
 
-          <button
-            class="danger"
-            type="button"
-            (click)="reject(item)"
-            [disabled]="busy() === item.id"
-          >
-            Reject
-          </button>
+          <!-- The reason is required by `POST /review/{id}/reject`, and it is
+               required here for the same purpose: a rejection nobody explained
+               is a gap in the audit trail, and the extractor cannot be improved
+               from a decision with no stated cause. -->
+          <span class="control-group">
+            <input
+              type="text"
+              name="rejection-{{ item.id }}"
+              placeholder="Reason for rejecting"
+              [(ngModel)]="rejections[item.id]"
+            />
+            <button
+              class="danger"
+              type="button"
+              (click)="reject(item)"
+              [disabled]="busy() === item.id"
+            >
+              Reject
+            </button>
+          </span>
         </div>
       } @else {
         <!-- Not a row of disabled buttons: a disabled control with no

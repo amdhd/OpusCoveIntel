@@ -444,8 +444,37 @@ tbody tr.selected > td {
   background: var(--accent-subtle);
 }
 
-tbody tr.clickable {
+/* A control that reads as a link but is a button, because it acts on this
+ * page rather than navigating to another one. Anything that changes what is
+ * on screen has to be reachable by keyboard, and a `<tr>` with a click
+ * handler is not. */
+button.link {
+  padding: 0;
+  min-height: 0;
+  font: inherit;
+  font-weight: 500;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: none;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 2px;
+  white-space: normal;
   cursor: pointer;
+}
+
+button.link:hover {
+  background: none;
+  text-decoration-color: currentColor;
+}
+
+button.link[aria-pressed="true"] {
+  color: var(--ink);
+  text-decoration: none;
+  cursor: default;
 }
 
 .muted {
@@ -456,6 +485,25 @@ tbody tr.clickable {
   color: var(--muted);
   padding: var(--s-4) 0;
   margin: 0;
+}
+
+/* Waiting, said once and out loud.
+ *
+ * `role="status"` because a screen reader gets nothing from text that simply
+ * appears, and the indeterminate bar because the time is genuinely unknown --
+ * the same reason the ingestion panel uses one. It reserves its own height, so
+ * the content that replaces it does not jump the page. */
+.loading {
+  display: grid;
+  gap: var(--s-3);
+  align-content: start;
+  min-height: 4rem;
+  padding: var(--s-4) 0;
+  color: var(--muted);
+}
+
+.loading progress {
+  max-width: 16rem;
 }
 
 .panel > :first-child {
@@ -800,6 +848,39 @@ button:disabled {
 .citation .meta {
   font-size: var(--text-caption);
   color: var(--muted);
+}
+
+/* Example questions. Chips rather than a bulleted list: they are controls,
+ * and they should not look like the answer's prose. */
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--n-100);
+}
+
+.examples p {
+  margin: 0;
+  width: 100%;
+}
+
+.examples button {
+  min-height: 0;
+  padding: var(--s-1) var(--s-3);
+  font-weight: 450;
+  font-size: var(--text-caption);
+  color: var(--n-600);
+  border-radius: 999px;
+  white-space: normal;
+  text-align: left;
+}
+
+.examples button:hover {
+  color: var(--ink);
+  border-color: var(--accent);
 }
 
 /* -- provenance ---------------------------------------------------------- */

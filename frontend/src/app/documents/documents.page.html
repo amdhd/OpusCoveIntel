@@ -120,9 +120,15 @@
   <h2>In the corpus</h2>
 
   @if (loading()) {
-    <p class="muted">Loading…</p>
+    <div class="loading" role="status">
+      <progress></progress>
+      <span>Loading the corpus…</span>
+    </div>
   } @else if (documents().length === 0) {
-    <p class="empty">Nothing ingested yet.</p>
+    <p class="empty">
+      Nothing ingested yet. Upload a PDF above, or run
+      <code>opuscovintel ingest &lt;path&gt;</code>.
+    </p>
   } @else {
     <table>
       <thead>
