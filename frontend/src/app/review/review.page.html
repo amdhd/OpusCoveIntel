@@ -23,9 +23,12 @@
 }
 
 @if (loading()) {
-  <p class="muted">Loading…</p>
+  <div class="loading" role="status">
+      <progress></progress>
+      <span>Loading the queue…</span>
+    </div>
 } @else if (items().length === 0) {
-  <p class="empty">Nothing pending. </p>
+  <p class="empty">Nothing is waiting for review. Every extracted field has been decided.</p>
 } @else {
   @for (item of items(); track item.id) {
     <section class="panel review-item">

@@ -6,7 +6,10 @@
 
 <section class="panel">
   @if (loading()) {
-    <p class="muted">Loading…</p>
+    <div class="loading" role="status">
+      <progress></progress>
+      <span>Loading instruments…</span>
+    </div>
   } @else if (instruments().length === 0) {
     <p class="empty">No instruments. Run <code>make seed</code> or ingest a document.</p>
   } @else {
@@ -82,7 +85,10 @@
     <h2>{{ instrument.instrument_name }} — covenants</h2>
 
     @if (covenants().length === 0) {
-      <p class="empty">No covenants extracted for this instrument.</p>
+      <p class="empty">
+        No covenants extracted for this instrument yet. Ingest its prospectus or trust deed,
+        then run extraction.
+      </p>
     } @else {
       <table>
         <thead>

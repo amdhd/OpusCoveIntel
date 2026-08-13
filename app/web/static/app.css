@@ -487,6 +487,25 @@ button.link[aria-pressed="true"] {
   margin: 0;
 }
 
+/* Waiting, said once and out loud.
+ *
+ * `role="status"` because a screen reader gets nothing from text that simply
+ * appears, and the indeterminate bar because the time is genuinely unknown --
+ * the same reason the ingestion panel uses one. It reserves its own height, so
+ * the content that replaces it does not jump the page. */
+.loading {
+  display: grid;
+  gap: var(--s-3);
+  align-content: start;
+  min-height: 4rem;
+  padding: var(--s-4) 0;
+  color: var(--muted);
+}
+
+.loading progress {
+  max-width: 16rem;
+}
+
 .panel > :first-child {
   margin-top: 0;
 }
