@@ -242,10 +242,14 @@ export interface paths {
         put?: never;
         /**
          * Parse and chunk now, without waiting for the worker
-         * @description Run ingestion inline.
+         * @description Run ingestion inline, including indexing.
          *
          *     The worker picks queued documents up on its own; this exists for operators
          *     and demos that do not want to wait for a poll interval.
+         *
+         *     Indexing is part of it. A document ingested through this endpoint has no
+         *     queued parse job left for the worker to claim, so if this path stopped at
+         *     chunked the document would never become searchable at all.
          */
         post: operations["process_document_documents__document_id__process_post"];
         delete?: never;
@@ -877,6 +881,8 @@ export interface components {
             pages_flagged_for_vlm: number;
             /** Parse Confidence */
             parse_confidence: number | null;
+            /** Searchable */
+            searchable: boolean;
             status: components["schemas"]["DocumentStatus"];
             /** Terminal */
             terminal: boolean;

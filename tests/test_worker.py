@@ -58,8 +58,13 @@ async def test_a_queued_document_is_claimed_and_ingested(
     assert processed == 1
     document = await ingestion_service.get_document(outcome.document.id)
     assert document is not None
-    assert document.status is DocumentStatus.CHUNKED
-    assert len(await ingestion_service.list_chunks(outcome.document.id)) > 0
+    # `embedded`, not `chunked`: the worker indexes what it ingests. A document
+    # left at chunked is in the corpus and findable by nothing, and the step
+    # that used to fix that was a CLI command nobody ran.
+    assert document.status is DocumentStatus.EMBEDDED
+    chunks = await ingestion_service.list_chunks(outcome.document.id)
+    assert len(chunks) > 0
+    assert all(chunk.embedding is not None for chunk in chunks)
 
 
 async def test_an_empty_queue_does_no_work(ingestion_service: IngestionService) -> None:

@@ -429,6 +429,51 @@ class IngestionService:
         return sum(1 for page in pages if page.vlm_reason)
 
 
+async def ingest_and_index(
+    session: AsyncSession,
+    store: ObjectStore,
+    document_id: uuid.UUID,
+    settings: Settings | None = None,
+) -> IngestionOutcome:
+    """Parse and chunk a document, then make it searchable.
+
+    **Ingesting used to stop at chunked.** Indexing was a separate `opuscovintel
+    index` nobody ran, so a document could sit in the corpus, appear on the
+    Documents screen with a healthy status, and be invisible to every question
+    asked about it -- both retrieval legs read columns that were still null. A
+    user uploaded three real prospectuses, asked about one, and was answered
+    from the synthetic fixtures instead (docs/review.md, findings 11 and 15).
+
+    One function rather than a step in each caller: the worker and the
+    `/documents/{id}/process` endpoint both ingest, and a document that reached
+    the corpus through the endpoint would otherwise never be indexed at all --
+    the worker has no queued parse job left to claim.
+
+    Indexing failures propagate. The document is parsed either way, and the
+    `embed` job records the failure, so the status endpoint shows a document
+    that is ingested and not searchable rather than silently claiming both.
+    """
+    # Imported here rather than at module scope: `app.retrieval` pulls in the
+    # embedder and its provider configuration, and ingestion is used by paths
+    # (the CLI's `ingest`, the upload endpoint) that must keep working when
+    # none of that is configured.
+    from app.retrieval.indexing import IndexingService
+
+    outcome = await IngestionService(session, store, settings).process(document_id)
+    indexed = await IndexingService(session).index_document(document_id)
+    await session.commit()
+
+    logger.info(
+        "document ingested and indexed",
+        extra={
+            "document_id": str(document_id),
+            "chunks_embedded": indexed.chunks_embedded,
+            "embedding_model": indexed.embedding_model,
+        },
+    )
+    return outcome
+
+
 def _assert_spans_are_real(parsed: ParsedDocument, drafts: list[ChunkDraft]) -> None:
     """Refuse to persist a chunk whose offsets do not reproduce its text.
 

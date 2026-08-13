@@ -206,7 +206,12 @@ async def test_a_processed_document_reports_terminal_with_its_counts(
     status = (await api_client.get(f"/documents/{document_id}/status")).json()
 
     assert status["terminal"] is True
-    assert status["status"] == "chunked"
+    # `embedded`, not `chunked`: processing indexes as well as parses, because
+    # a document that stops at chunked is in the corpus and invisible to every
+    # question asked about it.
+    assert status["status"] == "embedded"
+    assert status["searchable"] is True
+    assert [job["job_type"] for job in status["jobs"]] == ["parse", "chunk", "embed"]
     assert status["page_count"] and status["page_count"] > 0
     assert status["chunk_count"] > 0
     assert status["jobs"][0]["status"] == "succeeded"
@@ -259,3 +264,45 @@ async def test_status_is_404_for_a_document_that_does_not_exist(
     api_client: AsyncClient,
 ) -> None:
     assert (await api_client.get(f"/documents/{uuid.uuid4()}/status")).status_code == 404
+
+
+async def test_an_uploaded_document_is_not_yet_searchable(api_client: AsyncClient) -> None:
+    """Ingested is not the same as findable, and the screen must not merge them.
+
+    A document reported "done" at `chunked` is one an analyst will ask about
+    and be answered from somewhere else entirely (docs/review.md, finding 15).
+    """
+    document_id = (await upload(api_client)).json()["document"]["id"]
+
+    status = (await api_client.get(f"/documents/{document_id}/status")).json()
+
+    assert status["searchable"] is False
+
+
+async def test_processing_makes_a_document_findable(
+    api_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Indexing is part of ingesting now, not a separate command nobody runs.
+
+    Asserted on the columns retrieval actually reads: an embedding and a text
+    search vector. Checking the status alone would pass on a pipeline that set
+    the status and indexed nothing.
+    """
+    from app.db.models.documents import DocumentChunk
+
+    document_id = (await upload(api_client)).json()["document"]["id"]
+    await api_client.post(f"/documents/{document_id}/process")
+
+    chunks = (
+        (
+            await db_session.execute(
+                select(DocumentChunk).where(DocumentChunk.document_id == uuid.UUID(document_id))
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    assert chunks
+    assert all(chunk.embedding is not None for chunk in chunks)
+    assert all(chunk.fts is not None for chunk in chunks)

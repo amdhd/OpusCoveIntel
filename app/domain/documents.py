@@ -125,6 +125,11 @@ class DocumentStatusRead(BaseModel):
     document_id: uuid.UUID
     filename: str
     status: DocumentStatus
+    # Whether a question asked about this document can actually reach it.
+    # `chunked` means ingested and invisible: both retrieval legs read columns
+    # that indexing populates, so a screen reporting "done" at that point is
+    # describing the parse, not the document (docs/review.md, findings 11, 15).
+    searchable: bool
     page_count: int | None
     chunk_count: int
     pages_flagged_for_vlm: int

@@ -261,9 +261,12 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
 3. **Live-verify the VLM.** Wired (`opuscovintel ocr`) and never once run against a real
    provider; blocked on OpenAI credit. Closes §9 Q3.
 4. **Real embeddings and the semantic candidate legs.** Everything runs on
-   `HashingEmbedder`, so the vector leg of hybrid retrieval is noise and the FTS/kNN
-   candidate legs default off. Close §9 Q2 **before** indexing: 1024 dims is baked into the
-   schema, and changing it means re-embedding the corpus and rebuilding the HNSW index.
+   `HashingEmbedder`, so the vector leg of hybrid retrieval is lexical only and the FTS/kNN
+   candidate legs default off. §9 Q2 is **closed** — international endpoint, 1024 dims, keep
+   both — so what is left is a funded `QWEN_API_KEY`, a re-index, and a re-baseline of the
+   retrieval numbers, which today describe keyword matching. Running on the placeholder is no
+   longer silent: the fallback and any index/query model mismatch are logged with what they
+   cost.
 5. ~~**Refuse more.**~~ ✅ The agent answered some unsupported questions at 0.95 confidence —
    the intent classifier routed them to `instrument_lookup`, which answers from structured rows
    without needing retrieval, so the refusal path was never reached, and the golden set missed it
@@ -346,9 +349,19 @@ production HA/DR.
 1. **Real documents.** Everything below assumes synthetic fixtures. When do licensed prospectuses
    become available? Regex and chunking heuristics will need retuning against real layouts, and
    that is the single biggest source of schedule risk.
-2. **Qwen embedding endpoint.** DashScope international vs. mainland endpoint — which region, and is
-   `text-embedding-v4` at 1024 dims the right dimensionality? (Changing dims later means re-embedding
-   the whole corpus and an index rebuild.)
+2. ~~**Qwen embedding endpoint.**~~ **Closed 2026-08-13: international endpoint, 1024 dims, keep
+   both.** `QWEN_BASE_URL` already points at `dashscope-intl`, which is the right side of the
+   Malaysian data-residency question and the one the account can reach. `text-embedding-v4`
+   supports 1024, the schema is built for it (`vector(1024)`, an HNSW index and
+   `VECTOR_DIMENSION`), and nothing measured says a wider vector would pay for a corpus of
+   ~6,000 chunks. Changing it later costs a re-embed and an index rebuild; changing it *now*
+   would cost the same and buy an untested guess.
+
+   What remains is not a decision but a key. Until `QWEN_API_KEY` is set the deployment runs on
+   `HashingEmbedder`, and it now says so: the fallback logs the consequence once per process, and
+   a query whose vector leg matched nothing because the corpus was indexed by a different model
+   says that rather than degrading to keyword-only in silence. Re-baseline retrieval after the
+   first real index (Phase 10.4) — the current numbers describe lexical matching.
 3. **GPT vision model ID.** Env-configured; needs a current, verified ID and its per-image token cost
    before the VLM cap can be tuned sensibly.
 4. **Portfolio holdings source.** CSV upload for MVP, or a read-only feed from the existing PMS?

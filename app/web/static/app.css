@@ -777,6 +777,15 @@ button:disabled {
   color: var(--n-600);
 }
 
+/* Amber: something needs doing before this screen tells the whole truth --
+ * a document ingested but not indexed, say. Not `.error`, because nothing has
+ * gone wrong; not `.info`, because it is not just background. */
+.alert.warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-stroke);
+  color: var(--warn);
+}
+
 /* -- status -------------------------------------------------------------- */
 
 .status {

@@ -128,13 +128,41 @@ class HybridSearcher:
         document_id: uuid.UUID | None = None,
     ) -> list[tuple[DocumentChunk, float]]:
         vectors = await self._embedder.embed([query])
-        return list(
+        hits = list(
             await self._chunks.search_by_vector(
                 vectors[0],
                 limit=limit,
                 document_id=document_id,
                 embedding_model=self._embedder.model_id,
             )
+        )
+        if not hits:
+            await self._explain_an_empty_vector_leg()
+        return hits
+
+    async def _explain_an_empty_vector_leg(self) -> None:
+        """Say why, when the vector leg matched nothing at all.
+
+        `search_by_vector` filters to chunks embedded by the *same* model,
+        because comparing vectors from two models is meaningless. That filter
+        is right, and its failure mode is silence: point a deployment with a
+        real key at a corpus indexed by the placeholder and every query quietly
+        becomes keyword-only, with results that look like ordinary bad results.
+
+        Only reached when the leg is empty, so the count runs once per failed
+        query rather than on the hot path.
+        """
+        indexed = await self._chunks.embedding_models()
+        others = sorted(model for model in indexed if model != self._embedder.model_id)
+        if not others:
+            return  # An empty or unindexed corpus, which is not a mismatch.
+        logger.warning(
+            "the vector leg matched nothing: the corpus was indexed by another model",
+            extra={
+                "querying_with": self._embedder.model_id,
+                "corpus_indexed_by": others,
+                "remedy": "re-index with `opuscovintel index` so both agree",
+            },
         )
 
     async def search_fts(
