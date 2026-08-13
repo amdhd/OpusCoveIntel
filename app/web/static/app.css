@@ -444,8 +444,37 @@ tbody tr.selected > td {
   background: var(--accent-subtle);
 }
 
-tbody tr.clickable {
+/* A control that reads as a link but is a button, because it acts on this
+ * page rather than navigating to another one. Anything that changes what is
+ * on screen has to be reachable by keyboard, and a `<tr>` with a click
+ * handler is not. */
+button.link {
+  padding: 0;
+  min-height: 0;
+  font: inherit;
+  font-weight: 500;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: none;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 2px;
+  white-space: normal;
   cursor: pointer;
+}
+
+button.link:hover {
+  background: none;
+  text-decoration-color: currentColor;
+}
+
+button.link[aria-pressed="true"] {
+  color: var(--ink);
+  text-decoration: none;
+  cursor: default;
 }
 
 .muted {
