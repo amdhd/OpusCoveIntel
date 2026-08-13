@@ -358,16 +358,29 @@ h1 .muted {
 }
 
 /* A table is the one thing on these screens that cannot be made narrower, so
- * it scrolls inside its own card rather than pushing the page sideways. It
- * also loses the card's padding: a row should run the full width of the
- * surface it sits on, and the header rule should meet both edges. */
+ * it scrolls inside its own card rather than pushing the page sideways. */
 .panel:has(> table) {
-  padding: 0;
   overflow-x: auto;
 }
 
-.panel:has(> table) table {
+/* A card that is *only* a table loses the card's padding: a row should run the
+ * full width of the surface, and the header rule should meet both edges. The
+ * `:first-child` guard is load-bearing -- a detail card that leads with a
+ * heading and a summary list, with a table among them, is not a table card.
+ * Without the guard the whole card went flush the moment it held a table
+ * anywhere, jamming the title and the pages/chunks list against the edge. */
+.panel:has(> table:first-child) {
+  padding: 0;
+}
+
+.panel > table:first-child {
   margin: 0;
+}
+
+/* A table below a heading or a summary list keeps the card's padding, and sits
+ * off the content above it rather than butting straight against it. */
+.panel > table:not(:first-child) {
+  margin-top: var(--s-4);
 }
 
 table {
