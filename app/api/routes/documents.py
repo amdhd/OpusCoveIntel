@@ -26,13 +26,14 @@ from app.domain.documents import (
     IngestionResponse,
     UploadResponse,
 )
-from app.domain.enums import DocumentStatus, DocumentType, SourceType
+from app.domain.enums import DocumentStatus, DocumentType, JobStatus, SourceType
 from app.ingest.service import (
     IngestionError,
     IngestionService,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
     VlmBudgetExceededError,
+    ingest_and_index,
 )
 from app.ingest.storage import ObjectStore, get_object_store
 
@@ -57,6 +58,19 @@ TERMINAL_STATUSES: frozenset[DocumentStatus] = frozenset(
         DocumentStatus.BUDGET_EXCEEDED,
     }
 )
+
+# A document only counts as searchable once its chunks carry embeddings and a
+# text-search vector. `chunked` means ingested and invisible: both retrieval
+# legs read columns that indexing populates, so a question about a chunked-only
+# document is answered from whatever else is in the corpus (finding 15).
+SEARCHABLE_STATUSES: frozenset[DocumentStatus] = frozenset(
+    {DocumentStatus.EMBEDDED, DocumentStatus.EXTRACTING, DocumentStatus.EXTRACTED}
+)
+
+# Jobs still owed. A document whose status is terminal but whose `embed` job is
+# queued is not finished, and a client that stopped polling there would show
+# "ingested" for a document nothing can find.
+UNFINISHED_JOB_STATUSES: frozenset[JobStatus] = frozenset({JobStatus.QUEUED, JobStatus.RUNNING})
 
 
 def get_ingestion_service(
@@ -195,16 +209,18 @@ async def document_status(
     pages = await service.list_pages(document_id)
 
     failed = next((job for job in jobs if job.error_message), None)
+    owed = any(job.status in UNFINISHED_JOB_STATUSES for job in jobs)
     return DocumentStatusRead(
         document_id=document.id,
         filename=document.filename,
         status=document.status,
+        searchable=document.status in SEARCHABLE_STATUSES,
         page_count=document.page_count,
         chunk_count=chunks,
         pages_flagged_for_vlm=sum(1 for page in pages if page.vlm_reason),
         parse_confidence=document.parse_confidence,
         jobs=[IngestionJobRead.model_validate(job) for job in jobs],
-        terminal=document.status in TERMINAL_STATUSES,
+        terminal=document.status in TERMINAL_STATUSES and not owed,
         error=failed.error_message if failed else None,
     )
 
@@ -216,15 +232,20 @@ async def document_status(
 )
 async def process_document(
     document_id: uuid.UUID,
-    service: IngestionService = Depends(get_ingestion_service),
+    session: AsyncSession = Depends(get_session),
+    store: ObjectStore = Depends(get_object_store),
 ) -> IngestionResponse:
-    """Run ingestion inline.
+    """Run ingestion inline, including indexing.
 
     The worker picks queued documents up on its own; this exists for operators
     and demos that do not want to wait for a poll interval.
+
+    Indexing is part of it. A document ingested through this endpoint has no
+    queued parse job left for the worker to claim, so if this path stopped at
+    chunked the document would never become searchable at all.
     """
     try:
-        outcome = await service.process(document_id)
+        outcome = await ingest_and_index(session, store, document_id)
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="document not found") from exc
     except VlmBudgetExceededError as exc:

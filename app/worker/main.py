@@ -23,7 +23,7 @@ from app.core.logging import configure_logging, get_logger
 from app.db.repositories.ops import ExtractionJobRepository
 from app.db.session import check_database, dispose_engines, get_sessionmaker
 from app.domain.enums import JobType
-from app.ingest.service import IngestionService
+from app.ingest.service import ingest_and_index
 from app.ingest.storage import get_object_store
 
 logger = get_logger(__name__)
@@ -40,7 +40,6 @@ async def process_queued_documents(*, limit: int = MAX_JOBS_PER_PASS) -> int:
     processed = 0
 
     async with get_sessionmaker()() as session:
-        service = IngestionService(session, store, settings)
         for _ in range(limit):
             job = await ExtractionJobRepository(session).claim_next(JobType.PARSE)
             if job is None:
@@ -51,7 +50,10 @@ async def process_queued_documents(*, limit: int = MAX_JOBS_PER_PASS) -> int:
             await session.commit()
 
             try:
-                await service.process(document_id)
+                # Indexed here too: a parsed document that nothing indexed is
+                # invisible to every question asked about it, and the step that
+                # used to do it was a CLI command nobody ran.
+                await ingest_and_index(session, store, document_id, settings)
             except Exception:
                 logger.exception(
                     "document ingestion failed", extra={"document_id": str(document_id)}

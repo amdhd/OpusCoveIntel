@@ -1044,6 +1044,10 @@
             ],
             "title": "Parse Confidence"
           },
+          "searchable": {
+            "title": "Searchable",
+            "type": "boolean"
+          },
           "status": {
             "$ref": "#/components/schemas/DocumentStatus"
           },
@@ -1056,6 +1060,7 @@
           "document_id",
           "filename",
           "status",
+          "searchable",
           "page_count",
           "chunk_count",
           "pages_flagged_for_vlm",
@@ -3003,7 +3008,7 @@
     },
     "/documents/{document_id}/process": {
       "post": {
-        "description": "Run ingestion inline.\n\nThe worker picks queued documents up on its own; this exists for operators\nand demos that do not want to wait for a poll interval.",
+        "description": "Run ingestion inline, including indexing.\n\nThe worker picks queued documents up on its own; this exists for operators\nand demos that do not want to wait for a poll interval.\n\nIndexing is part of it. A document ingested through this endpoint has no\nqueued parse job left for the worker to claim, so if this path stopped at\nchunked the document would never become searchable at all.",
         "operationId": "process_document_documents__document_id__process_post",
         "parameters": [
           {
