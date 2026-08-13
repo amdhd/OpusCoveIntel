@@ -55,6 +55,38 @@ describe('DocumentsPage', () => {
     return TestBed.createComponent(DocumentsPage).componentInstance;
   }
 
+  it('is one control that chooses, then uploads', () => {
+    // The screen used to show the browser's "Choose File" beside our "Upload",
+    // and ours was disabled until the other had been used -- so the obvious
+    // button did nothing and explained nothing.
+    api.uploadDocument.and.returnValue(
+      of({ type: HttpEventType.UploadProgress, loaded: 1, total: 1024 }),
+    );
+    const fixture = TestBed.createComponent(DocumentsPage);
+    fixture.detectChanges();
+
+    const button = (): HTMLButtonElement =>
+      fixture.nativeElement.querySelector('.field-row button');
+    const input: HTMLInputElement = fixture.nativeElement.querySelector('input[type=file]');
+    const clicked = spyOn(input, 'click');
+
+    // Nothing chosen: live, and it opens the picker rather than uploading.
+    expect(button().disabled).toBeFalse();
+    expect(button().textContent?.trim()).toBe('Choose a PDF…');
+    button().click();
+    expect(clicked).toHaveBeenCalled();
+    expect(api.uploadDocument).not.toHaveBeenCalled();
+
+    // Chosen: the same button now says what it will send, and sends it.
+    const page = fixture.componentInstance as unknown as { file: File | null };
+    page.file = new File([new Uint8Array([1])], 'prospectus.pdf');
+    fixture.detectChanges();
+
+    expect(button().textContent?.trim()).toBe('Upload prospectus.pdf');
+    button().click();
+    expect(api.uploadDocument).toHaveBeenCalled();
+  });
+
   it('does not print an unset classification as a finding about the file', () => {
     const page = create() as unknown as { typeLabel(type: string): string };
 

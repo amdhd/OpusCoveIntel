@@ -17,13 +17,29 @@
     <p class="alert notice">{{ notice() }}</p>
   }
 
+  <!-- One button, two steps.
+       The screen used to show the browser's own "Choose File" beside our
+       "Upload", which is two controls that both look like the way in -- and
+       ours was disabled until the other one had been used, so the obvious
+       thing to press did nothing and said nothing about why. This button is
+       always live and its label is always what pressing it will do.
+
+       The input is an implementation detail: it is the native picker, kept for
+       its native file dialog, and hidden from both the layout and the
+       accessibility tree because the button is the labelled control. -->
+  <input
+    #picker
+    type="file"
+    accept="application/pdf,.pdf"
+    class="visually-hidden"
+    tabindex="-1"
+    aria-hidden="true"
+    (change)="onFileSelected($event)"
+  />
+
   <div class="field-row">
     <div>
-      <label class="muted" for="file">PDF</label>
-      <input id="file" type="file" accept="application/pdf,.pdf" (change)="onFileSelected($event)" />
-    </div>
-    <div>
-      <label class="muted" for="document-type">Type</label>
+      <label for="document-type">Type</label>
       <select id="document-type" name="document-type" [(ngModel)]="documentType">
         @for (type of documentTypes; track type) {
           <option [value]="type">{{ typeLabel(type) }}</option>
@@ -33,11 +49,15 @@
     <button
       class="primary"
       type="button"
-      (click)="upload()"
-      [disabled]="!file || transferPercent() !== null"
+      (click)="chooseOrUpload()"
+      [disabled]="transferPercent() !== null"
     >
-      Upload
+      {{ file ? 'Upload ' + file.name : 'Choose a PDF…' }}
     </button>
+    @if (file) {
+      <!-- Not a second way to upload: a way to undo the choice. -->
+      <button type="button" class="link" (click)="clearFile()">Choose a different file</button>
+    }
   </div>
 
   <p class="caption">
@@ -101,8 +121,8 @@
           <tr>
             <td>{{ job.job_type | label }}</td>
             <td><span class="status {{ statusClass(job.status) }}">{{ job.status | label }}</span></td>
-            <td>{{ job.started_at ?? '—' }}</td>
-            <td>{{ job.finished_at ?? '—' }}</td>
+            <td>{{ job.started_at | timestamp }}</td>
+            <td>{{ job.finished_at | timestamp }}</td>
           </tr>
         }
       </tbody>

@@ -21,12 +21,12 @@
  * added to the pipeline.
  */
 import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription, exhaustMap, takeWhile, timer } from 'rxjs';
 
 import { Api } from '../api/api';
-import { ConfidencePipe, LabelPipe, label } from '../format/format';
+import { ConfidencePipe, LabelPipe, TimestampPipe, label } from '../format/format';
 import { FAILED_STATUSES } from '../api/models';
 import type { DocumentRead, DocumentStatusRead, DocumentType } from '../api/models';
 
@@ -60,7 +60,7 @@ const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
 @Component({
   selector: 'app-documents',
-  imports: [FormsModule, ConfidencePipe, LabelPipe],
+  imports: [FormsModule, ConfidencePipe, LabelPipe, TimestampPipe],
   templateUrl: './documents.page.html',
 })
 export class DocumentsPage implements OnDestroy {
@@ -71,6 +71,9 @@ export class DocumentsPage implements OnDestroy {
   protected readonly loading = signal(true);
 
   protected file: File | null = null;
+
+  /** The native picker, driven by the button rather than shown beside it. */
+  private readonly picker = viewChild.required<ElementRef<HTMLInputElement>>('picker');
   protected documentType: DocumentType = 'unknown';
 
   /** 0-100 while bytes are in flight, null when nothing is uploading. */
@@ -91,6 +94,29 @@ export class DocumentsPage implements OnDestroy {
   protected readonly documentTypes = DOCUMENT_TYPES;
 
   // -- picking a file ----------------------------------------------------
+
+  /**
+   * The single control: choose when there is nothing to send, send when there
+   * is. Never disabled for want of a file, because a disabled button is how
+   * this screen used to answer someone trying to start.
+   */
+  protected chooseOrUpload(): void {
+    if (this.file) {
+      this.upload();
+      return;
+    }
+    this.picker().nativeElement.click();
+  }
+
+  /** Forget the chosen file, and let the same one be chosen again. */
+  protected clearFile(): void {
+    this.file = null;
+    this.error.set(null);
+    this.notice.set(null);
+    // Without this the input still holds the file, and re-picking it fires no
+    // `change` event -- the button would sit on "Choose a PDF…" and do nothing.
+    this.picker().nativeElement.value = '';
+  }
 
   protected onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -122,8 +148,11 @@ export class DocumentsPage implements OnDestroy {
     this.error.set(null);
     this.notice.set(null);
     if (file && !file.name.toLowerCase().endsWith('.pdf')) {
-      this.error.set('Only PDFs can be ingested.');
       this.file = null;
+      // Reset the input too, or the rejected file stays in it and picking the
+      // corrected one from the same folder can fire no `change` at all.
+      this.picker().nativeElement.value = '';
+      this.error.set('Only PDFs can be ingested.');
       return;
     }
     this.file = file;
@@ -147,7 +176,7 @@ export class DocumentsPage implements OnDestroy {
         }
         if (event.type === HttpEventType.Response && event.body) {
           this.transferPercent.set(null);
-          this.file = null;
+          this.clearFile();
           // A duplicate is a correct outcome, not an error: the same bytes are
           // one document. Say so plainly rather than showing a failure.
           this.notice.set(
