@@ -3,13 +3,30 @@
 {% block content %}
 <h1>Ask</h1>
 
-<form class="panel" method="post" action="/ui/ask">
-  <label for="question" class="muted">Question</label>
-  <textarea id="question" name="question" rows="3" required
-            placeholder="Which holdings would breach their rating trigger at the current rating?"
-            >{{ question or "" }}</textarea>
-  <p class="actions"><button class="primary" type="submit">Ask</button></p>
-</form>
+<div class="panel">
+  <form method="post" action="/ui/ask">
+    <label for="question">Question</label>
+    <textarea id="question" name="question" rows="3" required
+              placeholder="Ask about a covenant, a threshold, a rating trigger or an exposure."
+              >{{ question or "" }}</textarea>
+    <p class="actions"><button class="primary" type="submit">Ask</button></p>
+  </form>
+
+  {# A placeholder is guidance that disappears the moment someone starts
+     typing, which is when they need it. These stay, and each one is a submit
+     button carrying its own question -- no script, one click, asked.
+
+     Taken from the golden set (`app/evals/golden.py`), so every one of them is
+     a question this corpus can actually answer. An example that returns "no
+     supporting evidence" teaches the wrong thing about the product. #}
+  <div class="examples">
+    <p class="caption">Or start from one of these:</p>
+    <button type="submit" name="question" value="Which holdings would breach their rating trigger at the current rating?">Which holdings would breach their rating trigger at the current rating?</button>
+    <button type="submit" name="question" value="What gearing ratio must Synthetic Green Energy Sdn Bhd maintain?">What gearing ratio must Synthetic Green Energy Sdn Bhd maintain?</button>
+    <button type="submit" name="question" value="Which instruments are rated below A?">Which instruments are rated below A?</button>
+    <button type="submit" name="question" value="What happens if there is Shariah non-compliance?">What happens if there is Shariah non-compliance?</button>
+  </div>
+</div>
 
 {% if answer %}
   {% if answer.refused %}

@@ -1,20 +1,33 @@
 <h1>Ask</h1>
 
-<form class="panel" (ngSubmit)="ask()">
-  <label for="question" class="muted">
-    A question the corpus can answer — a covenant, a threshold, a rating trigger, an exposure.
-  </label>
-  <textarea
-    id="question"
-    name="question"
-    rows="3"
-    [(ngModel)]="question"
-    placeholder="Which holdings would breach their rating trigger at the current rating?"
-  ></textarea>
-  <button class="primary actions" type="submit" [disabled]="asking()">
-    {{ asking() ? 'Asking…' : 'Ask' }}
-  </button>
-</form>
+<div class="panel">
+  <form (ngSubmit)="ask()">
+    <label for="question">
+      A question the corpus can answer — a covenant, a threshold, a rating trigger, an exposure.
+    </label>
+    <textarea
+      id="question"
+      name="question"
+      rows="3"
+      [(ngModel)]="question"
+      placeholder="Ask about a covenant, a threshold, a rating trigger or an exposure."
+    ></textarea>
+    <button class="primary actions" type="submit" [disabled]="asking()">
+      {{ asking() ? 'Asking…' : 'Ask' }}
+    </button>
+  </form>
+
+  <!-- A placeholder is guidance that disappears the moment someone starts
+       typing, which is when they need it. These stay, and one click asks. -->
+  <div class="examples">
+    <p class="caption">Or start from one of these:</p>
+    @for (example of examples; track example) {
+      <button type="button" (click)="askExample(example)" [disabled]="asking()">
+        {{ example }}
+      </button>
+    }
+  </div>
+</div>
 
 @if (error()) {
   <p class="alert error">{{ error() }}</p>

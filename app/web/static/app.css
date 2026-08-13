@@ -831,6 +831,39 @@ button:disabled {
   color: var(--muted);
 }
 
+/* Example questions. Chips rather than a bulleted list: they are controls,
+ * and they should not look like the answer's prose. */
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--n-100);
+}
+
+.examples p {
+  margin: 0;
+  width: 100%;
+}
+
+.examples button {
+  min-height: 0;
+  padding: var(--s-1) var(--s-3);
+  font-weight: 450;
+  font-size: var(--text-caption);
+  color: var(--n-600);
+  border-radius: 999px;
+  white-space: normal;
+  text-align: left;
+}
+
+.examples button:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
 /* -- provenance ---------------------------------------------------------- */
 
 .chunk {
