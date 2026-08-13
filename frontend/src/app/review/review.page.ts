@@ -41,6 +41,9 @@ export class ReviewPage {
   /** Correction drafts, keyed by review id, so two open rows cannot collide. */
   protected corrections: Record<string, string> = {};
 
+  /** Rejection reasons, same reasoning. */
+  protected rejections: Record<string, string> = {};
+
   constructor() {
     this.refresh();
   }
@@ -65,7 +68,15 @@ export class ReviewPage {
   }
 
   protected reject(item: ReviewItem): void {
-    this.act(item.id, this.api.rejectReview(item.id), 'rejected');
+    // `RejectRequest.reason` is `str` with `min_length=1`. This used to call
+    // `rejectReview(id)` with no reason, which serialised to `{"reason": null}`
+    // and was answered 422 every single time -- the button had never worked.
+    const reason = (this.rejections[item.id] ?? '').trim();
+    if (!reason) {
+      this.error.set('A rejection needs a reason.');
+      return;
+    }
+    this.act(item.id, this.api.rejectReview(item.id, reason), 'rejected');
   }
 
   protected correct(item: ReviewItem): void {
@@ -86,6 +97,7 @@ export class ReviewPage {
         this.busy.set(null);
         this.notice.set(`Item ${verb}.`);
         delete this.corrections[reviewId];
+        delete this.rejections[reviewId];
         this.refresh();
       },
       error: (caught: unknown) => {

@@ -90,14 +90,26 @@
             </button>
           </span>
 
-          <button
-            class="danger"
-            type="button"
-            (click)="reject(item)"
-            [disabled]="busy() === item.id"
-          >
-            Reject
-          </button>
+          <!-- The reason is required by `POST /review/{id}/reject`, and it is
+               required here for the same purpose: a rejection nobody explained
+               is a gap in the audit trail, and the extractor cannot be improved
+               from a decision with no stated cause. -->
+          <span class="control-group">
+            <input
+              type="text"
+              name="rejection-{{ item.id }}"
+              placeholder="Reason for rejecting"
+              [(ngModel)]="rejections[item.id]"
+            />
+            <button
+              class="danger"
+              type="button"
+              (click)="reject(item)"
+              [disabled]="busy() === item.id"
+            >
+              Reject
+            </button>
+          </span>
         </div>
       } @else {
         <!-- Not a row of disabled buttons: a disabled control with no
