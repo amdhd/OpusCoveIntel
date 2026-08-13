@@ -43,7 +43,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - storage:/app/var/storage
+      # The host's `var/storage`, not a named volume. See the note at the foot
+      # of this file.
+      - ./var/storage:/app/var/storage
     restart: unless-stopped
 
   worker:
@@ -68,9 +70,28 @@ services:
         required: false
     volumes:
       # Shared with api so the worker reads documents the API wrote.
-      - storage:/app/var/storage
+      - ./var/storage:/app/var/storage
     restart: unless-stopped
 
 volumes:
   pgdata:
-  storage:
+
+# -- why documents live on a bind mount, not a named volume ------------------
+#
+# `STORAGE_DIR` holds the PDF bytes every citation ultimately points at, and it
+# was a named volume shared by api and worker. Correct for those two, and a
+# trap for everyone else: `uv run uvicorn` and `opuscovintel ingest` write to
+# the host's `./var/storage`, which the containers could not see, so a document
+# ingested from a terminal was invisible to the compose stack and vice versa.
+#
+# The failure is not subtle once it happens -- the worker claims the job, finds
+# no object at the storage key, and marks the document `failed`. But it takes a
+# while to *understand*, because both halves are behaving correctly and the
+# database rows are identical either way.
+#
+# One directory, both worlds. It is also a directory you can list, back up and
+# point a colleague at, which a named volume is not.
+#
+# Production is a different question and has a different answer: object storage
+# (PLAN.md defers S3/MinIO to Phase 8), where the shared-filesystem assumption
+# stops holding the moment the api and the worker run on different hosts.

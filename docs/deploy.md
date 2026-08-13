@@ -151,13 +151,41 @@ runtime container. A deployment that has not built it loses `/app` and nothing e
 Keep it on the API's origin. Splitting them means CORS plus `SameSite=none`, which trades the CSRF
 property described above for a deployment convenience.
 
-## 7. Backups
+## 7. Storage, and who can see it
 
-Back up Postgres and `STORAGE_DIR` together, and restore them together. The
-database holds the citation offsets into the chunks; the filesystem holds the
-document bytes those offsets point at. A restore of one without the other leaves
-covenant rows citing spans in documents nobody can open, which fails
+**One directory, shared by everything that touches documents.** `STORAGE_DIR`
+holds the PDF bytes every citation ultimately points at. Compose bind-mounts
+the repository's `./var/storage` into both `api` and `worker`, rather than
+using a named volume, so a document ingested from a terminal
+(`opuscovintel ingest`, or `uv run uvicorn` during development) and a document
+uploaded to the containerised API land in the same place.
+
+That was not always true, and the failure is worth recognising. With a named
+volume the containers and the host had *separate* corpora: a PDF uploaded to a
+locally-run API was invisible to the containerised worker, which claimed the
+job, found no object at the storage key, and marked the document `failed` with
+
+```
+ObjectNotFoundError: no object at 'documents/53/97/5397afe…pdf'
+```
+
+Both halves were behaving correctly and the database rows were identical either
+way, which is what made it take a while to understand.
+
+**A document's bytes and its rows must be backed up and restored together.**
+The database holds the citation offsets into the chunks; the filesystem holds
+the document bytes those offsets point at. A restore of one without the other
+leaves covenant rows citing spans in documents nobody can open, which fails
 CLAUDE.md 1.2 in the least visible way possible: the rows still look fine.
+
+The same applies to `docker compose down -v`, which drops the database volume
+while `./var/storage` survives on disk — leaving files with nothing pointing at
+them, and a corpus that has to be re-ingested rather than restored.
+
+**Production is a different question.** A shared filesystem stops working the
+moment `api` and `worker` run on different hosts; `app/ingest/storage.py` is
+already an S3-shaped interface for exactly that day (PLAN.md defers S3/MinIO to
+Phase 8).
 
 Nothing else is precious. Chunks, embeddings, clauses and covenants can all be
 rebuilt from the document bytes for $0 (`ingest`, `index`, `extract-rules`) —
