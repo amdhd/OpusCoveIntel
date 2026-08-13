@@ -85,6 +85,8 @@
       <p class="muted">
         @if (status.status === 'uploaded') {
           Queued. The worker polls every few seconds.
+        } @else if (status.status === 'chunked') {
+          Indexing, so the document can be searched…
         } @else {
           Parsing, scoring pages and chunking…
         }
@@ -94,6 +96,22 @@
 
     @if (status.error) {
       <p class="alert error">{{ status.error }}</p>
+    }
+
+    <!-- Ingested is not the same as findable. A document that stops short of
+         indexing sits in the corpus while every question about it is answered
+         from somewhere else, which is exactly what happened to a user's
+         prospectus, so the screen says which of the two it is. -->
+    @if (status.terminal && !status.error) {
+      @if (status.searchable) {
+        <p class="alert info">Indexed. Questions on the Ask screen can reach this document.</p>
+      } @else {
+        <p class="alert warn">
+          Ingested but not indexed, so questions cannot reach it yet. Run
+          <code>opuscovintel index</code>, or re-upload it — documents ingested from now on are
+          indexed automatically.
+        </p>
+      }
     }
 
     <dl class="kv">
@@ -169,6 +187,14 @@
             <td class="muted">{{ typeLabel(document.document_type) }}</td>
             <td>
               <span class="status {{ statusClass(document.status) }}">{{ document.status | label }}</span>
+              <!-- The distinction the corpus list has to carry: three of these
+                   rows were ingested and unfindable for weeks, and the screen
+                   showed them exactly like the rest. -->
+              @if (!searchable(document.status)) {
+                <span class="status at_risk" title="Ingested, but not indexed — questions cannot reach it">
+                  not searchable
+                </span>
+              }
             </td>
             <td class="num">{{ document.page_count ?? '—' }}</td>
             <!-- Named after what it opens, and marked while it is open: the

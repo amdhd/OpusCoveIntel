@@ -27,7 +27,7 @@ import { Subscription, exhaustMap, takeWhile, timer } from 'rxjs';
 
 import { Api } from '../api/api';
 import { ConfidencePipe, LabelPipe, TimestampPipe, label } from '../format/format';
-import { FAILED_STATUSES } from '../api/models';
+import { FAILED_STATUSES, SEARCHABLE_STATUSES } from '../api/models';
 import type { DocumentRead, DocumentStatusRead, DocumentType } from '../api/models';
 
 /**
@@ -270,6 +270,19 @@ export class DocumentsPage implements OnDestroy {
    */
   protected typeLabel(documentType: string): string {
     return documentType === 'unknown' ? 'Not classified' : label(documentType);
+  }
+
+  /**
+   * Whether a question can reach this document.
+   *
+   * Mirrors the server's `SEARCHABLE_STATUSES` for the corpus list, which
+   * carries `DocumentRead` rows without the `searchable` flag the status
+   * endpoint computes. The detail panel uses the server's answer; this is for
+   * the table, where the alternative is showing an unfindable document exactly
+   * like a findable one.
+   */
+  protected searchable(status: string): boolean {
+    return SEARCHABLE_STATUSES.has(status);
   }
 
   protected statusClass(status: string): string {

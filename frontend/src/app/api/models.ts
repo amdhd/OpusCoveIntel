@@ -44,3 +44,18 @@ export type ReviewActionResponse = Schemas['ReviewActionResponse'];
  * done.
  */
 export const FAILED_STATUSES: ReadonlySet<string> = new Set(['failed', 'budget_exceeded']);
+
+/**
+ * Statuses in which a question can actually reach a document.
+ *
+ * The status endpoint computes this server-side and the detail panel uses that
+ * answer. This copy exists for the corpus list, whose rows are `DocumentRead`
+ * and carry only a status -- and a list that shows an ingested-but-unindexed
+ * document identically to an indexed one is how three real prospectuses sat
+ * invisible while every question about them was answered from elsewhere.
+ */
+export const SEARCHABLE_STATUSES: ReadonlySet<string> = new Set([
+  'embedded',
+  'extracting',
+  'extracted',
+]);
