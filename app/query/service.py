@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.db.models.clauses import CallSchedule, Clause, Covenant, RatingTrigger
-from app.db.models.documents import DocumentChunk
+from app.db.models.documents import Document, DocumentChunk
 from app.db.models.instruments import Instrument
 from app.db.models.portfolio import Portfolio, PortfolioHolding
 from app.domain.enums import CovenantType, QueryIntent, RatingAgency
@@ -46,7 +46,12 @@ from app.domain.rules import (
 )
 from app.extract.patterns import RATING_TOKEN
 from app.query.answerable import STRUCTURED_INTENTS, refusal_for, unsupported_terms
-from app.query.intent import classify, mentioned_entities
+from app.query.intent import (
+    classify,
+    mentioned_documents,
+    mentioned_entities,
+    name_words,
+)
 from app.retrieval.hybrid import HybridSearcher
 from app.rules.covenants import evaluate
 from app.rules.money import format_myr
@@ -55,6 +60,25 @@ from app.rules.ratings import UnknownRatingError, normalise, rank
 logger = get_logger(__name__)
 
 NO_EVIDENCE: Final[str] = "No supporting evidence in the corpus."
+
+
+def no_covenants_for(filename: str) -> str:
+    """Refusal for a document the corpus holds but has never extracted.
+
+    Naming the document and the reason matters. A bare "no supporting evidence"
+    reads as "your document does not mention that", when the truth is that
+    nothing has been extracted from it yet -- a different fact, with a different
+    remedy, and the difference is the whole of finding 15. The alternative the
+    system used to choose was worse than either: answer with some other
+    document's covenants.
+    """
+    return (
+        f"No covenants have been extracted from {filename}. The document is in the corpus and "
+        "its text is searchable, but the extraction pipeline has not run against it, so there "
+        "is nothing structured to answer from. Ask about its text instead, or extract it first."
+    )
+
+
 UNSUPPORTED_MESSAGE: Final[str] = (
     "This system answers questions evidenced by the document corpus. "
     "It does not forecast markets, value instruments or give investment advice."
@@ -247,7 +271,21 @@ class DeterministicQueryService:
         instruments = await self._instruments_for(question)
         instrument_ids = [item.id for item in instruments] or None
 
-        rows = await self._covenants_matching(wanted, instrument_ids)
+        # A document the question names, and whether anything has been
+        # extracted from it. Without this, a question about one document was
+        # answered from every document (docs/review.md, finding 15).
+        document_ids, unextracted = await self._documents_for(question)
+        if unextracted is not None:
+            return Answer(
+                question=question,
+                intent=QueryIntent.COVENANT_LOOKUP,
+                text=no_covenants_for(unextracted),
+                confidence=0.0,
+                refused=True,
+                tools_used=["get_covenants"],
+            )
+
+        rows = await self._covenants_matching(wanted, instrument_ids, document_ids)
         if not rows:
             # Structured extraction found nothing; the corpus may still say it.
             return await self._document_search(question)
@@ -433,15 +471,51 @@ class DeterministicQueryService:
         return [item for item in portfolios if item.name in mentioned] if mentioned else []
 
     async def _covenants_matching(
-        self, covenant_type: CovenantType | None, instrument_ids: list[uuid.UUID] | None
+        self,
+        covenant_type: CovenantType | None,
+        instrument_ids: list[uuid.UUID] | None,
+        document_ids: list[uuid.UUID] | None = None,
     ) -> list[tuple[Covenant, Clause]]:
         stmt = select(Covenant, Clause).join(Clause, Covenant.clause_id == Clause.id)
         if covenant_type is not None:
             stmt = stmt.where(Covenant.covenant_type == covenant_type)
         if instrument_ids:
             stmt = stmt.where(Covenant.instrument_id.in_(instrument_ids))
+        if document_ids:
+            stmt = stmt.where(Clause.document_id.in_(document_ids))
         result = await self._session.execute(stmt.order_by(Clause.page_number))
         return [(row[0], row[1]) for row in result.all()]
+
+    async def _documents_for(self, question: str) -> tuple[list[uuid.UUID] | None, str | None]:
+        """The documents a question names, and the one with nothing extracted.
+
+        The second value is set only when the question named exactly one
+        document and that document holds no covenants -- the case that must
+        refuse and say so, rather than widening to the rest of the corpus.
+        """
+        rows = (await self._session.execute(select(Document.id, Document.filename))).all()
+        by_filename = {str(row[1]): row[0] for row in rows}
+        # Words that name an instrument are reserved: they identify an
+        # instrument, which is a different lookup with its own answer. Without
+        # this, "the RM300m Green Ijarah Sukuk" resolved to whichever filename
+        # happened to be the only one containing "sukuk".
+        instruments = (await self._session.execute(select(Instrument))).scalars().all()
+        reserved = set(
+            name_words(
+                " ".join(
+                    [item.instrument_name for item in instruments]
+                    + [item.issuer_name for item in instruments]
+                )
+            )
+        )
+        mentioned = mentioned_documents(question, list(by_filename), reserved=reserved)
+        if not mentioned:
+            return None, None
+
+        document_ids = [by_filename[filename] for filename in mentioned]
+        if len(document_ids) == 1 and not await self._covenants_matching(None, None, document_ids):
+            return document_ids, mentioned[0]
+        return document_ids, None
 
     async def _covenants_with_clause(
         self, instrument_id: uuid.UUID

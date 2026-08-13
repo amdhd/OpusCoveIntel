@@ -112,6 +112,15 @@ def classify(question: str) -> QueryIntent:
     return QueryIntent.DOCUMENT_SEARCH
 
 
+def _words(block: str) -> frozenset[str]:
+    """A whitespace-separated block of words, as a set.
+
+    A block rather than a list literal: this is a vocabulary to be read and
+    edited by a person, and one word per line of quotes obscures what is in it.
+    """
+    return frozenset(block.split())
+
+
 # A phrase shorter than this identifies nothing: "sukuk" is in every
 # instrument name in the corpus, and "sdn bhd" is in half the issuers.
 _MIN_PHRASE_WORDS: Final[int] = 2
@@ -119,8 +128,14 @@ _MIN_PHRASE_WORDS: Final[int] = 2
 _NAME_WORD = re.compile(r"[a-z0-9]+")
 
 
-def _name_words(text: str) -> list[str]:
+def name_words(text: str) -> list[str]:
+    """The lower-case alphanumeric words of a name. Public: callers build the
+    reserved vocabulary for `mentioned_documents` from it, and two tokenisers
+    would disagree the first time one of them changed."""
     return _NAME_WORD.findall(text.lower())
+
+
+_name_words = name_words
 
 
 def _phrases(words: list[str], *, minimum: int) -> set[str]:
@@ -172,4 +187,70 @@ def mentioned_entities(question: str, candidates: list[str]) -> list[str]:
         name
         for name, phrases in zip(candidates, candidate_phrases, strict=True)
         if name.lower() in text or any(len(owners[phrase]) == 1 for phrase in phrases)
+    ]
+
+
+# Words that name a *kind* of document rather than one document. Every corpus
+# of offering material is full of them, so a question saying "the prospectus"
+# has named nothing -- and answering as though it had is how one document's
+# covenants get attributed to another (docs/review.md, finding 15).
+_GENERIC_DOCUMENT_WORDS: Final[frozenset[str]] = _words(
+    """
+    prospectus prospectuses base offering circular memorandum information
+    trust deed certificate certificates rating report announcement statement
+    supplemental supplement final draft sample scan scanned copy document
+    documents file files pdf part annex appendix schedule volume programme
+    program terms conditions
+    sukuk sukuks bond bonds note notes paper issue issuance release press
+    """
+)
+
+# Two letters is a file-naming artefact ("v2", "12b"), not a subject.
+_MIN_DOCUMENT_WORD_LENGTH: Final[int] = 3
+
+
+def mentioned_documents(
+    question: str, filenames: list[str], *, reserved: set[str] | None = None
+) -> list[str]:
+    """Which documents the question names, by a word only one of them has.
+
+    A single word is enough here, where `mentioned_entities` insists on two.
+    Filenames are not written by the person asking -- nobody types
+    "Dubai_12B_Project_Drive_-_Base_Prospectus_1.pdf", they type "the Dubai
+    prospectus" -- so a contiguous run of the stored name almost never appears
+    in a real question.
+
+    What keeps a single word honest is the same rule as everywhere else:
+    **uniqueness**. The word must belong to exactly one document in the corpus
+    and must not be a word that names a kind of document. "Dubai" identifies
+    one file; "prospectus" and "trust" identify none, however many files
+    contain them. A question that names two documents gets both.
+
+    Purely numeric words are ignored: a year or a tranche number in a filename
+    is a coincidence waiting to match the wrong question.
+
+    `reserved` is the vocabulary that already means something else -- the words
+    in instrument and issuer names. "Sukuk" was unique to one filename in a
+    corpus of nine, so "when can the issuer redeem the RM300m Green Ijarah
+    Sukuk?" resolved to a press release and was refused for having no covenants.
+    A word that names an instrument identifies an instrument, and that is a
+    different lookup with its own answer.
+    """
+    asked = set(_name_words(question))
+    off_limits = _GENERIC_DOCUMENT_WORDS | (reserved or set())
+
+    owners: dict[str, set[str]] = {}
+    for filename in filenames:
+        for word in set(_name_words(filename)):
+            if len(word) < _MIN_DOCUMENT_WORD_LENGTH or word.isdigit() or word in off_limits:
+                continue
+            owners.setdefault(word, set()).add(filename.lower())
+
+    return [
+        filename
+        for filename in filenames
+        if any(
+            word in asked and owners.get(word, set()) == {filename.lower()}
+            for word in _name_words(filename)
+        )
     ]

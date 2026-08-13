@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.sql_guard import SQLGuardError, validate_sql
 from app.core.logging import get_logger
 from app.db.models.clauses import CallSchedule, Clause, Covenant, RatingTrigger
+from app.db.models.documents import Document
 from app.db.models.instruments import Instrument
 from app.db.models.portfolio import Portfolio, PortfolioHolding
 from app.domain.enums import CovenantType, RatingAgency
@@ -117,16 +119,42 @@ async def get_instrument(
     )
 
 
+async def list_documents(session: AsyncSession, *, limit: int = 500) -> ToolResult:
+    """Every document's id and filename, for matching against a question.
+
+    Names, not contents: this is what lets "the Dubai prospectus" be resolved
+    to a document before anything is retrieved on its behalf.
+    """
+    result = await session.execute(select(Document.id, Document.filename).limit(limit))
+    documents = [{"id": row[0], "filename": row[1]} for row in result.all()]
+    return ToolResult(
+        tool_name="list_documents",
+        ok=True,
+        data={"documents": documents, "count": len(documents)},
+    )
+
+
 async def get_covenants(
     session: AsyncSession,
     *,
     instrument_id: uuid.UUID | None = None,
+    instrument_ids: Sequence[uuid.UUID] | None = None,
+    document_ids: Sequence[uuid.UUID] | None = None,
     covenant_type: CovenantType | None = None,
 ) -> ToolResult:
-    """Retrieve covenants, optionally filtered."""
+    """Retrieve covenants, optionally filtered.
+
+    `document_ids` filters on the *clause's* document, which is where a
+    covenant's provenance lives. Without it, a question naming one document was
+    answered with every covenant in the corpus (docs/review.md, finding 15).
+    """
     stmt = select(Covenant, Clause).join(Clause, Covenant.clause_id == Clause.id)
     if instrument_id is not None:
         stmt = stmt.where(Covenant.instrument_id == instrument_id)
+    if instrument_ids:
+        stmt = stmt.where(Covenant.instrument_id.in_(instrument_ids))
+    if document_ids:
+        stmt = stmt.where(Clause.document_id.in_(document_ids))
     if covenant_type is not None:
         stmt = stmt.where(Covenant.covenant_type == covenant_type)
     result = await session.execute(stmt.order_by(Clause.page_number))
