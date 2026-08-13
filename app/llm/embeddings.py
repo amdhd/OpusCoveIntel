@@ -26,6 +26,7 @@ import re
 from typing import Final, Protocol, runtime_checkable
 
 from app.core.config import get_settings
+from app.core.logging import get_logger
 
 TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[0-9a-z]+(?:[.\-'][0-9a-z]+)*")
 
@@ -33,6 +34,8 @@ TOKEN_RE: Final[re.Pattern[str]] = re.compile(r"[0-9a-z]+(?:[.\-'][0-9a-z]+)*")
 # a re-embed is detectable: chunks embedded by different models must never be
 # compared, and this is what makes that checkable in SQL.
 FAKE_EMBEDDING_MODEL: Final[str] = "hashing-bow-v1"
+
+logger = get_logger(__name__)
 
 
 @runtime_checkable
@@ -140,6 +143,14 @@ def get_embedder() -> Embedder:
 
     Phase 5: the single call site that changed. IndexingService and
     HybridSearcher consume this and don't know which implementation they got.
+
+    **The fallback is announced.** `HashingEmbedder` is a bag of words with a
+    hash for a vector: it makes the vector leg of hybrid retrieval run, and it
+    makes it meaningless -- "Dubai negative pledge" returned a page of legal
+    advisers and two director biographies above the negative-pledge clause,
+    because only the keyword leg was doing real work. That is survivable in CI
+    and for a $0 demo, and it is not something a deployment should discover
+    from its search results (docs/review.md, finding 11).
     """
     settings = get_settings()
 
@@ -149,10 +160,35 @@ def get_embedder() -> Embedder:
         return HashingEmbedder()
 
     if settings.QWEN_API_KEY is None:
+        _warn_placeholder("QWEN_API_KEY is not set")
         return HashingEmbedder()
 
     # Check if EMBEDDING_MODEL names a real provider rather than the fake one.
     if settings.EMBEDDING_MODEL in ("text-embedding-v4", "text-embedding-v3"):
         return QwenEmbedder()
 
+    _warn_placeholder(f"EMBEDDING_MODEL={settings.EMBEDDING_MODEL!r} names no real provider")
     return HashingEmbedder()
+
+
+# Said once per process. Every indexed chunk and every query would otherwise
+# repeat it, and a warning that appears ten thousand times is one nobody reads.
+_placeholder_announced = False
+
+
+def _warn_placeholder(reason: str) -> None:
+    global _placeholder_announced
+    if _placeholder_announced:
+        return
+    _placeholder_announced = True
+    logger.warning(
+        "semantic search is disabled: retrieval is running on the placeholder embedder",
+        extra={
+            "reason": reason,
+            "embedder": FAKE_EMBEDDING_MODEL,
+            "consequence": (
+                "the vector leg of hybrid retrieval carries no semantic signal; "
+                "only keyword matching is answering"
+            ),
+        },
+    )

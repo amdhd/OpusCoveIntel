@@ -197,6 +197,20 @@ class DocumentChunkRepository(BaseRepository[DocumentChunk]):
         result = await self.session.execute(stmt)
         return [(row[0], float(row[1])) for row in result.all()]
 
+    async def embedding_models(self) -> set[str]:
+        """Which models produced the embeddings currently in the index.
+
+        Normally one. More than one means a re-embed was started and not
+        finished, and knowing that is what turns "the vector leg found nothing"
+        from a mystery into a sentence.
+        """
+        result = await self.session.execute(
+            select(DocumentChunk.embedding_model)
+            .where(DocumentChunk.embedding_model.is_not(None))
+            .distinct()
+        )
+        return {model for model in result.scalars().all() if model}
+
     async def search_by_vector(
         self,
         embedding: list[float],
