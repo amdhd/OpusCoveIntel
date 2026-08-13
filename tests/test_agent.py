@@ -336,6 +336,133 @@ async def test_the_verify_node_ensures_citations_are_traceable(
             assert citation.clause_id is not None or citation.chunk_id is not None
 
 
+class TestCovenantLookupIsNarrowedToTheDocument:
+    """Finding 15: a covenant question about one document, answered from all.
+
+    A user uploaded a 201-page base prospectus, asked for its cross-default
+    threshold, and got `RM30 million` at confidence 0.85 with five citations --
+    every one of them from a synthetic fixture, none from their document. The
+    threshold named appears nowhere in the document the question was about.
+
+    The real corpus makes this the *normal* case rather than an edge one: a
+    document can be ingested and searchable while its covenants have never been
+    extracted, because extraction costs more than the per-document cap
+    (finding 4). The only rows available to answer with belong to something
+    else.
+    """
+
+    @staticmethod
+    async def _ingest(
+        db_session: AsyncSession, object_store: object, filename: str, *, extract: bool
+    ) -> uuid.UUID:
+        """Ingest and index a distinctively-named document, optionally extracting it.
+
+        Without extraction this is exactly the state every real prospectus in
+        the corpus is in: searchable, and holding no covenants.
+        """
+        from app.extract.service import RuleExtractionService
+        from app.ingest.service import IngestionService
+        from app.retrieval.indexing import IndexingService
+        from tests.fixtures.synthetic_pdf import build_prose_document
+
+        body = (
+            "The Issuer shall not create or permit to subsist any security interest "
+            "over its assets. An event of default shall occur if any indebtedness of "
+            "the Issuer exceeding RM75,000,000 becomes due and payable prior to its "
+            "stated maturity."
+        )
+        ingestion = IngestionService(db_session, object_store)  # type: ignore[arg-type]
+        outcome = await ingestion.upload(
+            filename=filename, data=build_prose_document(body, heading="BASE PROSPECTUS")
+        )
+        await ingestion.process(outcome.document.id)
+        await IndexingService(db_session).index_document(outcome.document.id)
+        if extract:
+            await RuleExtractionService(db_session).extract_document(outcome.document.id)
+        return outcome.document.id
+
+    async def test_a_document_with_no_covenants_is_not_answered_from_another(
+        self,
+        db_session: AsyncSession,
+        object_store: object,
+        indexed_corpus: list[uuid.UUID],
+        seeded_universe: None,
+    ) -> None:
+        """The reported failure, end to end."""
+        await self._ingest(db_session, object_store, "dubai-base-prospectus.pdf", extract=False)
+
+        answer = await service(db_session).answer(
+            "What is the cross-default threshold in the Dubai prospectus?"
+        )
+
+        assert answer.refused, answer.answer
+        assert answer.confidence == 0.0
+        assert answer.citations == []
+        # It says which document, and why there is nothing -- "no supporting
+        # evidence" would read as "your document says nothing about it".
+        assert "dubai-base-prospectus.pdf" in answer.answer
+        # And above all: no other document's threshold is offered as an answer.
+        assert "RM30" not in answer.answer
+        assert "RM50" not in answer.answer
+
+    async def test_a_named_document_narrows_to_its_own_covenants(
+        self,
+        db_session: AsyncSession,
+        object_store: object,
+        indexed_corpus: list[uuid.UUID],
+        seeded_universe: None,
+    ) -> None:
+        """Naming an extracted document answers from that document alone."""
+        document_id = await self._ingest(
+            db_session, object_store, "kuching-port-prospectus.pdf", extract=True
+        )
+
+        answer = await service(db_session).answer(
+            "What does the Kuching prospectus say about cross-default?"
+        )
+
+        assert not answer.refused, answer.answer
+        assert answer.citations
+        documents = {citation.document_id for citation in answer.citations}
+        assert documents == {str(document_id)}, "citations came from more than the named document"
+        # The corpus holds RM30m and RM50m cross-default thresholds in other
+        # documents; this document's is RM75m and it is the only one offered.
+        assert "RM75" in answer.answer
+        assert "RM30" not in answer.answer
+
+    def test_a_generic_document_word_names_no_document(self) -> None:
+        """ "The prospectus" and "the trust deed" identify a kind, not a file.
+
+        Deliberate, and the safe direction: failing to narrow returns the
+        corpus, which is noisy; narrowing on a shared word would attach one
+        document's covenants to another, which is finding 15 again.
+        """
+        from app.query.intent import mentioned_documents
+
+        corpus = ["trust-deed.pdf", "prospectus.pdf", "2021-trust-certificate-prospectus.pdf"]
+
+        assert mentioned_documents("what does the trust deed say?", corpus) == []
+        assert mentioned_documents("what does the prospectus say?", corpus) == []
+
+    async def test_a_question_that_names_no_document_still_sees_the_corpus(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        seeded_universe: None,
+    ) -> None:
+        """The regression guard.
+
+        "What cross-default thresholds do we have?" is a corpus-wide question
+        and must stay one; narrowing everything to nothing is the easy way to
+        break this fix.
+        """
+        answer = await service(db_session).answer("What are the cross-default thresholds?")
+
+        assert not answer.refused
+        documents = {citation.document_id for citation in answer.citations}
+        assert len(documents) > 1, "a corpus-wide question was narrowed to one document"
+
+
 class TestCovenantLookupIsNarrowedToTheQuestion:
     """The agent must not answer a question about one covenant with all of them.
 

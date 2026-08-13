@@ -29,6 +29,7 @@ those constants for why one session cannot serve both.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from typing import Any, Literal
@@ -44,6 +45,7 @@ from app.agent.tools import (
     get_covenants,
     get_instrument,
     get_portfolio_holdings,
+    list_documents,
     run_read_only_sql,
     search_clauses,
 )
@@ -52,8 +54,18 @@ from app.db.models.ops import AuditLog, QueryLog
 from app.domain.enums import ActorType, QueryIntent
 from app.domain.rules import Citation
 from app.query.answerable import STRUCTURED_INTENTS, refusal_for, unsupported_terms
-from app.query.intent import classify, mentioned_entities
-from app.query.service import NO_EVIDENCE, UNSUPPORTED_MESSAGE, covenant_type_in
+from app.query.intent import (
+    classify,
+    mentioned_documents,
+    mentioned_entities,
+    name_words,
+)
+from app.query.service import (
+    NO_EVIDENCE,
+    UNSUPPORTED_MESSAGE,
+    covenant_type_in,
+    no_covenants_for,
+)
 
 # RunnableConfig is langgraph's config dict. Defined here to keep imports
 # clean — langgraph.types does not explicitly export it for mypy.
@@ -83,6 +95,10 @@ class AgentState:
     # Words in the question that the structured path has no meaning for. Set by
     # `_retrieve`; non-empty is a refusal (app/query/answerable.py).
     unsupported_terms: list[str] = field(default_factory=list)
+    # A refusal decided during retrieval, with the text to answer with. Set
+    # when the question named a document the corpus holds but has not extracted
+    # (docs/review.md, finding 15).
+    refusal: str | None = None
 
     # Output
     answer: str = ""
@@ -203,11 +219,30 @@ async def _retrieve(state: AgentState, config: RunnableConfig) -> AgentState:
             state.tools_called.append("get_instrument")
 
         case QueryIntent.COVENANT_LOOKUP:
-            # Narrow to the covenant type the question names. Retrieving all of
-            # them and letting synthesis sort it out returns every covenant in
-            # the corpus for a question about one of them, which reads as an
-            # answer and is not one.
-            result = await get_covenants(session, covenant_type=covenant_type_in(state.question))
+            # Narrow to what the question names: the covenant type, and the
+            # document or instrument it is about. Retrieving all of them and
+            # letting synthesis sort it out returns every covenant in the
+            # corpus for a question about one of them, which reads as an answer
+            # and is not one -- and, when the named document has no extracted
+            # covenants, hands back another document's thresholds under this
+            # document's name (docs/review.md, finding 15).
+            named = await _named_sources(session, state.question)
+            state.tools_called.append("list_documents")
+
+            if named.document_without_covenants is not None:
+                state.refusal = no_covenants_for(named.document_without_covenants)
+                logger.info(
+                    "agent.named_document_has_no_covenants",
+                    extra={"document": named.document_without_covenants},
+                )
+                return state
+
+            result = await get_covenants(
+                session,
+                covenant_type=covenant_type_in(state.question),
+                document_ids=named.document_ids or None,
+                instrument_ids=named.instrument_ids or None,
+            )
             state.tool_results.append(result)
             state.tools_called.append("get_covenants")
             state.citations.extend(result.citations)
@@ -321,6 +356,58 @@ def _narrow_to_named(state: AgentState) -> None:
     state.tool_results = narrowed
 
 
+@dataclass
+class _NamedSources:
+    """What a covenant question named, resolved against the corpus."""
+
+    document_ids: list[uuid.UUID] = field(default_factory=list)
+    instrument_ids: list[uuid.UUID] = field(default_factory=list)
+    # Set when the question named exactly one document and that document has no
+    # extracted covenants -- the case that must refuse rather than widen.
+    document_without_covenants: str | None = None
+
+
+async def _named_sources(session: AsyncSession, question: str) -> _NamedSources:
+    """Resolve the documents and instruments a question names.
+
+    Naming nothing resolves to nothing, and the caller then searches the whole
+    corpus: "what cross-default thresholds do we have?" is a question about the
+    book, and narrowing it to nothing would be a worse answer than the one this
+    fixes.
+    """
+    named = _NamedSources()
+
+    instruments = (await get_instrument(session)).data["instruments"]
+    names = [item.instrument_name for item in instruments]
+    names += [item.issuer_name for item in instruments]
+    wanted = set(mentioned_entities(question, names))
+
+    documents = (await list_documents(session)).data["documents"]
+    by_filename = {item["filename"]: item["id"] for item in documents}
+    # A word that names an instrument is not a word that names a document, even
+    # when it happens to appear in exactly one filename.
+    mentioned = mentioned_documents(
+        question, list(by_filename), reserved=set(name_words(" ".join(names)))
+    )
+    named.document_ids = [by_filename[filename] for filename in mentioned]
+    named.instrument_ids = [
+        item.id
+        for item in instruments
+        if item.instrument_name in wanted or item.issuer_name in wanted
+    ]
+
+    # One named document with nothing extracted from it. Checked here rather
+    # than by looking at an empty result, because an empty result is also what
+    # a question about a covenant type nobody has looks like, and those two
+    # deserve different answers.
+    if len(named.document_ids) == 1 and not named.instrument_ids:
+        held = await get_covenants(session, document_ids=named.document_ids)
+        if held.data["count"] == 0:
+            named.document_without_covenants = mentioned[0]
+
+    return named
+
+
 def _known_names(results: list[ToolResult]) -> list[str]:
     """Names the database holds, harvested from what retrieval already loaded.
 
@@ -393,6 +480,12 @@ async def _synthesize(state: AgentState) -> AgentState:
     # Checked before the intent, because every branch below would otherwise
     # format the rows it happens to hold into an answer to a question those
     # rows cannot address.
+    if state.refusal:
+        state.answer = state.refusal
+        state.refused = True
+        state.confidence = 0.0
+        return state
+
     if state.unsupported_terms:
         state.answer = refusal_for(state.unsupported_terms)
         state.refused = True
@@ -440,6 +533,12 @@ async def _verify(state: AgentState) -> AgentState:
     that was actually retrieved this turn."
     """
     if state.refused:
+        return state
+
+    if state.refusal:
+        state.answer = state.refusal
+        state.refused = True
+        state.confidence = 0.0
         return state
 
     # The same signal `_synthesize` acts on, enforced again at the last gate.
@@ -556,7 +655,7 @@ def _route_after_retrieve(state: AgentState) -> Literal["insufficient", "tools"]
     # A question the data cannot address skips the tools entirely -- there is
     # no point evaluating covenants or running portfolio SQL for it, and the
     # breach check's exemption below must not let it through.
-    if state.unsupported_terms:
+    if state.unsupported_terms or state.refusal:
         return "insufficient"
     if not state.evidence_sufficient and state.intent not in (
         QueryIntent.COVENANT_BREACH_CHECK,

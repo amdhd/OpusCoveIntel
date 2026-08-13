@@ -34,9 +34,11 @@ so what was true at `dc30321` remains readable.
 | 12 | No dependency vulnerability scanning in CI | Security | Low | Open |
 | 13 | Review-queue pages are unbounded | Performance | Low | Open |
 | 14 | Agent answers a question about one instrument with all of them | Correctness | Medium | Fixed |
+| 15 | A covenant question about one document is answered from every document | Correctness | **High** | Fixed |
 
-Finding 14 was found on 2026-08-10 while fixing 6, not in the original audit; its entry is at the
-end of the Correctness section.
+Findings 14 and 15 were found after the original audit — 14 on 2026-08-10 while fixing 6, and 15 on
+2026-08-13 by a user asking an ordinary question about a document they had uploaded. Their entries
+are at the end of the Correctness section.
 
 ---
 
@@ -355,6 +357,53 @@ most easily have caused.
 result before the `run_read_only_sql` one, so the generated SQL is executed and its rows are then
 ignored whenever holdings exist. Dead work rather than a wrong answer, but the SQL path is what
 PLAN.md §5 says portfolio aggregation runs on.
+
+### 15. A covenant question about one document is answered from every document — High
+
+*Found 2026-08-13, in ordinary use, by a user who had uploaded a 201-page base prospectus and
+asked about it.*
+
+**Reproduced live:**
+
+```
+Q: What is the cross-default threshold in the Dubai prospectus?
+A: cross_default · threshold RM30 million · (page 1)
+   refused: false · confidence 0.85 · 5 citations
+```
+
+Every one of those five citations was from `scanned-sample.pdf`, `trust-deed.pdf` and
+`sample-prospectus.pdf` — the *synthetic* fixtures. Not one was from the user's document. The
+answer names a threshold that appears nowhere in the document the question asked about, and
+carries citations that make it look checked.
+
+`covenant_lookup` narrows by covenant *type* and by nothing else. It reads every covenant row in
+the corpus, so a question that names a document is answered from whichever documents happen to
+have been extracted. The deterministic path narrows by instrument when the question names one, and
+by document never.
+
+**Two things made it invisible until now.** The golden set asks about a corpus where every
+document is extracted, so "all covenants" and "this document's covenants" are the same rows. And
+the real prospectuses are ingested but *not* extracted — they cost more than the per-document cap
+(finding 4) — so the only rows available to answer with belong to something else.
+
+This is the third of a family: finding 6 answered a question the data could not address, finding
+14 answered about one instrument with all of them, and this answers about one document with
+another document's covenants. It is the worst of the three, because it is the case a user hits
+without trying and the wrong figure is a covenant threshold.
+
+**Fixed.** `covenant_lookup` now narrows to what the question names, on both read paths:
+
+* a **document**, matched on a word that belongs to exactly one filename and is not a generic
+  document word — "dubai" identifies one document, "prospectus" and "trust" identify none;
+* an **instrument or issuer**, via the same `mentioned_entities` used by the other intents.
+
+When the named document has no extracted covenants, the answer says exactly that, names the
+document, and refuses — rather than reaching for rows from elsewhere. That refusal is the right
+answer for every real document in the corpus today, and it says why, which "no supporting evidence"
+did not.
+
+A question that names nothing still returns the whole corpus, which is what makes "what
+cross-default thresholds do we have?" answerable.
 
 ---
 
