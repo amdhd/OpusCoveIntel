@@ -583,10 +583,11 @@ def eval_command(
     """Score extraction and answers against the golden set. $0, no model calls.
 
     PLAN.md Phase 8 acceptance: metrics land in `evals/results/`. Exits 1 when a
-    read path misses its PLAN.md target -- 6/10 deterministic, 8/10 for the
-    agent. Extraction F1 is reported and never gated: PLAN.md sets no target for
-    it, and a threshold invented against a synthetic corpus would be a gate that
-    says nothing about production.
+    read path misses its PLAN.md target -- 9/13 deterministic, 11/13 for the
+    agent -- and when a labelled document was not scored at all. Extraction F1
+    is reported and never gated: PLAN.md sets no target for it, and a threshold
+    invented against a synthetic corpus would be a gate that says nothing about
+    production. Whether the corpus was there to measure is not a threshold.
     """
     from app.agent.service import open_agent_query_service
     from app.db.session import get_readonly_sessionmaker, get_sessionmaker
@@ -637,12 +638,26 @@ def eval_command(
     typer.echo(f"\nwrote {json_path}")
     typer.echo(f"wrote {markdown_path}")
 
-    if not report.documents_scored:
+    # A run that scored no labelled document has not passed; it has not run.
+    # The labels join on `document_sha256`, so a fixture whose bytes changed
+    # stops joining rather than scoring badly, and the golden-question targets
+    # below are independent of the labels -- they carry on passing over an empty
+    # extraction corpus. Fail here, loudly, rather than leave it as a field in a
+    # log line.
+    if not report.corpus_complete:
+        if report.documents_missing:
+            typer.echo(
+                f"\nLabelled but not scored: {', '.join(report.documents_missing)}.", err=True
+            )
+        labelled = len(report.documents_scored) + len(report.documents_missing)
         typer.echo(
-            "\nNo labelled document is in the corpus; extraction scored nothing. "
-            "Run `make ingest-corpus index extract-sample`.",
+            f"Extraction scored {len(report.documents_scored)} of {labelled} labelled "
+            "document(s). Run `make ingest-corpus index extract-sample`; if a fixture builder "
+            "changed, the hashes in app/evals/labels.py need re-pinning.",
             err=True,
         )
+        raise typer.Exit(code=1)
+
     if not report.meets_targets:
         raise typer.Exit(code=1)
 

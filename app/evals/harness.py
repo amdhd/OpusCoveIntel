@@ -26,6 +26,15 @@ extraction has no rules-vs-LLM agreement rate; a document that was never
 ingested is reported missing rather than scored as a total miss. The failure
 mode this avoids is the one that matters: a green number that means "nobody
 looked".
+
+**And a harness that found no corpus fails.** Reporting the gap is not enough on
+its own: the labels join on `document_sha256`, so a fixture whose bytes change
+stops joining rather than starting to disagree, and every extraction metric is
+then computed over an empty set while the golden-question targets -- which do
+not touch the labels -- carry on passing. `meets_targets` therefore reads
+`corpus_complete`, and `opuscovintel eval` exits non-zero on it. This is not
+hypothetical: `pymupdf` 1.28.2 changed the fixture bytes and a run scoring zero
+documents logged `meets_targets: true`.
 """
 
 from __future__ import annotations
@@ -74,15 +83,36 @@ class EvalReport:
     errors: list[str] = field(default_factory=list)
 
     @property
+    def corpus_complete(self) -> bool:
+        """Whether every labelled document was found and scored.
+
+        Not a quality measure -- a precondition for there being one. The labels
+        join on `document_sha256` (`evals/labels.py`), so a document whose bytes
+        changed, or was never ingested, drops out of the join entirely: nothing
+        is scored badly, nothing is scored at all.
+        """
+        return bool(self.documents_scored) and not self.documents_missing
+
+    @property
     def meets_targets(self) -> bool:
-        """Whether every read path that ran met its PLAN.md acceptance target.
+        """Whether the run measured its corpus and met every acceptance target.
 
         Extraction F1 has no target here on purpose: PLAN.md sets one for the
         golden questions and none for extraction, and inventing a threshold
         against a synthetic corpus would turn a measurement into a gate that
         says nothing about production.
+
+        `corpus_complete` is a different thing from a target and is required
+        anyway. The golden questions do not join on the labels, so they pass
+        whether or not a single labelled document was scored -- which is exactly
+        how a run over an empty corpus came to report success. A target no
+        document was measured against has not been met.
         """
-        return bool(self.answers) and all(scores.meets_target for scores in self.answers.values())
+        return (
+            self.corpus_complete
+            and bool(self.answers)
+            and all(scores.meets_target for scores in self.answers.values())
+        )
 
     def field_totals(self, method: str) -> dict[str, Score]:
         """Per-field covenant scores summed across every document, for one method."""
@@ -122,6 +152,7 @@ class EvalReport:
             "extraction_model": self.extraction_model,
             "meets_targets": self.meets_targets,
             "corpus": {
+                "complete": self.corpus_complete,
                 "scored": [document.name for document in self.documents_scored],
                 "missing": self.documents_missing,
                 "unlabelled_in_corpus": self.documents_unlabelled,
@@ -212,6 +243,7 @@ async def run_eval(
         extra={
             "documents_scored": len(report.documents_scored),
             "documents_missing": len(report.documents_missing),
+            "corpus_complete": report.corpus_complete,
             "meets_targets": report.meets_targets,
             "total_cost_usd": str(report.cost.total_usd),
         },

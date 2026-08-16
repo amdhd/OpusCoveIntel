@@ -11,6 +11,7 @@ that reports something is not a harness that reports the right thing, and
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from decimal import Decimal
 from pathlib import Path
@@ -18,12 +19,16 @@ from pathlib import Path
 import pytest
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from typer.testing import CliRunner
 
+from app.cli import app as cli_app
 from app.db.models.clauses import Covenant
 from app.domain.enums import CovenantType
+from app.evals import harness as harness_module
 from app.evals import labels as label_module
+from app.evals.answers import PathScores
 from app.evals.extraction import ExtractionEvaluator
-from app.evals.harness import run_eval
+from app.evals.harness import EvalReport, run_eval
 from app.evals.report import render_markdown, write_report
 from app.query.service import DeterministicQueryService
 
@@ -251,3 +256,113 @@ async def test_an_uningested_document_is_reported_missing_not_scored_zero(
     assert report.documents_scored == []
     assert sorted(report.documents_missing) == ["prospectus", "rating-report", "trust-deed"]
     assert "never ingested" in render_markdown(report)
+
+
+class TestAHarnessThatScoredNothingFails:
+    """The failure this class exists for happened on 2026-08-16.
+
+    `pymupdf` 1.28.0 -> 1.28.2 changed the bytes of the generated fixtures, the
+    hashes in `evals/labels.py` stopped matching what was ingested, and the join
+    on `document_sha256` returned nothing. The run logged
+    `documents_scored: 0`, `documents_missing: 3`, `meets_targets: true` and the
+    command exited zero -- because the golden-question targets, which are all
+    `meets_targets` used to read, do not join on the labels and passed as usual.
+
+    An eval that cannot find its corpus has measured nothing, so it has met
+    nothing (CLAUDE.md 7: `assert x >= 0` is true of every possible bug).
+    """
+
+    async def test_labels_that_join_to_nothing_do_not_meet_targets(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A hash nothing matches -- exactly what a changed fixture produces.
+
+        The corpus is fully ingested here and the read path is scored, so the
+        golden questions still hit their target. Nothing but the broken join is
+        wrong, which is what makes this the reproduction: before the fix, this
+        report said `meets_targets: True`.
+        """
+        ghost = "0" * 64
+        monkeypatch.setattr(harness_module, "LABELLED_SHAS", (ghost,))
+
+        report = await run_eval(db_session, deterministic=DeterministicQueryService(db_session))
+
+        assert report.documents_scored == []
+        assert report.documents_missing == [ghost[:12]]
+        # The half that keeps passing, and hid the fault.
+        assert all(scores.meets_target for scores in report.answers.values())
+        # The half that must not.
+        assert not report.corpus_complete
+        assert not report.meets_targets
+
+    async def test_a_partly_ingested_corpus_is_also_a_failure(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Two of three labels joining is a harness measuring two thirds of itself."""
+        monkeypatch.setattr(
+            harness_module,
+            "LABELLED_SHAS",
+            (label_module.PROSPECTUS_SHA, label_module.TRUST_DEED_SHA, "0" * 64),
+        )
+
+        report = await run_eval(db_session, deterministic=DeterministicQueryService(db_session))
+
+        assert [document.name for document in report.documents_scored] == [
+            "prospectus",
+            "trust-deed",
+        ]
+        assert not report.corpus_complete
+        assert not report.meets_targets
+
+    def test_the_command_exits_non_zero_when_nothing_was_scored(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """The other half of the fault: `opuscovintel eval` exited zero.
+
+        The report is built rather than measured -- the command opens its own
+        engines and event loop, which a session bound to this test's loop cannot
+        serve. What is under test is the command's decision, and the report it
+        is handed is the one the 2026-08-16 run produced: no document scored,
+        three missing, and a read path comfortably over its target.
+        """
+        report = EvalReport(
+            generated_at=dt.datetime.now(dt.UTC),
+            extraction_model="claude-opus-5",
+            documents_missing=["prospectus", "trust-deed", "rating-report"],
+            answers={"deterministic": PathScores(path="deterministic", target=0)},
+        )
+        assert report.answers["deterministic"].meets_target, "the read path must look green"
+
+        async def _stub_run_eval(*args: object, **kwargs: object) -> EvalReport:
+            return report
+
+        class _Session:
+            async def __aenter__(self) -> _Session:
+                return self
+
+            async def __aexit__(self, *exc: object) -> None: ...
+
+        async def _no_dispose() -> None: ...
+
+        monkeypatch.setattr("app.evals.harness.run_eval", _stub_run_eval)
+        monkeypatch.setattr("app.db.session.get_sessionmaker", lambda: lambda: _Session())
+        monkeypatch.setattr("app.db.session.get_readonly_sessionmaker", lambda: lambda: _Session())
+        monkeypatch.setattr("app.cli.dispose_engines", _no_dispose)
+
+        result = CliRunner().invoke(
+            cli_app, ["eval", "--skip-agent", "--quiet", "--output-dir", str(tmp_path)]
+        )
+
+        assert result.exit_code == 1, result.output
+        output = result.output + (result.stderr or "")
+        assert "Labelled but not scored" in output
+        assert "prospectus" in output
+        # The artefact is still written: a run that failed this way is a run
+        # someone has to diagnose, and the report names what was missing.
+        assert (tmp_path / "latest.md").exists()
