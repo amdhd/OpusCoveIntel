@@ -18,7 +18,7 @@ from starlette.types import Scope
 from app.api.routes import audit, auth, catalog, documents, health, query, review
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import RequestIDMiddleware
+from app.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
 from app.db.session import dispose_engines
 from app.web import routes as web_routes
 from app.web.deps import RedirectToLogin, login_redirect
@@ -60,6 +60,13 @@ def create_app() -> FastAPI:
     )
     app.state.settings = settings
     app.add_middleware(RequestIDMiddleware)
+    # Added after RequestIDMiddleware, so it wraps it and runs first on the way
+    # out -- the headers land on every response, including one produced by an
+    # exception handler.
+    app.add_middleware(
+        SecurityHeadersMiddleware,
+        https_only=settings.SESSION_COOKIE_SECURE,
+    )
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(documents.router)
