@@ -139,12 +139,19 @@ class LLMCacheRepository(BaseRepository[LLMCache]):
 class HumanReviewRepository(BaseRepository[HumanReview]):
     model = HumanReview
 
-    async def list_pending(self, *, limit: int = 100) -> Sequence[HumanReview]:
+    async def list_pending(self, *, limit: int = 100, offset: int = 0) -> Sequence[HumanReview]:
+        """Oldest first, so paging through the queue drains it in order.
+
+        `offset` exists because the page that renders this had none, and a
+        review queue is unbounded by nature -- it is the list of everything the
+        pipeline was not sure about (docs/review.md finding 13).
+        """
         result = await self.session.execute(
             select(HumanReview)
             .where(HumanReview.status == ReviewStatus.PENDING)
             .order_by(HumanReview.created_at)
             .limit(limit)
+            .offset(offset)
         )
         return result.scalars().all()
 

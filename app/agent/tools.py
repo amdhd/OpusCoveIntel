@@ -356,39 +356,26 @@ async def run_read_only_sql(
         )
 
 
-async def evaluate_covenant_rule(
-    session: AsyncSession,
-    *,
-    instrument_id: uuid.UUID,
-    as_of: dt.date | None = None,
-) -> ToolResult:
-    """Run the deterministic rules engine over one instrument's covenants.
+def _evaluate_loaded(
+    instrument: Instrument,
+    triggers: Sequence[RatingTrigger],
+    covenants: Sequence[Covenant],
+    as_of_date: dt.date,
+) -> dict[str, Any]:
+    """Evaluate one instrument from rows that are already in memory.
 
-    CLAUDE.md 1.1: the LLM never computes a breach. This tool calls the
-    deterministic rules engine and returns the structured evaluations.
+    The single-instrument tool and the batch entry point below differ only in
+    how they load; both evaluate here. That is deliberate -- docs/review.md
+    finding 8 warns that a second rules implementation for the UI would
+    eventually disagree with the agent's, and the one on screen is the one
+    somebody acts on. Keeping the loaders apart and the evaluation shared is
+    what makes batching a data-loading change rather than a logic change.
     """
-    instrument = await session.get(Instrument, instrument_id)
-    if instrument is None:
-        return ToolResult(
-            tool_name="evaluate_covenant_rule",
-            ok=False,
-            error=f"instrument {instrument_id} not found",
-        )
-
-    as_of_date = as_of or dt.date.today()
     facts = ObservedFacts(
         as_of=as_of_date,
         current_rating=instrument.current_rating,
         rating_agency=instrument.rating_agency,
     )
-
-    # Rating triggers
-    trigger_result = await session.execute(
-        select(RatingTrigger)
-        .where(RatingTrigger.instrument_id == instrument_id)
-        .order_by(RatingTrigger.trigger_rank)
-    )
-    triggers = list(trigger_result.scalars().all())
 
     evaluations: list[dict[str, Any]] = []
     for trigger in triggers:
@@ -410,11 +397,7 @@ async def evaluate_covenant_rule(
             }
         )
 
-    # Financial covenants
-    covenant_result = await session.execute(
-        select(Covenant).where(Covenant.instrument_id == instrument_id)
-    )
-    for covenant in covenant_result.scalars().all():
+    for covenant in covenants:
         terms_or_none = _terms_from_row(covenant)
         if terms_or_none is None:
             continue
@@ -432,24 +415,115 @@ async def evaluate_covenant_rule(
             }
         )
 
-    breaching = sum(1 for e in evaluations if e["status"] == "breach")
-    at_risk = sum(1 for e in evaluations if e["status"] == "at_risk")
-    insufficient = sum(1 for e in evaluations if e["status"] == "insufficient_data")
+    return {
+        "instrument_name": instrument.instrument_name,
+        "issuer_name": instrument.issuer_name,
+        "current_rating": instrument.current_rating,
+        "as_of": as_of_date.isoformat(),
+        "evaluations": evaluations,
+        "breach_count": sum(1 for e in evaluations if e["status"] == "breach"),
+        "at_risk_count": sum(1 for e in evaluations if e["status"] == "at_risk"),
+        "insufficient_data_count": sum(
+            1 for e in evaluations if e["status"] == "insufficient_data"
+        ),
+    }
+
+
+async def evaluate_covenant_rule(
+    session: AsyncSession,
+    *,
+    instrument_id: uuid.UUID,
+    as_of: dt.date | None = None,
+) -> ToolResult:
+    """Run the deterministic rules engine over one instrument's covenants.
+
+    CLAUDE.md 1.1: the LLM never computes a breach. This tool calls the
+    deterministic rules engine and returns the structured evaluations.
+    """
+    instrument = await session.get(Instrument, instrument_id)
+    if instrument is None:
+        return ToolResult(
+            tool_name="evaluate_covenant_rule",
+            ok=False,
+            error=f"instrument {instrument_id} not found",
+        )
+
+    as_of_date = as_of or dt.date.today()
+
+    trigger_result = await session.execute(
+        select(RatingTrigger)
+        .where(RatingTrigger.instrument_id == instrument_id)
+        .order_by(RatingTrigger.trigger_rank)
+    )
+    covenant_result = await session.execute(
+        select(Covenant).where(Covenant.instrument_id == instrument_id)
+    )
 
     return ToolResult(
         tool_name="evaluate_covenant_rule",
         ok=True,
-        data={
-            "instrument_name": instrument.instrument_name,
-            "issuer_name": instrument.issuer_name,
-            "current_rating": instrument.current_rating,
-            "as_of": as_of_date.isoformat(),
-            "evaluations": evaluations,
-            "breach_count": breaching,
-            "at_risk_count": at_risk,
-            "insufficient_data_count": insufficient,
-        },
+        data=_evaluate_loaded(
+            instrument,
+            list(trigger_result.scalars().all()),
+            list(covenant_result.scalars().all()),
+            as_of_date,
+        ),
     )
+
+
+async def evaluate_covenant_rules(
+    session: AsyncSession,
+    *,
+    instrument_ids: Sequence[uuid.UUID],
+    as_of: dt.date | None = None,
+) -> dict[uuid.UUID, dict[str, Any]]:
+    """Evaluate many instruments in a fixed number of queries.
+
+    docs/review.md finding 8: the portfolio page called the single-instrument
+    tool once per holding, and each call issued three queries -- fine for two
+    positions, six hundred queries for a realistic 200-bond portfolio. This
+    loads instruments, rating triggers and covenants in **three queries total**,
+    regardless of how many instruments are asked for, then evaluates each one
+    through `_evaluate_loaded`, the same code the single-instrument tool uses.
+
+    Returns a mapping keyed by instrument id. An id with no matching instrument
+    is absent from the result rather than raising: a portfolio holding a row
+    that no longer resolves is a data problem for the caller to show, not a
+    reason to fail the whole page.
+    """
+    ids = list(dict.fromkeys(instrument_ids))
+    if not ids:
+        return {}
+
+    as_of_date = as_of or dt.date.today()
+
+    instrument_rows = await session.execute(select(Instrument).where(Instrument.id.in_(ids)))
+    instruments = {row.id: row for row in instrument_rows.scalars().all()}
+
+    trigger_rows = await session.execute(
+        select(RatingTrigger)
+        .where(RatingTrigger.instrument_id.in_(ids))
+        .order_by(RatingTrigger.trigger_rank)
+    )
+    triggers_by_instrument: dict[uuid.UUID, list[RatingTrigger]] = {}
+    for trigger in trigger_rows.scalars().all():
+        triggers_by_instrument.setdefault(trigger.instrument_id, []).append(trigger)
+
+    covenant_rows = await session.execute(select(Covenant).where(Covenant.instrument_id.in_(ids)))
+    covenants_by_instrument: dict[uuid.UUID, list[Covenant]] = {}
+    for covenant in covenant_rows.scalars().all():
+        if covenant.instrument_id is not None:
+            covenants_by_instrument.setdefault(covenant.instrument_id, []).append(covenant)
+
+    return {
+        instrument_id: _evaluate_loaded(
+            instrument,
+            triggers_by_instrument.get(instrument_id, []),
+            covenants_by_instrument.get(instrument_id, []),
+            as_of_date,
+        )
+        for instrument_id, instrument in instruments.items()
+    }
 
 
 async def cite_sources(

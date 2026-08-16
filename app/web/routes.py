@@ -18,12 +18,12 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.service import AgentQueryService
-from app.agent.tools import evaluate_covenant_rule
+from app.agent.tools import evaluate_covenant_rules
 from app.api.deps import get_auth_service
 from app.auth.rate_limit import LoginThrottledError
 from app.auth.service import AuthService
@@ -46,6 +46,36 @@ def _catalog(session: Annotated[AsyncSession, Depends(get_readonly_session)]) ->
 
 CatalogDep = Annotated[CatalogService, Depends(_catalog)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
+
+
+# How many rows a list page shows at once. Small enough that the page stays
+# readable and the query stays bounded; the review queue and the instrument list
+# both used to render whatever the database had (docs/review.md finding 13).
+PAGE_SIZE = 50
+
+
+def _page_window(page: int, total: int) -> dict[str, Any]:
+    """Everything a template needs to render one slice and move between them.
+
+    Clamps rather than 404s. A queue drains while somebody is reading it, so
+    page 3 becoming out of range between the click and the render is ordinary,
+    and showing the last page beats an error.
+    """
+    last = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    current = min(max(page, 1), last)
+    offset = (current - 1) * PAGE_SIZE
+    return {
+        "page": current,
+        "last": last,
+        "offset": offset,
+        "total": total,
+        "has_previous": current > 1,
+        "has_next": current < last,
+        "previous": current - 1,
+        "next": current + 1,
+        "first_shown": offset + 1 if total else 0,
+        "last_shown": min(offset + PAGE_SIZE, total),
+    }
 
 
 async def _pending_count(session: AsyncSession) -> int:
@@ -218,7 +248,10 @@ async def instruments(
     user: PageUser,
     catalog: CatalogDep,
     session: Annotated[AsyncSession, Depends(get_session)],
+    page: Annotated[int, Query(ge=1)] = 1,
 ) -> HTMLResponse:
+    total = await catalog.count_instruments()
+    window = _page_window(page, total)
     return _page(
         request,
         "instruments.html",
@@ -226,7 +259,8 @@ async def instruments(
             "user": user,
             "active": "instruments",
             "pending_count": await _pending_count(session),
-            "instruments": await catalog.list_instruments(limit=200),
+            "instruments": await catalog.list_instruments(limit=PAGE_SIZE, offset=window["offset"]),
+            "pagination": window,
         },
     )
 
@@ -326,11 +360,19 @@ async def portfolio_detail(
     if holdings is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="portfolio not found")
 
+    # One batch, not one call per holding (docs/review.md finding 8): three
+    # queries for the whole portfolio rather than three per position. The
+    # evaluation itself is unchanged -- `evaluate_covenant_rules` shares
+    # `_evaluate_loaded` with the single-instrument tool the agent calls.
+    evaluated = await evaluate_covenant_rules(
+        read_session,
+        instrument_ids=[holding.instrument.id for holding in holdings.holdings],
+    )
+
     rows: list[dict[str, Any]] = []
     breach_total = at_risk_total = 0
     for holding in holdings.holdings:
-        result = await evaluate_covenant_rule(read_session, instrument_id=holding.instrument.id)
-        data = result.data if result.ok and result.data else {}
+        data = evaluated.get(holding.instrument.id, {})
         breaches = int(data.get("breach_count", 0))
         at_risk = int(data.get("at_risk_count", 0))
         breach_total += breaches
@@ -371,17 +413,24 @@ async def review_queue(
     request: Request,
     user: PageUser,
     session: Annotated[AsyncSession, Depends(get_session)],
+    page: Annotated[int, Query(ge=1)] = 1,
 ) -> HTMLResponse:
     repo = HumanReviewRepository(session)
-    items = await repo.list_pending(limit=100)
+    total = await repo.count_pending()
+    window = _page_window(page, total)
+    items = await repo.list_pending(limit=PAGE_SIZE, offset=window["offset"])
     return _page(
         request,
         "review.html",
         {
             "user": user,
             "active": "review",
-            "pending_count": await repo.count_pending(),
-            "total_pending": await repo.count_pending(),
+            # One query, used twice. These were two identical `count_pending()`
+            # calls; the nav badge and the heading always showed the same number
+            # and always will, so they can read the same one.
+            "pending_count": total,
+            "total_pending": total,
+            "pagination": window,
             "items": [
                 {
                     "id": str(item.id),
