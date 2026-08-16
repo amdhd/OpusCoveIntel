@@ -237,10 +237,19 @@ vulnerabilities.
 **Fix:** `uv pip audit` (or `pip-audit`) as a CI job, plus Dependabot for the lockfile. Low
 severity only because the dependency surface is small and pinned.
 
-**Fixed.** A sixth CI job, `dependency audit`, plus [`.github/dependabot.yml`](../.github/dependabot.yml).
+**Fixed.** A sixth CI job, `dependency audit`, plus `.github/dependabot.yml`.
 Both trees audit **clean today**, which is the point of landing it now: the scan starts green, so
 the first red tick is a real regression rather than a backlog somebody has to triage before the
 job is worth anything.
+
+**Amended 2026-08-16: `.github/dependabot.yml` is deleted, so Dependabot opens no more scheduled
+version-update PRs.** Weekly grouped updates across three ecosystems still produced more pull
+requests than anyone was reading, and a PR nobody reads is worse than no PR — it trains the habit
+of merging dependency bumps unlooked-at. The detector is unchanged: `dependency audit` runs
+`pip-audit` and `npm audit` on every CI run and `make audit` runs both locally, so a known
+vulnerability still turns the build red. What is gone is the automatic upgrade PR, which makes
+bumping a lockfile a deliberate act again. Dependabot **security** updates are a repository
+setting rather than this file, and were not touched.
 
 `uv pip audit` **does not exist** — a reasonable guess, and wrong, which one `--help` settled. The
 tool is PyPA's `pip-audit`, run through `uvx` at a **pinned** `2.10.1`: a scanner that silently
