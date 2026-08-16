@@ -80,8 +80,14 @@ def _corpus_section(report: EvalReport) -> list[str]:
     lines.append(f"- Scored: {scored}")
     if report.documents_missing:
         lines.append(
-            f"- **Not in the corpus** (labelled but never ingested): "
-            f"{', '.join(report.documents_missing)}"
+            f"- **Not in the corpus** (labelled but never ingested, or its bytes changed "
+            f"so the `sha256` no longer joins): {', '.join(report.documents_missing)}"
+        )
+    if not report.corpus_complete:
+        lines.append(
+            "- **This run did not measure its corpus, so it has met nothing.** "
+            "Re-ingest with `make ingest-corpus index extract-sample`; if a fixture "
+            "builder changed, re-pin the hashes in `app/evals/labels.py`."
         )
     if report.documents_unlabelled:
         lines.append(

@@ -128,6 +128,17 @@ PLAN.md target (9/13 deterministic, 11/13 agent). Extraction F1 is reported and
 never gated — PLAN.md sets no target for it, and a threshold invented against a
 synthetic corpus would be a gate that says nothing about production.
 
+**It also exits non-zero when a labelled document was not scored at all**, which
+is not a threshold but the absence of a measurement. The labels join on
+`document_sha256`, so a document that was never ingested — or whose bytes
+changed under it — drops out of the join and is scored zero times rather than
+scored badly. The fix is one of two things, and the message says which to check:
+run `make ingest-corpus index extract-sample` if the corpus is simply not
+loaded, or re-pin the hashes in `app/evals/labels.py` if a fixture builder (or
+its PDF library) changed. A `pymupdf` patch release did exactly that on
+2026-08-16, and the run before this gate reported `meets_targets: true` over
+zero documents.
+
 Read it in this order:
 
 1. **Golden questions.** Below target is a regression in retrieval, intent
