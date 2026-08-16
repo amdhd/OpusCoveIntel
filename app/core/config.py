@@ -76,7 +76,13 @@ class Settings(BaseSettings):
 
     # -- budget guards ----------------------------------------------------
     # PLAN.md 2. Money is Decimal, never float (CLAUDE.md 6).
-    MAX_COST_PER_DOCUMENT_USD: Decimal = Decimal("2.00")
+    # Calibrated for real 200-535pp prospectuses, whose dry-run ceilings run
+    # $4-21 (docs/review.md finding 4). The old $2.00 default was sized for the
+    # 1-5pp synthetic fixtures and aborted every real document mid-extraction.
+    # $8.00 covers the expected real spend ($3-7) with headroom; a document
+    # whose dry-run ceiling still exceeds it is refused before the first call
+    # rather than part-way through (ExtractionPipeline preflight).
+    MAX_COST_PER_DOCUMENT_USD: Decimal = Decimal("8.00")
     MAX_TOTAL_COST_USD: Decimal = Decimal("200.00")
     MAX_COST_PER_CALL_USD: Decimal = Decimal("0.50")
     MAX_VLM_PAGES_PER_DOC: int = 40

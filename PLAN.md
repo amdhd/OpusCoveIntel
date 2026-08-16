@@ -286,13 +286,15 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    `20260810_0733_revoke_operational_tables_from_readonly.py`, with a test that connects as the
    role, gets `permission denied`, and pins the role's readable set to the allowlist so a future
    table cannot inherit `SELECT` from the init script's default privileges.
-8. **Raise the cost cap, and fail before spending rather than during.** All three real
-   prospectuses exceed `MAX_COST_PER_DOCUMENT_USD=2.00` — worst case $20.94, $11.48 and
-   $4.28 — so each would abort mid-document, paying for the calls made and leaving a
-   partial extraction. Raise the default to something calibrated for 500-page documents,
-   and make the guard refuse a document whose dry-run ceiling already exceeds the cap.
-   Then build the **Batch API** path §2 specifies and nothing implements: 50% off, and
-   backfilling a corpus is exactly its workload.
+8. **Raise the cost cap, and fail before spending rather than during.** ✅ *(cap + preflight; Batch
+   API still open)* All three real prospectuses exceeded `MAX_COST_PER_DOCUMENT_USD=2.00` — worst
+   case $20.94, $11.48 and $4.28 — so each would abort mid-document, paying for the calls made and
+   leaving a partial extraction. The default is now **$8.00**, calibrated for the $3–7 real spend,
+   and `ExtractionPipeline` **refuses before the first call** any document whose dry-run ceiling
+   already exceeds the cap — pricing it with the same `estimate_candidate_cost` the `--dry-run` CLI
+   uses, so the operator's number and the guard's number cannot drift. Still open: the **Batch API**
+   path §2 specifies and nothing implements (50% off, and backfilling a corpus is exactly its
+   workload) — which is what would let the two documents still over the cap through.
 9. **Close the auth gaps.** ✅ *Rate limiting* — `login_attempts` plus exponential backoff per
    username and per client address (`app/auth/rate_limit.py`), enforced inside
    `AuthService.authenticate` so both login paths inherit it; backoff rather than lockout, so
