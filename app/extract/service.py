@@ -46,13 +46,19 @@ from app.domain.enums import (
     ExtractionStatus,
     JobStatus,
     JobType,
+    RatingAgency,
     ReviewStatus,
     ReviewTrigger,
 )
 from app.domain.extraction import RuleExtraction
 from app.extract.citations import verify_quote
 from app.extract.linking import resolve_instrument
-from app.extract.rule_extractor import EXTRACTOR_VERSION, extract, extract_call_schedule
+from app.extract.rule_extractor import (
+    EXTRACTOR_VERSION,
+    extract,
+    extract_call_schedule,
+    resolve_document_agency,
+)
 from app.rules.ratings import UnknownRatingError, rank
 
 logger = get_logger(__name__)
@@ -119,8 +125,13 @@ class RuleExtractionService:
 
             counts = _Counts()
             chunks = await self._chunks.list_for_document(document_id, limit=100_000)
+            # Resolved once over the whole document, because a trigger sentence
+            # routinely names a notch without naming the agency -- the document
+            # said which agency it meant a paragraph earlier, and chunking put
+            # that paragraph out of reach (docs/review.md finding 9).
+            document_agency = resolve_document_agency(c.chunk_text for c in chunks)
             for chunk in chunks:
-                await self._extract_chunk(document, chunk, resolved, counts)
+                await self._extract_chunk(document, chunk, resolved, counts, document_agency)
 
             document.status = DocumentStatus.EXTRACTED
             job.status = JobStatus.SUCCEEDED
@@ -160,8 +171,9 @@ class RuleExtractionService:
         chunk: DocumentChunk,
         instrument_id: uuid.UUID | None,
         counts: _Counts,
+        document_agency: RatingAgency | None = None,
     ) -> None:
-        for extraction in extract(chunk.chunk_text):
+        for extraction in extract(chunk.chunk_text, document_agency=document_agency):
             clause = await self._persist_clause(document, chunk, extraction, instrument_id)
             if clause is None:
                 continue
