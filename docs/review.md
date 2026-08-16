@@ -24,7 +24,7 @@ so what was true at `dc30321` remains readable.
 | 2 | No rate limiting on login | Security | **High** | Fixed |
 | 3 | No password strength policy | Security | Medium | Fixed |
 | 4 | Per-document cost cap is too low for real documents | Cost | **High** | Open |
-| 5 | No security response headers | Security | Medium | Open |
+| 5 | No security response headers | Security | Medium | Fixed |
 | 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Fixed |
 | 7 | No document upload in the UI | Gap | Medium | Fixed |
 | 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Open |
@@ -190,6 +190,41 @@ external assets, so a strict policy should apply without exceptions.
 
 **Not a finding:** CSRF. Both cookie paths set `SameSite=lax`, which blocks cross-site form POSTs.
 Worth an explicit test so it cannot regress silently.
+
+**Fixed.** [`SecurityHeadersMiddleware`](../app/core/middleware.py) sets all five, as middleware
+rather than per-route so a page added later inherits the policy — the failure mode of the
+decorator-based alternative is a new screen with no policy and nobody noticing. Verified on every
+surface including a 404 and a static file. HSTS is gated on `SESSION_COOKIE_SECURE`, so it is
+absent on the plain-HTTP local stack and present the moment a deployment is HTTPS.
+
+**The last sentence of the fix above was wrong, and a browser is the only thing that could say
+so.** "The UI uses no inline scripts or external assets" was true when it was written and stopped
+being true when finding 7 landed the Angular client app. Two exceptions were needed, and they are
+opposite in kind:
+
+* **`/app` was fixed rather than exempted.** Angular's critical-CSS inliner emits an inline
+  `<style>` block *and* an `onload="this.media='all'"` attribute on the stylesheet link. Under
+  `default-src 'self'` the browser blocks both, the real stylesheet never leaves `media="print"`,
+  and every screen renders **completely unstyled** — confirmed by turning the setting back on and
+  loading the page. Rather than weaken the policy for the pages that render clause text,
+  `inlineCritical` is off in [`frontend/angular.json`](../frontend/angular.json), which removes
+  both constructs. A test asserts the built `index.html` still contains neither, and a second
+  asserts the setting itself so a checkout with no build still catches a flip.
+* **`/docs` was exempted, narrowly.** Swagger UI loads its bundle from a CDN, takes its favicon
+  from the FastAPI site, and bootstraps from an inline `<script>` — under the application policy
+  the page is blank. It gets its own policy carrying `'unsafe-inline'`. That is acceptable
+  *there and only there*: `/docs` is disabled in production, and what it renders is our own
+  OpenAPI schema rather than text out of a third-party PDF. A test pins that the exception cannot
+  leak onto a page that renders clauses.
+
+The property that matters is asserted directly rather than implied by the header value: the
+application policy permits no inline execution of any kind. That is the layer standing behind
+Jinja autoescaping, and `'unsafe-inline'` is the easiest thing in the world to add while chasing a
+page that will not render — which is exactly what happened twice while writing this.
+
+CSRF got its test, on the **form** login: `app/web/routes.py` sets its own cookie inline, separate
+from the JSON path's helper, and only the latter was covered. Two `set_cookie` calls means one can
+regress alone.
 
 ---
 
@@ -580,7 +615,7 @@ Grouped by what they buy, hardest-hitting first.
 1. ~~Revoke the read-only role's grant on the six operational tables~~ *(finding 1 — done)*
 2. Raise the per-document cost cap and refuse-before-spending *(finding 4)*
 3. ~~Password minimum length~~ *(finding 3 — done)*
-4. Security headers middleware *(finding 5)*
+4. ~~Security headers middleware~~ *(finding 5 — done)*
 
 **Next — needs design**
 

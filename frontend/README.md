@@ -30,7 +30,7 @@ make frontend-types    # regenerate src/app/api/schema.d.ts from the API's OpenA
 The build is optional: the API and `/ui` run without it, and `app/main.py` logs that `/app` is
 unavailable rather than failing to start.
 
-## Two rules worth keeping
+## Three rules worth keeping
 
 **Types come from the server.** `src/app/api/schema.d.ts` is generated from the API's OpenAPI
 document, which comes from the Pydantic models. Hand-written interfaces drift, and the first
@@ -40,6 +40,16 @@ fails if the committed copy has moved.
 **The server decides when ingestion is done.** The upload screen polls until `terminal` comes back
 true; it never infers completion from a status string it recognises. A client that decided for
 itself would report a half-parsed document as finished the first time the pipeline gained a stage.
+
+**`inlineCritical` stays off.** `optimization.styles.inlineCritical: false` in `angular.json` looks
+like a performance setting being left on the table, and it is deliberate. The inliner emits an
+inline `<style>` block and an `onload="this.media='all'"` attribute on the stylesheet link, and the
+API serves a `Content-Security-Policy` with no `'unsafe-inline'` (docs/review.md finding 5). The
+browser blocks both, the real stylesheet never leaves `media="print"`, and **every screen renders
+unstyled** — it fails completely, not subtly. The policy is strict because the server-rendered
+pages show clause text lifted verbatim out of third-party PDFs, so the fix is to keep the build
+CSP-clean rather than to weaken the header. Two tests pin this: one on the built `index.html`, one
+on the setting.
 
 ## Why Angular 20 rather than 21
 
