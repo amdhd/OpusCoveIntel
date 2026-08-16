@@ -47,9 +47,21 @@ from app.domain.rules import ComparisonOperator
 # sha256 of the deterministic fixture builders in tests/fixtures/synthetic_pdf.py.
 # `_to_bytes` pins the PDF metadata and suppresses the random /ID precisely so
 # these stay stable across rebuilds.
-PROSPECTUS_SHA = "482996c8de98f43d0cd60f8b2aaccbc344a327a9b59c22095fcaaac120472a51"
-TRUST_DEED_SHA = "04576748cc53ed6b5cd650003879e87c04d76827121b1833923a5fe283b7767a"
-RATING_REPORT_SHA = "32ae72d9feaf9d0da6b923e667ba967586637f2a40163e30dbb90f3bddc43c98"
+#
+# **A PyMuPDF upgrade still moves them**, because the bytes it emits are its own
+# business -- 1.28.0 -> 1.28.2 changed all three. That is not a silent failure:
+# the labels join on sha256 (see the module docstring), so stale values score
+# zero documents rather than the wrong ones, and `tests/test_eval_harness.py`
+# asserts the builders still hash to these. Regenerate with:
+#
+#     python -c "import hashlib; from tests.fixtures.synthetic_pdf import \
+#       build_prospectus as b; print(hashlib.sha256(b()).hexdigest())"
+#
+# They are hardcoded rather than computed because `app/` must not import from
+# `tests/` -- the dependency would run the wrong way.
+PROSPECTUS_SHA = "c08324a3442363bf1c6ccc377ccd1397e03eb4a04652581fe2f07142cb38aeed"
+TRUST_DEED_SHA = "48fca71e6115fefb62d4f130a2191c523883f717b6b40069164c7bc257033383"
+RATING_REPORT_SHA = "74d0b5f714ad4a7c7434884f7390de7b1af0dbb08a97c4d7096fafb8d0a44719"
 
 # Human-readable names for the report. Not join keys -- see the module docstring.
 DOCUMENT_NAMES: Final[dict[str, str]] = {
