@@ -171,6 +171,16 @@ eval-demo: migrate seed ingest-corpus index extract-sample eval  ## Corpus + eva
 cost-report:  ## LLM spend by stage and by document, from the llm_calls ledger. $0
 	$(UV) run opuscovintel cost-report
 
+# `--dry-run` is hardcoded and there is no way to pass anything else through, so
+# this target cannot spend. It exists because `.claude/settings.json` denies
+# `extract --all` outright -- the shape that once cost $0.39 unattended -- and
+# that deny cannot tell `--all --yes` from `--all --dry-run`, since permissions
+# match on prefix. Pricing the corpus is the thing an agent *should* do before
+# asking to spend, so it gets a door that is safe by construction rather than an
+# incentive to work around the lock.
+cost-preview:  ## What extracting every ingested document would cost, worst case. $0
+	$(UV) run opuscovintel extract --all --dry-run
+
 demo: migrate seed ingest-sample index extract-sample golden  ## Full $0 pipeline, end to end
 
 # -- housekeeping --------------------------------------------------------

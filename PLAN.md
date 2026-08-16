@@ -49,7 +49,7 @@ This is the backbone. Everything routes through `app/llm/router.py`.
 
 | Guard | Env var | Default | Behavior on breach |
 |---|---|---|---|
-| Per-document ceiling | `MAX_COST_PER_DOCUMENT_USD` | `8.00` | Refused before the first call when the dry-run ceiling exceeds it; mid-run breach marks `budget_exceeded` |
+| Per-document ceiling | `MAX_COST_PER_DOCUMENT_USD` | `5.00` | Refused before the first call when the dry-run ceiling exceeds it; mid-run breach marks `budget_exceeded` |
 | Global ceiling | `MAX_TOTAL_COST_USD` | `10.00` | Circuit-breaker opens; all calls refused |
 | Per-call ceiling | `MAX_COST_PER_CALL_USD` | `0.50` | Reject before dispatch |
 | VLM pages per doc | `MAX_VLM_PAGES_PER_DOC` | `40` | Fail loudly; do not silently truncate |
@@ -254,6 +254,35 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    generated ourselves — that measures the harness, not the extractor. Regex patterns,
    chunking and candidate detection are all tuned to invented layouts. Nothing licensed
    may be committed (CLAUDE.md 7); keep it under `var/`.
+
+   **Partly begun, by accident, on 2026-08-16.** An agent refreshing the corpus after a
+   version bump ran `extract --all --yes` and extracted the **2025 GMTN prospectus** — 480
+   pages — before anyone approved it. The rows are kept rather than discarded: the $0.39
+   is spent either way, and this is the first time any of this ran against a document
+   nobody wrote for it. **It is an observation, not the re-baseline.** The GMTN has no
+   golden labels, so no F1 can be computed from it; `make eval` still scores extraction
+   against the three labelled fixtures only.
+
+   What it showed, all of which wants confirming against a labelled document:
+
+   | | GMTN (real, 480pp) | synthetic fixtures |
+   |---|---|---|
+   | Real spend | **$0.39** against a $4.28 dry-run ceiling | — |
+   | Chunks → candidates | 2,620 → 19 | ~20 → ~7 |
+   | LLM covenants | 20 | 17 across three documents |
+   | Covenant types found | `change_of_control` 12 · `other` 5 · `rating_trigger` 3 | gearing, cross-default, interest cover, FSCR, rating trigger |
+
+   Two things stand out. **The estimator is ~11× conservative** — it prices every completion
+   at the full 8,000-token budget, and real completions are a few hundred tokens, so the
+   ceiling that governs the budget guard is nowhere near the invoice. Useful for setting
+   caps; useless as a forecast. And **the covenant mix is nothing like the fixtures**: not
+   one gearing ratio, cross-default, interest cover or finance service cover was extracted
+   from 480 pages, while a quarter of what was found landed in `other`. That is either a
+   real property of this issuer's documents or precisely the "patterns tuned to invented
+   layouts" failure this item exists to measure — and only labels will separate the two.
+
+   Consequence for the corpus-wide **agreement rate**, which fell 0.88 → 0.74: that is the
+   real document entering the count, not a regression. Extraction F1 is unaffected.
 2. ~~**`rating_agency` extraction.**~~ ✅ **1.00 P/R/F1 on both paths** (LLM 0.50 → 1.00,
    rules 0.67 → 1.00), against the ≥0.9 acceptance below. It was **scoping, not
    normalisation**, and not in `app/rules/ratings.py` at all — that module handles the
@@ -382,7 +411,7 @@ production HA/DR.
    Lowered to **$10.00**. The build phase it was sized for has been built, and total spend to date
    is $0.99 across the whole corpus. A ceiling set far above normal spend never fires: the run that
    prompted this — an agent passing `--yes` to `extract --all` — cost $0.39 and would have had to
-   repeat itself five hundred times before $200 stopped it. The per-document cap ($8.00) bounds one
+   repeat itself five hundred times before $200 stopped it. The per-document cap ($5.00) bounds one
    mistake; this one bounds a loop. Both now sit close enough to real spend to be a control rather
    than a formality.
 7. **Bahasa Malaysia volume.** What share of the real corpus is BM? If material, the extraction

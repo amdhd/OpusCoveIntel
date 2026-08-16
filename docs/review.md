@@ -272,9 +272,12 @@ Worth noting the estimator is honest about being a ceiling: it prices every comp
 ceiling. Expect real cost in the **$3–7** range for all three documents, but confirm it by running
 the cheapest one first and reading `make cost-report`.
 
-**Fixed (steps 1–2); step 3 deferred.** `MAX_COST_PER_DOCUMENT_USD` default is now `8.00`
+**Fixed (steps 1–2); step 3 deferred.** `MAX_COST_PER_DOCUMENT_USD` was raised to `8.00`
 ([`app/core/config.py`](../app/core/config.py), `.env.example`, [deploy.md](deploy.md)) — sized
-for the $3–7 real spend with headroom, the number written down. And the pipeline now **refuses
+for the $3–7 real spend with headroom, the number written down — and **tightened again to `5.00`
+on 2026-08-16**, half the $10.00 global ceiling, so one document cannot exhaust the budget. That
+second change refuses nothing the first admitted: no document in the corpus prices between the two
+figures, checked before changing it. And the pipeline now **refuses
 before spending**: after candidate detection and before the first billable call,
 [`ExtractionPipeline`](../app/extract/pipeline.py) prices the whole document with the same
 `estimate_candidate_cost` the `--dry-run` CLI uses, and if that ceiling exceeds the cap it marks

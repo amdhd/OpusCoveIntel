@@ -57,7 +57,7 @@ The ones that decide behaviour rather than plumbing:
 | `DATABASE_URL_RO` | compose-local | **Must be the read-only role.** See §2 |
 | `STORAGE_DIR` | `./var/storage` | Must survive a restart |
 | `MAX_TOTAL_COST_USD` | `10.00` | Circuit breaker. All calls refused past it. Deliberately close to normal spend — a ceiling far above it never fires |
-| `MAX_COST_PER_DOCUMENT_USD` | `8.00` | Sized for real 200-535pp prospectuses. A document whose dry-run ceiling exceeds it is refused before the first call; a run that crosses it mid-document aborts and marks `budget_exceeded` |
+| `MAX_COST_PER_DOCUMENT_USD` | `5.00` | Half the global ceiling, so one document cannot exhaust the budget. A document whose dry-run ceiling exceeds it is refused before the first call; a run that crosses it mid-document aborts and marks `budget_exceeded` |
 | `MAX_COST_PER_CALL_USD` | `0.50` | Rejects before dispatch |
 | `MAX_VLM_PAGES_PER_DOC` | `40` | A document over it is refused, not truncated |
 | `EXTRACTION_MODEL` | `claude-opus-5` | Part of the extraction identity — changing it re-runs everything |
