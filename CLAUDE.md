@@ -227,3 +227,27 @@ Operating and deploying: [docs/operate.md](docs/operate.md), [docs/deploy.md](do
 - Do not persist an extraction whose citation failed verification.
 - Do not add Celery, Redis, MinIO, RBAC, or OIDC before Phase 8 — they are explicitly deferred.
 - Do not send a full document to Opus "just to see if it works". That is a $10 keystroke.
+- **Do not pass `--yes` to `extract` or `ocr`.** It exists for a human who has read the estimate
+  and decided. An agent reaching for it is silencing the only prompt between the corpus and the
+  invoice, usually because a prompt would hang a non-interactive session — which is a reason to
+  stop and ask the operator, not a reason to skip the question.
+- **Do not run `extract --all` or `ocr --all`.** `--all` means every ingested document, and `var/`
+  holds real 200–535pp prospectuses next to the 1–5pp fixtures. Name the document IDs, or use
+  `make extract-sample`, which touches only the labelled fixtures. This is not hypothetical: on
+  2026-08-16 an agent refreshing the eval corpus after a version bump ran `extract --all --yes` and
+  spent $0.39 on a prospectus nobody had approved — the raised per-document cap admitted what the
+  old one would have refused.
+
+### Spending money is an operator's decision, not the agent's
+
+The rule underneath the two above. `--dry-run` is free and answers "what would this cost"; the
+budget guards answer "what will be refused". **Neither authorises the spend** — the operator does,
+after seeing the number. Before any command that can bill:
+
+1. Run `--dry-run` and report the figure.
+2. Say which documents are in scope, by name.
+3. Wait for the operator to agree.
+
+Re-running an unchanged pipeline is $0 (CLAUDE.md 1.7) — but bumping `EXTRACTOR_VERSION` or
+`LLM_EXTRACTOR_VERSION` *deliberately* invalidates that, so the re-extraction after a version bump
+is a fresh bill, not a cache hit. That is exactly the case that looks free and is not.

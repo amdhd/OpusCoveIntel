@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(opuscovintel extract --all:*)",
+      "Bash(uv run opuscovintel extract --all:*)",
+      "Bash(opuscovintel ocr --all:*)",
+      "Bash(uv run opuscovintel ocr --all:*)"
+    ],
+    "ask": [
+      "Bash(opuscovintel extract:*)",
+      "Bash(uv run opuscovintel extract:*)",
+      "Bash(opuscovintel ocr:*)",
+      "Bash(uv run opuscovintel ocr:*)"
+    ]
+  }
+}
