@@ -1,0 +1,14 @@
+# Advisories the dependency audit is allowed to pass over.
+#
+# One per line: the advisory ID, then a space, then why and since when. The
+# reason is not decoration -- an ignore with no expiry and no author is how a
+# real vulnerability becomes permanent, so anything here should read like a
+# decision somebody would defend in a review.
+#
+# Format:
+#   GHSA-xxxx-xxxx-xxxx  no fix released; not reachable from our code path (2026-08-16, hadi)
+#
+# Prefer upgrading. Reach for this only when there is no fixed version yet, and
+# delete the line the moment there is.
+#
+# Empty on purpose: as of 2026-08-16 the Python and npm trees both audit clean.

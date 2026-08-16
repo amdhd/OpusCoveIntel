@@ -213,6 +213,8 @@ make ingest-sample && make extract-sample && make query-sample
 make ingest-corpus  # all three labelled fixtures — what `make eval` scores
 make eval        # extraction F1 + golden-set metrics → evals/results/. $0
 make cost-report # spend by document and stage, from the llm_calls ledger
+make cost-preview # what extracting every ingested document would cost. $0, cannot spend
+make audit       # known vulnerabilities in the Python and client trees. $0
 ```
 
 Operating and deploying: [docs/operate.md](docs/operate.md), [docs/deploy.md](docs/deploy.md).
