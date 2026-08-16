@@ -22,9 +22,14 @@ def test_budget_guards_are_decimal_not_float() -> None:
 
 
 def test_budget_defaults_match_the_plan() -> None:
-    """PLAN.md 2. A silent change here is a silent change to the spend ceiling."""
+    """PLAN.md 2. A silent change here is a silent change to the spend ceiling.
+
+    The per-document cap is $8.00, sized for real 200-535pp prospectuses whose
+    dry-run ceilings run $4-21 (docs/review.md finding 4); the old $2.00 was
+    calibrated for the 1-5pp synthetic fixtures.
+    """
     settings = Settings()
-    assert settings.MAX_COST_PER_DOCUMENT_USD == Decimal("2.00")
+    assert settings.MAX_COST_PER_DOCUMENT_USD == Decimal("8.00")
     assert settings.MAX_TOTAL_COST_USD == Decimal("200.00")
     assert settings.MAX_COST_PER_CALL_USD == Decimal("0.50")
     assert settings.MAX_VLM_PAGES_PER_DOC == 40
