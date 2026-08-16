@@ -22,6 +22,7 @@ import datetime as dt
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,7 @@ from app.domain.enums import (
 from app.domain.extraction import RuleExtraction
 from app.extract.candidates import Candidate, CandidateDetectionService
 from app.extract.citations import verify_quote
+from app.extract.dry_run import estimate_candidate_cost
 from app.extract.linking import resolve_instrument
 from app.extract.llm_extractor import LLMExtraction, LLMExtractor
 from app.extract.prompts import PROMPT_VERSION
@@ -117,6 +119,12 @@ class PipelineOutcome:
     queued_for_review: int = 0
     total_cost_usd: Decimal = Decimal("0")
     budget_exceeded: bool = False
+    # Set when the document was refused before any billable call because its
+    # dry-run ceiling already exceeded the per-document cap (finding 4). A
+    # preflight refusal costs $0 and leaves no partial extraction, which the
+    # mid-extraction abort does not -- so the two are recorded distinctly even
+    # though both mark the document BUDGET_EXCEEDED.
+    budget_preflight_refused: bool = False
     skipped: bool = False
     errors: list[str] = field(default_factory=list)
 
@@ -134,10 +142,11 @@ class ExtractionPipeline:
         session: AsyncSession,
         *,
         router: LLMRouter | None = None,
+        settings: Any | None = None,
     ) -> None:
         self._session = session
         self._router = router or LLMRouter(session)
-        self._settings = get_settings()
+        self._settings = settings if settings is not None else get_settings()
         self._documents = DocumentRepository(session)
         self._chunks = DocumentChunkRepository(session)
         self._clauses = ClauseRepository(session)
@@ -277,6 +286,35 @@ class ExtractionPipeline:
             outcome.errors.append(f"candidates: {exc}")
             await self._finalize(document, job, outcome)
             return outcome
+
+        # --- Refuse before spending (docs/review.md finding 4) --------------
+        # The per-document guard stops a run mid-document once accumulated spend
+        # crosses the cap, which pays for the calls already made and leaves a
+        # partial extraction that is harder to reason about than a clean
+        # refusal. When the dry-run ceiling for the whole document already
+        # exceeds the cap, there is nothing to discover by starting: refuse
+        # before the first billable call. The estimate is free (regex + offline
+        # token counts) and prices the same way the guard does, so the two
+        # cannot disagree.
+        if candidates:
+            estimate = estimate_candidate_cost(
+                [c.text for c in candidates], settings=self._settings
+            )
+            cap = self._settings.MAX_COST_PER_DOCUMENT_USD
+            if estimate.ceiling_usd > cap:
+                logger.warning(
+                    "document refused before spending; dry-run ceiling exceeds per-document cap",
+                    extra={
+                        "document_id": str(document_id),
+                        "candidates": estimate.candidates,
+                        "ceiling_usd": str(estimate.ceiling_usd),
+                        "cap_usd": str(cap),
+                    },
+                )
+                outcome.budget_exceeded = True
+                outcome.budget_preflight_refused = True
+                await self._finalize(document, job, outcome)
+                return outcome
 
         llm_results: list[LLMExtraction] = []
         for candidate in candidates:
@@ -679,7 +717,11 @@ class ExtractionPipeline:
         if outcome.budget_exceeded:
             document.status = DocumentStatus.BUDGET_EXCEEDED
             job.status = JobStatus.BUDGET_EXCEEDED
-            job.error_message = "per-document or global budget ceiling reached mid-extraction"
+            job.error_message = (
+                "dry-run ceiling exceeds the per-document cost cap; refused before the first call"
+                if outcome.budget_preflight_refused
+                else "per-document or global budget ceiling reached mid-extraction"
+            )
         elif outcome.errors and outcome.llm_extracted == 0:
             job.status = JobStatus.FAILED
             job.error_message = "; ".join(outcome.errors)[:2000]
@@ -712,6 +754,7 @@ class ExtractionPipeline:
                 "queued_for_review": outcome.queued_for_review,
                 "total_cost_usd": str(outcome.total_cost_usd),
                 "budget_exceeded": outcome.budget_exceeded,
+                "budget_preflight_refused": outcome.budget_preflight_refused,
                 "job_status": job.status.value,
             },
         )

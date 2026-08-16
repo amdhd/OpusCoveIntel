@@ -397,6 +397,106 @@ async def test_pipeline_budget_exceeded_is_reported(
     assert document.status is DocumentStatus.BUDGET_EXCEEDED
 
 
+class TestRefuseBeforeSpending:
+    """docs/review.md finding 4: refuse a document up front, not part-way.
+
+    The per-document guard trips mid-extraction, so a document whose ceiling
+    exceeds the cap pays for the calls made before the guard stops it and ends
+    up partially extracted. When the dry-run ceiling for the whole document
+    already exceeds the cap, the pipeline refuses before the first billable
+    call — $0 spent, no partial output, and a message that says which kind of
+    refusal it was.
+    """
+
+    async def test_a_document_over_the_cap_is_refused_before_any_call(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        mock_router: LLMRouter,
+        seeded_universe: None,
+    ) -> None:
+        from app.core.config import Settings
+        from app.db.models.ops import ExtractionJob
+        from app.domain.enums import JobStatus, JobType
+
+        # A cap below any non-empty document's ceiling forces the preflight to
+        # fire on the covenant-heavy fixture, which has candidates.
+        pinched = Settings(ENVIRONMENT="test", MAX_COST_PER_DOCUMENT_USD=Decimal("0.0000001"))
+        pipeline = ExtractionPipeline(db_session, router=mock_router, settings=pinched)
+
+        document_id = indexed_corpus[0]
+        outcome = await pipeline.extract(document_id)
+
+        # Refused, and refused the *preflight* way — distinct from a mid-run abort.
+        assert outcome.budget_exceeded
+        assert outcome.budget_preflight_refused
+        # Nothing billable ran: no cost, no LLM clauses.
+        assert outcome.total_cost_usd == Decimal("0")
+        assert outcome.llm_extracted == 0
+        assert outcome.llm_clauses == 0
+        # But the deterministic fallback still persisted (PLAN.md 3): a refused
+        # document is not an empty one.
+        assert outcome.rule_clauses > 0
+
+        document = await db_session.get(Document, document_id)
+        assert document is not None
+        assert document.status is DocumentStatus.BUDGET_EXCEEDED
+
+        # The covenant job the preflight marked. A document carries a
+        # rule-extraction job too, so narrow to the budget-exceeded covenant one
+        # and read its message -- which must name the preflight, not a mid-run abort.
+        job = (
+            await db_session.execute(
+                select(ExtractionJob).where(
+                    ExtractionJob.document_id == document_id,
+                    ExtractionJob.job_type == JobType.EXTRACT_COVENANT,
+                    ExtractionJob.status == JobStatus.BUDGET_EXCEEDED,
+                )
+            )
+        ).scalar_one()
+        assert job.error_message is not None
+        assert "before the first call" in job.error_message
+
+    async def test_a_document_under_the_cap_is_not_refused(
+        self,
+        pipeline: ExtractionPipeline,
+        indexed_corpus: list[uuid.UUID],
+        seeded_universe: None,
+    ) -> None:
+        """The preflight must not fire on documents the cap admits.
+
+        With the real default cap the small synthetic fixture is well under
+        budget, so a normal run reports no preflight refusal.
+        """
+        outcome = await pipeline.extract(indexed_corpus[0])
+
+        assert not outcome.budget_preflight_refused
+
+    async def test_a_mid_run_abort_is_not_flagged_as_a_preflight_refusal(
+        self,
+        db_session: AsyncSession,
+        indexed_corpus: list[uuid.UUID],
+        seeded_universe: None,
+    ) -> None:
+        """A per-call trip mid-extraction is a different event, and reads as one.
+
+        The per-call cap is tiny but the per-document cap is the default, so the
+        preflight passes and the guard trips inside the loop instead.
+        """
+        from app.core.config import Settings
+
+        broke = Settings(ENVIRONMENT="test", MAX_COST_PER_CALL_USD=Decimal("0.000001"))
+        pipeline = ExtractionPipeline(
+            db_session,
+            router=LLMRouter(db_session, provider=MockLLMProvider(), settings=broke),
+        )
+
+        outcome = await pipeline.extract(indexed_corpus[0])
+
+        assert outcome.budget_exceeded
+        assert not outcome.budget_preflight_refused
+
+
 async def test_review_queue_entries_reference_a_real_entity(
     pipeline: ExtractionPipeline,
     indexed_corpus: list[uuid.UUID],

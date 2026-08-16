@@ -23,7 +23,7 @@ so what was true at `dc30321` remains readable.
 | 1 | Read-only role can read the audit trail and other users' questions | Security | **High** | Fixed |
 | 2 | No rate limiting on login | Security | **High** | Fixed |
 | 3 | No password strength policy | Security | Medium | Fixed |
-| 4 | Per-document cost cap is too low for real documents | Cost | **High** | Open |
+| 4 | Per-document cost cap is too low for real documents | Cost | **High** | Fixed (Batch API deferred) |
 | 5 | No security response headers | Security | Medium | Fixed |
 | 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Fixed |
 | 7 | No document upload in the UI | Gap | Medium | Fixed |
@@ -271,6 +271,23 @@ Worth noting the estimator is honest about being a ceiling: it prices every comp
 8,000-token budget. Real spend on the synthetic corpus came in at $0.60 against a much higher
 ceiling. Expect real cost in the **$3–7** range for all three documents, but confirm it by running
 the cheapest one first and reading `make cost-report`.
+
+**Fixed (steps 1–2); step 3 deferred.** `MAX_COST_PER_DOCUMENT_USD` default is now `8.00`
+([`app/core/config.py`](../app/core/config.py), `.env.example`, [deploy.md](deploy.md)) — sized
+for the $3–7 real spend with headroom, the number written down. And the pipeline now **refuses
+before spending**: after candidate detection and before the first billable call,
+[`ExtractionPipeline`](../app/extract/pipeline.py) prices the whole document with the same
+`estimate_candidate_cost` the `--dry-run` CLI uses, and if that ceiling exceeds the cap it marks
+the document `budget_exceeded` and stops at $0 rather than paying its way to a partial extraction.
+The estimator was refactored so the CLI and the guard share one implementation and cannot drift.
+A preflight refusal carries a distinct job message and a `budget_preflight_refused` flag, so an
+operator can tell a $0 clean refusal from a mid-document abort. On the numbers above, only the 2025
+GMTN ($4.28) now starts; the two larger documents are refused up front until they run through the
+Batch API path.
+
+Step 3 — the **Batch API** — stays open as a separate item (PLAN.md §6 finding 4.3). It halves the
+cost of exactly the two documents the raised cap does not yet admit, so it is the natural next step,
+not part of this change.
 
 ---
 
@@ -613,7 +630,7 @@ Grouped by what they buy, hardest-hitting first.
 **Now — small, high value**
 
 1. ~~Revoke the read-only role's grant on the six operational tables~~ *(finding 1 — done)*
-2. Raise the per-document cost cap and refuse-before-spending *(finding 4)*
+2. ~~Raise the per-document cost cap and refuse-before-spending~~ *(finding 4 — done; Batch API still open, finding 4.3)*
 3. ~~Password minimum length~~ *(finding 3 — done)*
 4. ~~Security headers middleware~~ *(finding 5 — done)*
 

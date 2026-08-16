@@ -104,6 +104,29 @@ class TestDryRunEstimator:
         assert str(estimate.per_document_cap) in described
         assert "worst case" in described
 
+    async def test_an_over_cap_document_is_described_as_refused_not_as_aborted(
+        self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
+    ) -> None:
+        """The estimate must describe what the pipeline actually does.
+
+        This line read "the guard will stop mid-document", which was true until
+        the refuse-before-spending preflight landed and is now the opposite of
+        the behaviour -- an over-cap document costs $0 and produces no partial
+        extraction. An operator reading it would budget for a spend that never
+        happens, and would not know the document had been skipped entirely.
+        """
+        from decimal import Decimal
+
+        from app.core.config import Settings
+
+        pinched = Settings(ENVIRONMENT="test", MAX_COST_PER_DOCUMENT_USD=Decimal("0.0000001"))
+        estimate = await estimate_document(db_session, indexed_corpus[0], settings=pinched)
+
+        assert estimate.over_cap
+        described = estimate.describe()
+        assert "refused before the first call" in described
+        assert "mid-document" not in described
+
     async def test_the_cached_prefix_is_reported(
         self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None
     ) -> None:

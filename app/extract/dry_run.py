@@ -31,6 +31,62 @@ from app.llm.cost import count_tokens_estimate, estimate_cost
 
 
 @dataclass(frozen=True)
+class CandidateCostEstimate:
+    """The worst-case cost of extracting a set of candidate spans.
+
+    This is the shared unit of estimation: both the CLI `--dry-run` (via
+    `estimate_document`) and the pipeline's refuse-before-spending preflight
+    price the same way, so the number an operator sees and the number the guard
+    acts on can never disagree.
+    """
+
+    candidates: int
+    prompt_tokens: int
+    prefix_tokens: int
+    ceiling_usd: Decimal
+
+    @property
+    def cached_prefix_tokens(self) -> int:
+        """Prefix tokens that bill at 0.1x after the first call.
+
+        The system prompt is byte-stable across calls, so every call after the
+        first reads it from cache instead of paying full input rate.
+        """
+        return self.prefix_tokens * max(0, self.candidates - 1)
+
+
+def estimate_candidate_cost(
+    candidate_texts: list[str],
+    *,
+    settings: Settings | None = None,
+) -> CandidateCostEstimate:
+    """Price extracting these candidate spans. Dispatches nothing.
+
+    Prices output at the full `max_tokens` budget per candidate, matching what
+    the budget guard assumes — so this is the ceiling that decides "will this be
+    rejected", not a forecast of the invoice.
+    """
+    config = settings or get_settings()
+
+    prefix_tokens = count_tokens_estimate(build_system_prompt())
+    prompt_tokens = sum(
+        prefix_tokens + count_tokens_estimate(build_user_message(text)) for text in candidate_texts
+    )
+    ceiling = estimate_cost(
+        provider="anthropic",
+        model_id=config.EXTRACTION_MODEL,
+        prompt_tokens=prompt_tokens,
+        max_output_tokens=EXTRACTION_MAX_TOKENS * len(candidate_texts),
+    )
+    return CandidateCostEstimate(
+        candidates=len(candidate_texts),
+        prompt_tokens=prompt_tokens,
+        prefix_tokens=prefix_tokens,
+        ceiling_usd=ceiling.total,
+    )
+
+
+@dataclass(frozen=True)
 class DocumentEstimate:
     """What one document would cost to extract, before anything is dispatched."""
 
@@ -53,8 +109,12 @@ class DocumentEstimate:
                 f"(Either the document holds no covenant language the patterns "
                 f"recognise, or it has not been chunked yet.)"
             )
+        # What the operator is told must match what the pipeline will do. This
+        # said "the guard will stop mid-document", which was true until the
+        # preflight landed and is now the opposite of the behaviour: an
+        # over-cap document is refused before the first call and costs $0.
         note = (
-            "  ** exceeds the per-document cap; the guard will stop mid-document **"
+            "  ** exceeds the per-document cap; refused before the first call, $0 **"
             if self.over_cap
             else ""
         )
@@ -81,28 +141,13 @@ async def estimate_document(
     config = settings or get_settings()
 
     candidates = await CandidateDetectionService(session).detect(document_id)
-
-    system_prompt = build_system_prompt()
-    prefix_tokens = count_tokens_estimate(system_prompt)
-
-    prompt_tokens = 0
-    for candidate in candidates:
-        prompt_tokens += prefix_tokens + count_tokens_estimate(build_user_message(candidate.text))
-
-    ceiling = estimate_cost(
-        provider="anthropic",
-        model_id=config.EXTRACTION_MODEL,
-        prompt_tokens=prompt_tokens,
-        max_output_tokens=EXTRACTION_MAX_TOKENS * len(candidates),
-    )
+    estimate = estimate_candidate_cost([c.text for c in candidates], settings=config)
 
     return DocumentEstimate(
         document_id=document_id,
-        candidates=len(candidates),
-        prompt_tokens=prompt_tokens,
-        # The prefix is byte-stable across calls, so every call after the first
-        # reads it from cache instead of paying full input rate for it.
-        cached_prefix_tokens=prefix_tokens * max(0, len(candidates) - 1),
-        ceiling_usd=ceiling.total,
+        candidates=estimate.candidates,
+        prompt_tokens=estimate.prompt_tokens,
+        cached_prefix_tokens=estimate.cached_prefix_tokens,
+        ceiling_usd=estimate.ceiling_usd,
         per_document_cap=config.MAX_COST_PER_DOCUMENT_USD,
     )
