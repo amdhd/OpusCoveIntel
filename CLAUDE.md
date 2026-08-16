@@ -244,9 +244,13 @@ The rule underneath the two above. `--dry-run` is free and answers "what would t
 budget guards answer "what will be refused". **Neither authorises the spend** — the operator does,
 after seeing the number. Before any command that can bill:
 
-1. Run `--dry-run` and report the figure.
+1. Run `make cost-preview` (or `--dry-run` on one document) and report the figure.
 2. Say which documents are in scope, by name.
 3. Wait for the operator to agree.
+
+`make cost-preview` exists because the `extract --all` deny cannot distinguish `--all --yes` from
+`--all --dry-run` — permissions match on prefix. The target hardcodes `--dry-run`, so it prices the
+corpus without being able to spend. Use it rather than looking for a way around the deny.
 
 Re-running an unchanged pipeline is $0 (CLAUDE.md 1.7) — but bumping `EXTRACTOR_VERSION` or
 `LLM_EXTRACTOR_VERSION` *deliberately* invalidates that, so the re-extraction after a version bump

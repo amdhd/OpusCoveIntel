@@ -77,12 +77,18 @@ class Settings(BaseSettings):
     # -- budget guards ----------------------------------------------------
     # PLAN.md 2. Money is Decimal, never float (CLAUDE.md 6).
     # Calibrated for real 200-535pp prospectuses, whose dry-run ceilings run
-    # $4-21 (docs/review.md finding 4). The old $2.00 default was sized for the
-    # 1-5pp synthetic fixtures and aborted every real document mid-extraction.
-    # $8.00 covers the expected real spend ($3-7) with headroom; a document
-    # whose dry-run ceiling still exceeds it is refused before the first call
-    # rather than part-way through (ExtractionPipeline preflight).
-    MAX_COST_PER_DOCUMENT_USD: Decimal = Decimal("8.00")
+    # $4-21 (docs/review.md finding 4). The original $2.00 was sized for the
+    # 1-5pp synthetic fixtures and aborted every real document mid-extraction;
+    # a document whose dry-run ceiling exceeds this is refused before the first
+    # call rather than part-way through (ExtractionPipeline preflight).
+    #
+    # $8.00 -> $5.00 on 2026-08-16, so one document cannot exhaust the $10.00
+    # global ceiling. Checked before changing it rather than after: no document
+    # in the corpus sits between the two figures, so this refuses nothing $8.00
+    # admitted. The only real document under the cap is the 2025 GMTN, whose
+    # ceiling is $4.28 -- and which actually cost $0.39, because the estimator
+    # prices every completion at the full 8000-token budget.
+    MAX_COST_PER_DOCUMENT_USD: Decimal = Decimal("5.00")
     # Lowered from $200.00 on 2026-08-16 after an agent ran `extract --all
     # --yes` and spent $0.39 of real money on a document nobody had approved.
     # $200 was sized for a build phase that has since been built; the corpus is
