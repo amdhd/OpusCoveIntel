@@ -109,8 +109,12 @@ class DocumentEstimate:
                 f"(Either the document holds no covenant language the patterns "
                 f"recognise, or it has not been chunked yet.)"
             )
+        # What the operator is told must match what the pipeline will do. This
+        # said "the guard will stop mid-document", which was true until the
+        # preflight landed and is now the opposite of the behaviour: an
+        # over-cap document is refused before the first call and costs $0.
         note = (
-            "  ** exceeds the per-document cap; the guard will stop mid-document **"
+            "  ** exceeds the per-document cap; refused before the first call, $0 **"
             if self.over_cap
             else ""
         )
