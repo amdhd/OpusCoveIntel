@@ -28,7 +28,7 @@ so what was true at `dc30321` remains readable.
 | 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Fixed |
 | 7 | No document upload in the UI | Gap | Medium | Fixed |
 | 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Open |
-| 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Open |
+| 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Fixed |
 | 10 | Vision/OCR path has never run against a real provider | Coverage | Medium | Open |
 | 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Part-fixed |
 | 12 | No dependency vulnerability scanning in CI | Security | Low | Open |
@@ -364,6 +364,44 @@ than at either model — likely the Malaysian national-scale suffixes (`(m)`, `i
 **Fix:** start in [`app/rules/ratings.py`](../app/rules/ratings.py). Write the regression test,
 watch it fail, then fix.
 
+**Fixed — both paths now P 1.00 / R 1.00 / F1 1.00** (LLM 0.50 → 1.00, rules 0.67 → 1.00), against
+a target of ≥0.9.
+
+**The module named above was the wrong one.** `app/rules/ratings.py` normalises the *notch* and
+already strips `(m)` / `id`; `BBB-` parses there without complaint. The missing value was the
+*agency*, which that module never touches. Two defects were behind the number, and only running the
+extractors against the corpus separated them — with two labelled instances, "0.50" was one hit and
+one miss.
+
+* **The agency was looked up inside a single chunk.** In `rating-report.pdf` the trigger sentence
+  is a 224-character chunk of its own naming no agency; MARC is in the chunk before it and the one
+  after. `_agency_near` searches only the text it is handed, so no context window could reach it —
+  `_CONTEXT_CHARS` was already 400, nearly twice the chunk. Both extractors missed the same label
+  for the same structural reason, which is exactly why it read as a normalisation bug.
+  [`resolve_document_agency`](../app/extract/rule_extractor.py) now resolves the one agency a
+  document names and both paths use it as a *fallback* when a span names none. **Exactly one, or
+  nothing**: two named agencies resolve to nothing rather than a guess, because MARC's `A-` and
+  RAM's `AA3` are different scales and a wrong attribution is worse than an absent value — the same
+  choice finding 14 made. A span that names its own agency always wins.
+* **The LLM path wrote `"unknown"` as a value.** `rule_extractor` is explicit that "an absent
+  agency is a fact, 'unknown' as a value is noise" and omits it; the pipeline guarded on
+  truthiness, and `RatingAgency.UNKNOWN` is a non-empty `StrEnum` member. That string was the false
+  positive holding LLM precision at 0.50 while the rule path sat at 1.00 — the gap between the two
+  paths was this one line, not the models.
+
+**Two version bumps, one of them nearly missed.** `EXTRACTOR_VERSION` → `rules-v3` and
+`LLM_EXTRACTOR_VERSION` → `llm-pipeline-v3`. The extraction identity (CLAUDE.md 1.7) skips a
+document whose identity already ran, so without the bumps every already-extracted document keeps
+its agency-less and `"unknown"` rows for ever. The second bump was missed on the first attempt and
+found only by re-running, where the pipeline printed "skipped; extraction identity already
+satisfied" for the very document the fix targeted.
+
+**One cross-document hazard, found by reading the caller.** The resolved agency lives on the
+pipeline instance, and `extract --all` reuses one instance for the whole corpus — so a document
+whose rule pass failed would have inherited the previous document's agency and stamped its
+covenants with it. Cleared per run, with a test that drives the corpus through one instance and
+asserts the agency-less trust deed claims none.
+
 ### 14. The agent answers about one instrument with all of them — Medium
 
 *Found 2026-08-10 while verifying the fix for finding 6, not in the original audit.*
@@ -638,7 +676,7 @@ Grouped by what they buy, hardest-hitting first.
 
 5. ~~Login rate limiting~~ *(finding 2 — done)*
 6. ~~Make unsupported questions refuse, and extend the golden set to catch them~~ *(finding 6 — done)*
-7. Fix `rating_agency` normalisation *(finding 9)*
+7. ~~Fix `rating_agency` normalisation~~ *(finding 9 — done; it was scoping, not normalisation)*
 
 **Then — the accuracy question that matters most**
 

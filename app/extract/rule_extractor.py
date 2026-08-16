@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from collections.abc import Iterable
 from decimal import Decimal, InvalidOperation
 from typing import Final
 
@@ -36,7 +37,10 @@ logger = get_logger(__name__)
 # agency started travelling with the trigger notch: the output of this module
 # changed, and without a bump every already-extracted document would be skipped
 # as "identity already satisfied" and keep the old, agency-less rows for ever.
-EXTRACTOR_VERSION: Final[str] = "rules-v2"
+# v3: the agency now falls back to the one the document names when the span
+# names none (docs/review.md finding 9). Same reasoning as v2 -- a document
+# extracted under v2 holds a trigger with no agency, and only a bump re-runs it.
+EXTRACTOR_VERSION: Final[str] = "rules-v3"
 
 # How far around a match to look for the number it refers to. A cross-default
 # clause names its threshold in the same sentence; widening this to the chunk
@@ -56,12 +60,50 @@ _AGENCY_TOKENS: Final[dict[str, RatingAgency]] = {
 }
 
 
-def extract(text: str) -> list[RuleExtraction]:
-    """Every covenant this extractor can find in one chunk."""
+def resolve_document_agency(texts: Iterable[str]) -> RatingAgency | None:
+    """The one rating agency a document names, or None.
+
+    A rating trigger routinely states its notch in a sentence that names no
+    agency, because the document said which agency it was talking about a
+    paragraph earlier. `_agency_near` cannot see that: it searches the text it
+    is handed, and chunking hands it one paragraph. In `rating-report.pdf` the
+    trigger is a 224-character chunk of its own with MARC in the chunks either
+    side, so no context window inside the chunk could ever have reached it --
+    which is why both extractors missed the same label and it looked like a
+    normalisation bug (docs/review.md finding 9).
+
+    **Exactly one agency, or nothing.** Two named agencies resolve to None
+    rather than to a guess: MARC's `A-` and RAM's `AA3` are different scales
+    (CLAUDE.md 6), so attributing a notch to the wrong one is a wrong number
+    rather than a missing one. This is the choice finding 14 made for entity
+    narrowing, for the same reason.
+
+    The result is a *fallback*. A span that names its own agency always wins --
+    a cross-border prospectus can carry a MARC national-scale trigger and a
+    Fitch international one, and there the sentence is the better evidence.
+    """
+    seen = {
+        agency
+        for text in texts
+        for token, agency in _AGENCY_TOKENS.items()
+        if token in text.lower()
+    }
+    if len(seen) == 1:
+        return seen.pop()
+    return None
+
+
+def extract(text: str, *, document_agency: RatingAgency | None = None) -> list[RuleExtraction]:
+    """Every covenant this extractor can find in one chunk.
+
+    `document_agency` is the agency the rest of the document names, used only
+    when the span itself names none. Passed in rather than looked up because
+    this function is pure over its text -- the caller owns the document.
+    """
     found: list[RuleExtraction] = []
     for pattern in patterns.ALL_PATTERNS:
         for match in pattern.regex.finditer(text):
-            extraction = _build(pattern, match, text)
+            extraction = _build(pattern, match, text, document_agency)
             if extraction is not None:
                 found.append(extraction)
 
@@ -102,7 +144,12 @@ def extract_call_schedule(text: str) -> list[tuple[dt.date, Decimal, CallType, i
 # -- building an extraction ------------------------------------------------
 
 
-def _build(pattern: patterns.Pattern, match: re.Match[str], text: str) -> RuleExtraction | None:
+def _build(
+    pattern: patterns.Pattern,
+    match: re.Match[str],
+    text: str,
+    document_agency: RatingAgency | None = None,
+) -> RuleExtraction | None:
     quote = _sentence_around(text, match.start(), match.end())
     groups = match.groupdict()
 
@@ -115,7 +162,7 @@ def _build(pattern: patterns.Pattern, match: re.Match[str], text: str) -> RuleEx
         elif "amount" in groups and groups.get("amount"):
             terms = _amount_terms(pattern, groups["amount"])
         elif "rating" in groups and groups.get("rating"):
-            terms = _rating_terms(pattern, groups["rating"], text, match.start())
+            terms = _rating_terms(pattern, groups["rating"], text, match.start(), document_agency)
         elif pattern.covenant_type is CovenantType.CROSS_DEFAULT:
             terms = _cross_default_terms(pattern, text, match)
         else:
@@ -221,7 +268,11 @@ def _cross_default_terms(
 
 
 def _rating_terms(
-    pattern: patterns.Pattern, raw_rating: str, text: str, position: int
+    pattern: patterns.Pattern,
+    raw_rating: str,
+    text: str,
+    position: int,
+    document_agency: RatingAgency | None = None,
 ) -> CovenantTerms | None:
     try:
         notch = normalise_rating(raw_rating)
@@ -230,10 +281,17 @@ def _rating_terms(
         # evaluate. Coercing it would corrupt every downstream comparison.
         return None
     assert pattern.covenant_type is not None
+
+    # The span first, the document only as a fallback: a sentence that names its
+    # own agency is better evidence than one the document named elsewhere.
+    agency = _agency_near(text, position)
+    if agency is RatingAgency.UNKNOWN and document_agency is not None:
+        agency = document_agency
+
     return CovenantTerms(
         covenant_type=pattern.covenant_type,
         trigger_rating=notch,
-        rating_agency=_agency_near(text, position),
+        rating_agency=agency,
         severity=Severity.HIGH,
         description=pattern.pattern_id,
     )

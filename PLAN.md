@@ -254,10 +254,18 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    generated ourselves — that measures the harness, not the extractor. Regex patterns,
    chunking and candidate detection are all tuned to invented layouts. Nothing licensed
    may be committed (CLAUDE.md 7); keep it under `var/`.
-2. **`rating_agency` extraction.** The one weak field: P 0.50 / R 0.50 on the LLM path,
-   R 0.50 on rules, against ≥0.94 everywhere else. Both extractors miss the same label,
-   which points at normalisation rather than at either model — start with the `(m)` / `id`
-   national-scale suffixes in `app/rules/ratings.py`.
+2. ~~**`rating_agency` extraction.**~~ ✅ **1.00 P/R/F1 on both paths** (LLM 0.50 → 1.00,
+   rules 0.67 → 1.00), against the ≥0.9 acceptance below. It was **scoping, not
+   normalisation**, and not in `app/rules/ratings.py` at all — that module handles the
+   notch and already strips `(m)` / `id`. The agency was resolved inside a single chunk,
+   and a trigger sentence routinely names a notch without naming the agency the document
+   established a paragraph earlier; in `rating-report.pdf` the trigger is a 224-character
+   chunk with MARC on either side of it. `resolve_document_agency` now supplies the one
+   agency a document names as a fallback, ambiguity resolving to nothing. A second defect
+   sat underneath: the LLM path wrote the string `"unknown"` because
+   `RatingAgency.UNKNOWN` is truthy, which was the false positive separating the two
+   paths' precision. Both extractor versions bumped, or every extracted document keeps its
+   old rows.
 3. **Live-verify the VLM.** Wired (`opuscovintel ocr`) and never once run against a real
    provider; blocked on OpenAI credit. Closes §9 Q3.
 4. **Real embeddings and the semantic candidate legs.** Everything runs on

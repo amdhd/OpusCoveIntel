@@ -42,6 +42,7 @@ from app.domain.enums import (
     ExtractionStatus,
     JobStatus,
     JobType,
+    RatingAgency,
     ReviewStatus,
     ReviewTrigger,
 )
@@ -53,6 +54,7 @@ from app.extract.linking import resolve_instrument
 from app.extract.llm_extractor import LLMExtraction, LLMExtractor
 from app.extract.prompts import PROMPT_VERSION
 from app.extract.rule_extractor import extract as rule_extract
+from app.extract.rule_extractor import resolve_document_agency
 from app.extract.schemas import LLMCovenantExtraction
 from app.extract.service import RuleExtractionService
 from app.llm.budget import BudgetExceededError
@@ -69,7 +71,12 @@ logger = get_logger(__name__)
 # this pipeline should invalidate prior runs even though the prompt and model
 # are unchanged.
 # v2: multi-covenant spans, and rule matching paired by covenant type.
-LLM_EXTRACTOR_VERSION = "llm-pipeline-v2"
+# v3: the rating agency is no longer written as the string "unknown", and falls
+# back to the one the document names when the span names none (docs/review.md
+# finding 9). Without the bump a document already extracted under v2 keeps its
+# "unknown" rows for ever -- the run is skipped as identity-satisfied, which is
+# exactly what happened on the first attempt at this fix.
+LLM_EXTRACTOR_VERSION = "llm-pipeline-v3"
 
 # CLAUDE.md §5: monetary thresholds above this go to human review.
 HIGH_VALUE_THRESHOLD = Decimal("100000000")
@@ -156,6 +163,9 @@ class ExtractionPipeline:
         self._rules = RuleExtractionService(session, self._settings)
         self._candidates_svc = CandidateDetectionService(session)
         self._llm_extractor = LLMExtractor(session, router=self._router)
+        # The one agency this document names, resolved per run in `_run`. Used
+        # only when a span names none (docs/review.md finding 9).
+        self._document_agency: RatingAgency | None = None
 
     async def extract(
         self,
@@ -176,6 +186,14 @@ class ExtractionPipeline:
         document = await self._documents.get(document_id)
         if document is None:
             raise LookupError(f"document {document_id} not found")
+
+        # Cleared per document, not per instance. `extract --all` reuses one
+        # pipeline across the whole corpus, so without this a document whose
+        # rule pass failed would inherit the previous document's agency and
+        # stamp its covenants with it -- a wrong attribution, which is the one
+        # outcome the ambiguity rule in `resolve_document_agency` exists to
+        # avoid.
+        self._document_agency = None
 
         outcome = PipelineOutcome(document_id=document_id)
 
@@ -369,9 +387,15 @@ class ExtractionPipeline:
         routinely holds several chunks, so this was not a corner case.
         """
         chunks = await self._chunks.list_for_document(document.id, limit=100_000)
+        # Resolved here because this is where the document's chunks are already
+        # loaded, and recorded on the instance so the LLM persistence path uses
+        # the same answer the comparison baseline does -- two resolutions could
+        # disagree, and a disagreement would show up as a phantom review item.
+        self._document_agency = resolve_document_agency(c.chunk_text for c in chunks)
+
         results: _RuleIndex = {}
         for chunk in chunks:
-            for extraction in rule_extract(chunk.chunk_text):
+            for extraction in rule_extract(chunk.chunk_text, document_agency=self._document_agency):
                 results.setdefault(chunk.id, []).append((extraction, chunk))
         return results
 
@@ -670,8 +694,19 @@ class ExtractionPipeline:
             thresholds["threshold_ratio"] = str(output.threshold_ratio)
         if output.trigger_rating:
             thresholds["trigger_rating"] = output.trigger_rating
-            if output.rating_agency:
-                thresholds["rating_agency"] = output.rating_agency.value
+            # `is not UNKNOWN`, not truthiness. `RatingAgency.UNKNOWN` is a
+            # non-empty StrEnum member, so the truthiness check wrote the string
+            # "unknown" into the column -- a covenant that looks to every reader
+            # like it carries an agency, and a false positive in `make eval`.
+            # The rule extractor has always been explicit about this: an absent
+            # agency is a fact, "unknown" as a value is noise.
+            agency = output.rating_agency
+            if agency is None or agency is RatingAgency.UNKNOWN:
+                # The span named none, so fall back to the one the document
+                # names, exactly as the rule path does (finding 9).
+                agency = self._document_agency
+            if agency is not None and agency is not RatingAgency.UNKNOWN:
+                thresholds["rating_agency"] = agency.value
         return thresholds
 
     async def _queue_review(
