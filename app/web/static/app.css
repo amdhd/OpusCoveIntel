@@ -1141,3 +1141,41 @@ button:disabled {
     overflow: visible;
   }
 }
+
+/* -- pagination ---------------------------------------------------------
+   Shown only when a list has more than one page (app/web/templates/
+   _pagination.html). The disabled step keeps its slot rather than
+   disappearing, so the row does not reflow as you reach either end. */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  margin-top: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-caption);
+}
+
+.pagination-state {
+  color: var(--muted);
+}
+
+.pagination-step {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.pagination-step:hover {
+  background: var(--accent-subtle);
+}
+
+.pagination-step.is-disabled {
+  color: var(--muted);
+  border-color: transparent;
+  pointer-events: none;
+}

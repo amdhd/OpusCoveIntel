@@ -152,6 +152,10 @@ class CatalogService:
         rows = await self.instruments.list(limit=limit, offset=offset)
         return [_instrument(row) for row in rows]
 
+    async def count_instruments(self) -> int:
+        """How many there are, so a page can say which slice it is showing."""
+        return await self.instruments.count()
+
     async def get_instrument(self, instrument_id: uuid.UUID) -> InstrumentDetail | None:
         instrument = await self.instruments.get(instrument_id)
         if instrument is None:

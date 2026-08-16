@@ -72,4 +72,7 @@
   {% endif %}
 </div>
 {% endfor %}
+
+{% set endpoint = "/ui/review" %}
+{% include "_pagination.html" with context %}
 {% endblock %}

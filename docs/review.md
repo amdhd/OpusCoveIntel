@@ -27,12 +27,12 @@ so what was true at `dc30321` remains readable.
 | 5 | No security response headers | Security | Medium | Fixed |
 | 6 | Agent answers unsupported questions confidently instead of refusing | Correctness | **High** | Fixed |
 | 7 | No document upload in the UI | Gap | Medium | Fixed |
-| 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Open |
+| 8 | Portfolio page runs N rule evaluations per request | Performance | Medium | Fixed |
 | 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Fixed |
 | 10 | Vision/OCR path has never run against a real provider | Coverage | Medium | Open |
 | 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Part-fixed |
 | 12 | No dependency vulnerability scanning in CI | Security | Low | Fixed |
-| 13 | Review-queue pages are unbounded | Performance | Low | Open |
+| 13 | Review-queue pages are unbounded | Performance | Low | Fixed |
 | 14 | Agent answers a question about one instrument with all of them | Correctness | Medium | Fixed |
 | 15 | A covenant question about one document is answered from every document | Correctness | **High** | Fixed |
 | 16 | Ingesting a document does not make it searchable | Correctness | **High** | Fixed |
@@ -580,10 +580,41 @@ duplicating.
 and evaluates in memory. The rules engine itself is pure functions over loaded data, so this is a
 data-loading change, not a logic change. Add pagination while you're there.
 
+**Fixed.** `evaluate_covenant_rules` in [`app/agent/tools.py`](../app/agent/tools.py) loads
+instruments, rating triggers and covenants in **three queries total** regardless of how many
+instruments are asked for. A 200-bond portfolio goes from ~600 round trips to 3.
+
+The warning above shaped the implementation more than the batching did. Rather than a second
+evaluator, the per-instrument logic was extracted into `_evaluate_loaded`, and **both** the
+single-instrument tool the agent calls and the new batch entry point evaluate through it. The
+loaders differ; the evaluation cannot. A test asserts the two paths return identical data
+field-for-field, so a future edit to one that does not reach the other fails rather than drifts.
+
+**The query count is asserted, not assumed.** A batch entry point that loops internally satisfies
+every behavioural test — it returns the right answers, just slowly, which is precisely the defect.
+So the tests count SQL statements through a SQLAlchemy event listener and pin the total at three.
+Verified the way this codebase requires: with the batching replaced by a loop, the twelve
+behavioural tests still pass and only the two counting tests go red.
+
 ### 13. Review-queue and instrument pages are unbounded — Low
 
 The review queue renders up to 100 items with no pagination; `/ui/instruments` requests 200. Both
 are fine at demo scale and will not be at production scale.
+
+**Fixed.** Both take a `page` parameter and render 50 rows at a time through one `_page_window`
+helper. Verified live against the development database, which holds 124 pending items: page 1
+reports *"Showing 1–50 of 124 · page 1 of 3"* with **50** rows and a disabled *Previous*; page 3
+reports *"Showing 101–124 of 124"* with 24 rows and a disabled *Next*.
+
+Three small decisions. A page past the end **clamps rather than 404s** — a queue drains while
+somebody is reading it, so a stale page number is ordinary and the last page beats an error.
+`page=0` is a 422, because `ge=1` on the query parameter is cheaper than defending against a
+negative offset. And the control is **hidden when there is only one page**: the instrument list has
+three rows and renders no pagination at all, because a control that can never do anything is
+furniture.
+
+Also folded in: the review page called `count_pending()` twice per request, for the nav badge and
+the heading, which always showed the same number.
 
 ---
 
@@ -714,7 +745,7 @@ Grouped by what they buy, hardest-hitting first.
 
 **Later — scale, not correctness**
 
-11. Batch the portfolio page's rule evaluation; add pagination *(findings 8, 13)*
+11. ~~Batch the portfolio page's rule evaluation; add pagination~~ *(findings 8, 13 — done)*
 12. Upload screen *(finding 7)*
 13. ~~Dependency scanning in CI~~ *(finding 12 — done)*
 14. Batch API for bulk re-extraction *(finding 4.3)*
