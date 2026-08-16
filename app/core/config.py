@@ -83,7 +83,13 @@ class Settings(BaseSettings):
     # whose dry-run ceiling still exceeds it is refused before the first call
     # rather than part-way through (ExtractionPipeline preflight).
     MAX_COST_PER_DOCUMENT_USD: Decimal = Decimal("8.00")
-    MAX_TOTAL_COST_USD: Decimal = Decimal("200.00")
+    # Lowered from $200.00 on 2026-08-16 after an agent ran `extract --all
+    # --yes` and spent $0.39 of real money on a document nobody had approved.
+    # $200 was sized for a build phase that has since been built; the corpus is
+    # three synthetic fixtures plus three real prospectuses, and the whole of
+    # Phase 10 costs single-digit dollars. A ceiling only does its job when it
+    # is close enough to normal spend to stop something. Closes PLAN.md 9 Q6.
+    MAX_TOTAL_COST_USD: Decimal = Decimal("10.00")
     MAX_COST_PER_CALL_USD: Decimal = Decimal("0.50")
     MAX_VLM_PAGES_PER_DOC: int = 40
 

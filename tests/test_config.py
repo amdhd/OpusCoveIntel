@@ -30,7 +30,7 @@ def test_budget_defaults_match_the_plan() -> None:
     """
     settings = Settings()
     assert settings.MAX_COST_PER_DOCUMENT_USD == Decimal("8.00")
-    assert settings.MAX_TOTAL_COST_USD == Decimal("200.00")
+    assert settings.MAX_TOTAL_COST_USD == Decimal("10.00")
     assert settings.MAX_COST_PER_CALL_USD == Decimal("0.50")
     assert settings.MAX_VLM_PAGES_PER_DOC == 40
 

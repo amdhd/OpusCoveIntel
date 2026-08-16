@@ -49,8 +49,8 @@ This is the backbone. Everything routes through `app/llm/router.py`.
 
 | Guard | Env var | Default | Behavior on breach |
 |---|---|---|---|
-| Per-document ceiling | `MAX_COST_PER_DOCUMENT_USD` | `2.00` | Abort doc, mark `budget_exceeded`, queue for review |
-| Global ceiling | `MAX_TOTAL_COST_USD` | `200.00` | Circuit-breaker opens; all calls refused |
+| Per-document ceiling | `MAX_COST_PER_DOCUMENT_USD` | `8.00` | Refused before the first call when the dry-run ceiling exceeds it; mid-run breach marks `budget_exceeded` |
+| Global ceiling | `MAX_TOTAL_COST_USD` | `10.00` | Circuit-breaker opens; all calls refused |
 | Per-call ceiling | `MAX_COST_PER_CALL_USD` | `0.50` | Reject before dispatch |
 | VLM pages per doc | `MAX_VLM_PAGES_PER_DOC` | `40` | Fail loudly; do not silently truncate |
 
@@ -378,7 +378,13 @@ production HA/DR.
 5. ~~**Reviewer identity.**~~ **Closed 2026-08-07.** Placeholder reviewer IDs were not acceptable:
    the value came from the request body, so the audit trail recorded whatever the caller typed.
    Phase 9 replaced it with session-derived identity and two roles. OIDC stays deferred.
-6. **Global budget.** Is `MAX_TOTAL_COST_USD=200` the right ceiling for the build phase?
+6. ~~**Global budget.**~~ **Closed 2026-08-16. No — $200 was two orders of magnitude too high.**
+   Lowered to **$10.00**. The build phase it was sized for has been built, and total spend to date
+   is $0.99 across the whole corpus. A ceiling set far above normal spend never fires: the run that
+   prompted this — an agent passing `--yes` to `extract --all` — cost $0.39 and would have had to
+   repeat itself five hundred times before $200 stopped it. The per-document cap ($8.00) bounds one
+   mistake; this one bounds a loop. Both now sit close enough to real spend to be a control rather
+   than a formality.
 7. **Bahasa Malaysia volume.** What share of the real corpus is BM? If material, the extraction
    prompts need BM few-shot examples and the golden set needs BM questions.
 
