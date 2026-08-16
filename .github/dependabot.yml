@@ -1,0 +1,55 @@
+# Dependabot — the other half of docs/review.md finding 12.
+#
+# The CI audit job tells you a dependency has a known vulnerability. This opens
+# the pull request that fixes it. Neither is much use without the other: a red
+# tick with no upgrade path is a build nobody can turn green, and an upgrade
+# nobody is told they need is one nobody makes.
+#
+# Weekly rather than daily, and grouped rather than one PR per package, because
+# this is a small pinned tree and a stream of single-package PRs is the fastest
+# way to teach a team to stop reading them. Security updates are ungrouped and
+# arrive as soon as they exist -- those are the ones worth interrupting for.
+
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      python-minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      angular:
+        # Angular packages move as a set; upgrading one alone usually fails the
+        # build on a peer-dependency mismatch rather than producing anything
+        # useful to review.
+        patterns: ['@angular*', 'zone.js', 'typescript']
+      client-minor-and-patch:
+        patterns: ['*']
+        exclude-patterns: ['@angular*', 'zone.js', 'typescript']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: 'chore(deps)'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: 'chore(ci)'

@@ -31,7 +31,7 @@ so what was true at `dc30321` remains readable.
 | 9 | `rating_agency` extraction accuracy is 0.50 | Correctness | Medium | Fixed |
 | 10 | Vision/OCR path has never run against a real provider | Coverage | Medium | Open |
 | 11 | Retrieval runs on a placeholder embedder | Quality | Medium | Part-fixed |
-| 12 | No dependency vulnerability scanning in CI | Security | Low | Open |
+| 12 | No dependency vulnerability scanning in CI | Security | Low | Fixed |
 | 13 | Review-queue pages are unbounded | Performance | Low | Open |
 | 14 | Agent answers a question about one instrument with all of them | Correctness | Medium | Fixed |
 | 15 | A covenant question about one document is answered from every document | Correctness | **High** | Fixed |
@@ -236,6 +236,31 @@ vulnerabilities.
 
 **Fix:** `uv pip audit` (or `pip-audit`) as a CI job, plus Dependabot for the lockfile. Low
 severity only because the dependency surface is small and pinned.
+
+**Fixed.** A sixth CI job, `dependency audit`, plus [`.github/dependabot.yml`](../.github/dependabot.yml).
+Both trees audit **clean today**, which is the point of landing it now: the scan starts green, so
+the first red tick is a real regression rather than a backlog somebody has to triage before the
+job is worth anything.
+
+`uv pip audit` **does not exist** — a reasonable guess, and wrong, which one `--help` settled. The
+tool is PyPA's `pip-audit`, run through `uvx` at a **pinned** `2.10.1`: a scanner that silently
+upgrades itself is a supply-chain surface of its own.
+
+Three decisions worth stating:
+
+* **It fails the build.** A warning nobody is required to read is theatre. The escape hatch is
+  [`.github/pip-audit-ignore.txt`](../.github/pip-audit-ignore.txt) — advisory ID, reason, date,
+  author — so a suppression is a decision somebody signed rather than a flag somebody flipped, and
+  `pip-audit` prints the ignored count so it stays visible in the log.
+* **Dev dependencies are included** (`--all-groups`). They execute in CI and on developer machines,
+  which is exactly where a compromised test dependency would run.
+* **The client tree is audited too**, which this finding did not ask for. It ships to a browser and
+  is the same surface; `npm audit` reads the lockfile, so the job needs no `npm ci`.
+
+Verified by running the job's commands verbatim, then **proving the guard fires**: an audit of a
+knowingly-vulnerable pin (`jinja2==2.11.3`) reports four advisories and exits 1, and the same run
+with those four ignored exits 0 reporting "4 ignored". A scanner only trusted to pass has not been
+tested. `make audit` runs the same thing locally, so a red tick is reproducible without pushing.
 
 ---
 
@@ -691,5 +716,5 @@ Grouped by what they buy, hardest-hitting first.
 
 11. Batch the portfolio page's rule evaluation; add pagination *(findings 8, 13)*
 12. Upload screen *(finding 7)*
-13. Dependency scanning in CI *(finding 12)*
+13. ~~Dependency scanning in CI~~ *(finding 12 — done)*
 14. Batch API for bulk re-extraction *(finding 4.3)*

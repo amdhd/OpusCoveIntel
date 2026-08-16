@@ -23,6 +23,16 @@ lint:  ## Run ruff (check + format check)
 	$(UV) run ruff check app tests
 	$(UV) run ruff format --check app tests
 
+audit:  ## Known vulnerabilities in the Python and client dependency trees. $0
+	@# What CI's `dependency audit` job runs, so a red tick is reproducible
+	@# locally. `uv pip audit` does not exist; the tool is PyPA's pip-audit,
+	@# pinned so the scanner cannot silently change under us.
+	$(UV) export --format requirements-txt --no-emit-project --all-groups \
+		> /tmp/opuscovintel-audit.txt
+	uvx pip-audit@2.10.1 --requirement /tmp/opuscovintel-audit.txt \
+		--progress-spinner off --strict
+	cd frontend && npm audit --audit-level=high
+
 fmt:  ## Auto-fix lint issues and format
 	$(UV) run ruff check --fix app tests
 	$(UV) run ruff format app tests
