@@ -19,9 +19,11 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
-      python-minor-and-patch:
+      # `update-types` deliberately omitted: without it a major escapes into a
+      # PR of its own, which is how a first run produced seven. Majors are worth
+      # reading, but one at a time is a stream nobody reads.
+      python:
         patterns: ['*']
-        update-types: [minor, patch]
     commit-message:
       prefix: 'chore(deps)'
 
@@ -35,12 +37,21 @@ updates:
       angular:
         # Angular packages move as a set; upgrading one alone usually fails the
         # build on a peer-dependency mismatch rather than producing anything
-        # useful to review.
+        # useful to review. Capped at minor/patch because a major is a framework
+        # migration: Dependabot's first attempt proposed 20 -> 22 with a
+        # typescript bump Angular's own peer range forbade, so `npm ci` could
+        # not resolve it -- and v21+ requires Node >=24.15, which this project's
+        # machine does not have (frontend/README.md). Raise it deliberately.
         patterns: ['@angular*', 'zone.js', 'typescript']
-      client-minor-and-patch:
-        patterns: ['*']
-        exclude-patterns: ['@angular*', 'zone.js', 'typescript']
         update-types: [minor, patch]
+      jasmine:
+        # The test stack moves together or not at all. jasmine-core, its types
+        # and the karma reporter that peer-depends on both arrived as three
+        # separate PRs, two of which could not install alone.
+        patterns: ['jasmine*', '@types/jasmine', 'karma*']
+      client:
+        patterns: ['*']
+        exclude-patterns: ['@angular*', 'zone.js', 'typescript', 'jasmine*', '@types/jasmine', 'karma*']
     commit-message:
       prefix: 'chore(deps)'
 
