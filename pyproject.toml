@@ -5,7 +5,7 @@ description = "Sukuk & bond covenant intelligence platform"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
+    "uvicorn[standard]>=0.52.2",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "sqlalchemy>=2.0.36",
