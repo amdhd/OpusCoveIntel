@@ -47,6 +47,9 @@ data/real/
 frontend/node_modules/
 frontend/dist/
 frontend/.angular/
+# Unanchored as well, so an `npm install` run from the repo root -- or from a
+# second client added later -- cannot commit a dependency tree.
+node_modules/
 
 # -- editors / os --------------------------------------------------------
 .vscode/
