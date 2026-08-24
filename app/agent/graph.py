@@ -809,7 +809,7 @@ def _format_instrument_answer(state: AgentState) -> tuple[str, float]:
     import re
 
     from app.rules.money import format_myr
-    from app.rules.ratings import UnknownRatingError, normalise, rank
+    from app.rules.ratings import UnknownRatingError, normalise, rank, try_rank
 
     for r in state.tool_results:
         if r.tool_name == "get_instrument" and r.ok and r.data:
@@ -828,16 +828,28 @@ def _format_instrument_answer(state: AgentState) -> tuple[str, float]:
                     threshold_rating = normalise(threshold_match.group(1))
                 except UnknownRatingError:
                     threshold_rating = None
+            # Normalised above, so this cannot raise; computed once rather than
+            # once per instrument.
+            threshold_rank = rank(threshold_rating) if threshold_rating else None
 
             out_lines = []
             for inst in instruments_data:
-                # Filter by rating threshold if specified
-                if threshold_rating and inst.current_rating:
-                    try:
-                        if rank(inst.current_rating) <= rank(threshold_rating):
-                            continue
-                    except UnknownRatingError:
-                        pass
+                if threshold_rank is not None:
+                    # An instrument the scale cannot place is **not** known to be
+                    # below the threshold, and reporting it as such merges "could
+                    # not evaluate" with a verdict somebody acts on -- in the
+                    # direction that prompts action. Two holes used to do exactly
+                    # that: an instrument with no rating never reached this filter,
+                    # and an unrankable one was swallowed by `except
+                    # UnknownRatingError: pass` and appended anyway.
+                    #
+                    # `try_rank` returns None for both cases. The deterministic
+                    # read path excludes the same rows in SQL with
+                    # `current_rating_rank IS NOT NULL` (app/query/service.py), and
+                    # the two paths disagreeing is what findings 14 and 15 were.
+                    instrument_rank = try_rank(inst.current_rating, inst.rating_agency)
+                    if instrument_rank is None or instrument_rank <= threshold_rank:
+                        continue
 
                 parts = [
                     inst.instrument_name,
