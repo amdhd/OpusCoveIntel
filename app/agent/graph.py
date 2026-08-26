@@ -1,6 +1,6 @@
 """LangGraph query agent — the Phase 7 read path.
 
-PLAN.md 5:
+docs/plan.md 5:
 
     classify_intent → plan → retrieve → tools → rules_eval → synthesize → verify → log
                               │                                                │
@@ -469,7 +469,7 @@ async def _tools(state: AgentState, config: RunnableConfig) -> AgentState:
 async def _rules_eval(state: AgentState) -> AgentState:
     """Pass-through node — breach evaluation already happened in _tools.
 
-    Exists as a separate node so the graph topology matches PLAN.md, which
+    Exists as a separate node so the graph topology matches docs/plan.md, which
     matters for logging and future LLM-as-judge work.
     """
     return state
@@ -529,7 +529,7 @@ async def _synthesize(state: AgentState) -> AgentState:
 async def _verify(state: AgentState) -> AgentState:
     """Verify that every factual claim in the answer is traceable to a citation.
 
-    PLAN.md 5: "every factual claim in the drafted answer must map to a clause_id
+    docs/plan.md 5: "every factual claim in the drafted answer must map to a clause_id
     that was actually retrieved this turn."
     """
     if state.refused:

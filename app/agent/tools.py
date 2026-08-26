@@ -1,6 +1,6 @@
 """Deterministic tools the agent can call. No LLM in the tools themselves.
 
-PLAN.md 5: all tools are deterministic. The model *plans* which tools to call;
+docs/plan.md 5: all tools are deterministic. The model *plans* which tools to call;
 the tools *execute* against the database and the rules engine. This boundary is
 what makes the verify node possible — every tool return is traceable to a row or
 a computation.

@@ -293,7 +293,7 @@ class TestRouterProviderOptions:
     ) -> None:
         """The router must forward them, not swallow them.
 
-        Prompt caching is PLAN.md 2's second-largest cost lever (reads bill at
+        Prompt caching is docs/plan.md 2's second-largest cost lever (reads bill at
         0.1x). It was accepted as a parameter and dropped on the floor, so it
         never once took effect.
         """

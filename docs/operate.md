@@ -48,7 +48,7 @@ What to look at, in order of what it tells you:
 
 - **Budget remaining.** At zero the circuit breaker opens and every call is
   refused, including ones you want.
-- **Cost per document.** Should be cents. PLAN.md 2 budgets ~$0.35/document
+- **Cost per document.** Should be cents. docs/plan.md 2 budgets ~$0.35/document
   after candidate narrowing; the live prospectus run came in at $0.069.
 - **Provider prompt-cache read tokens.** If this is **zero across repeated
   extractions, that is a bug, not a tuning issue** — something in the prompt
@@ -119,13 +119,13 @@ clauses rather than doubling them.
 ## 5. Measuring whether it still works
 
 ```bash
-make eval             # scores extraction + answers -> evals/results/
+make eval             # scores extraction + answers -> var/evals/
 ```
 
 $0, no model calls, and it writes both a JSON record and a Markdown summary,
 plus `latest.json` / `latest.md`. It exits non-zero when a read path misses its
-PLAN.md target (9/13 deterministic, 11/13 agent). Extraction F1 is reported and
-never gated — PLAN.md sets no target for it, and a threshold invented against a
+docs/plan.md target (9/13 deterministic, 11/13 agent). Extraction F1 is reported and
+never gated — docs/plan.md sets no target for it, and a threshold invented against a
 synthetic corpus would be a gate that says nothing about production.
 
 **It also exits non-zero when a labelled document was not scored at all**, which

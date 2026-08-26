@@ -72,7 +72,7 @@ class TestRefusesWithoutAKey:
 
 
 class TestDryRunEstimator:
-    """PLAN.md 2's `--dry-run` estimator. Free: regex over rows already stored."""
+    """docs/plan.md 2's `--dry-run` estimator. Free: regex over rows already stored."""
 
     async def test_it_prices_a_real_document_without_dispatching(
         self, db_session: AsyncSession, indexed_corpus: list[uuid.UUID], seeded_universe: None

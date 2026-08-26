@@ -6,7 +6,7 @@ they are free, and their mistakes are inspectable.
 
 The important class is UNSUPPORTED. This system is decision support, not an
 oracle -- it must refuse forecasts, recommendations and anything else the
-corpus cannot evidence (PLAN.md 7, CLAUDE.md 1.5). Refusal is checked *first*,
+corpus cannot evidence (docs/plan.md 7, CLAUDE.md 1.5). Refusal is checked *first*,
 because "should I buy this sukuk?" contains the word "sukuk" and would
 otherwise classify as a perfectly answerable instrument lookup.
 """
@@ -93,7 +93,7 @@ def _matches(patterns: tuple[str, ...], text: str) -> bool:
 
 
 def classify(question: str) -> QueryIntent:
-    """Map a question onto the intent space (PLAN.md 5)."""
+    """Map a question onto the intent space (docs/plan.md 5)."""
     text = question.lower().strip()
     if not text:
         return QueryIntent.UNSUPPORTED

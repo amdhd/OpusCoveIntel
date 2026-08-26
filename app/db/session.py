@@ -33,7 +33,7 @@ def _build_engine(url: str, settings: Settings, *, readonly: bool) -> AsyncEngin
     connect_args: dict[str, object] = {}
     if readonly:
         # Belt-and-braces alongside the role's own grants: bound every agent
-        # statement in wall-clock time (PLAN.md 5).
+        # statement in wall-clock time (docs/plan.md 5).
         connect_args["server_settings"] = {
             "statement_timeout": str(settings.DB_STATEMENT_TIMEOUT_MS),
             "default_transaction_read_only": "on",

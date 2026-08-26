@@ -4,7 +4,7 @@ Reads what the pipeline persisted -- through the repositories, like every other
 reader (CLAUDE.md 3) -- matches it to `app.evals.labels`, and reports per-field
 precision, recall and F1.
 
-**Scored per extraction method, not in aggregate.** PLAN.md 3 runs the rule and
+**Scored per extraction method, not in aggregate.** docs/plan.md 3 runs the rule and
 LLM extractors in parallel specifically so "did the LLM actually help?" is
 measurable. Pooling their output into one number destroys the only measurement
 that question has, so `score_document` returns one `MethodScores` per method
@@ -140,7 +140,7 @@ class MethodScores:
     unmatched_predictions: int = 0
     # Recall broken out by document language: the corpus states the same gearing
     # covenant in English and in Bahasa Malaysia, and one number hides which of
-    # them the extractor can read (PLAN.md 9, open question 7).
+    # them the extractor can read (docs/plan.md 9, open question 7).
     recall_by_language: dict[str, tuple[int, int]] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, object]:
@@ -223,7 +223,7 @@ class ExtractionEvaluator:
 
         # One table per extractor and no union row. Pooling them looks like the
         # question an operator asks ("does the system get this right?") and is
-        # not: the two extractors run over the same spans by design (PLAN.md 3),
+        # not: the two extractors run over the same spans by design (docs/plan.md 3),
         # so every covenant both of them find appears twice, and one of the two
         # is then counted as a false positive against a label already taken. The
         # pooled precision that produces measures the duplication, not the

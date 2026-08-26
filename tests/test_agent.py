@@ -1,6 +1,6 @@
 """Phase 7 agent tests — the LangGraph agent with deterministic tools.
 
-PLAN.md, Phase 7 acceptance: "≥8/10 golden questions answered with correct
+docs/plan.md, Phase 7 acceptance: "≥8/10 golden questions answered with correct
 citations · agent refuses when evidence is absent" -- ≥11 of 13 since the
 Phase 10 additions.
 

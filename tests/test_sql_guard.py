@@ -1,6 +1,6 @@
 """SQL guardrail tests.
 
-PLAN.md, Phase 7 acceptance: "non-SELECT SQL rejected (test)."
+docs/plan.md, Phase 7 acceptance: "non-SELECT SQL rejected (test)."
 
 The guardrail is a pure function — no database required. Every test constructs
 a statement and asserts the guardrail either passes or rejects it with a
@@ -188,7 +188,7 @@ class TestFunctionAllowlist:
 
 
 class TestColumnAllowlist:
-    """The column half of PLAN.md 5's "table+column allowlist", which was absent."""
+    """The column half of docs/plan.md 5's "table+column allowlist", which was absent."""
 
     def test_a_column_held_back_from_the_allowlist_is_refused(self) -> None:
         for sql in (

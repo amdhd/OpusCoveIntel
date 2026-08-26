@@ -1,6 +1,6 @@
 """Indexing and hybrid retrieval.
 
-The headline test is `test_hybrid_beats_either_leg_alone` -- PLAN.md's Phase 4
+The headline test is `test_hybrid_beats_either_leg_alone` -- docs/plan.md's Phase 4
 acceptance criterion. It is measured with MRR over the retrieval golden set
 rather than asserted per query, because on any single query one leg will
 sometimes win; the claim is about the aggregate.
@@ -170,7 +170,7 @@ async def test_results_are_stable_across_identical_searches(
 async def test_hybrid_beats_either_leg_alone(
     db_session: AsyncSession, indexed_corpus: list[uuid.UUID]
 ) -> None:
-    """PLAN.md, Phase 4 acceptance.
+    """docs/plan.md, Phase 4 acceptance.
 
     Measured as mean reciprocal rank over the retrieval golden set. Hybrid wins
     where the legs disagree -- a paraphrased query the keyword leg ranks low,

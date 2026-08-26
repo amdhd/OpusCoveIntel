@@ -1,6 +1,6 @@
 """Prompt builder for LLM covenant extraction.
 
-PLAN.md Phase 6: "Versioned Jinja2 prompts." We achieve the same byte-stable,
+docs/plan.md Phase 6: "Versioned Jinja2 prompts." We achieve the same byte-stable,
 version-controlled prompt construction with Python string formatting so no new
 dependency is required. What makes this cacheable is:
 

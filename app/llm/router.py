@@ -12,7 +12,7 @@ This is the single chokepoint that enforces that invariant. Every call:
 4. Records the spend in llm_calls.
 5. Stores the response in the cache.
 
-Phase 5 ordering (PLAN.md): guards land before adapters. The router can be
+Phase 5 ordering (docs/plan.md): guards land before adapters. The router can be
 constructed with a MockLLMProvider for CI — same interface, zero spend.
 """
 
@@ -47,7 +47,7 @@ class LLMProvider(Protocol):
     `effort` and `enable_prompt_caching`) are meaningless elsewhere. The router
     forwards them; adapters that do not understand them ignore them. Dropping
     them at the router -- which is what used to happen -- silently disabled
-    prompt caching, the second-largest cost lever in PLAN.md 2.
+    prompt caching, the second-largest cost lever in docs/plan.md 2.
     """
 
     @property

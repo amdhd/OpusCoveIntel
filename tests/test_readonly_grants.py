@@ -1,7 +1,7 @@
 """What the query agent's database role can actually read.
 
 `app/agent/sql_guard.py` keeps six operational tables out of the agent's
-allowlist, and `docker/postgres/init` calls the Postgres grant "the actual
+allowlist, and `docker/postgres-init.sql` calls the Postgres grant "the actual
 boundary" with that allowlist as "defence in depth". Those two statements were
 not both true: the init script grants SELECT on every table, so for
 `audit_logs`, `extraction_jobs`, `human_reviews`, `llm_cache`, `llm_calls` and
@@ -122,7 +122,7 @@ class _Probe:
 
 @pytest_asyncio.fixture
 async def probe(db_engine: AsyncEngine) -> AsyncIterator[_Probe]:
-    """A read-only role holding the grants `docker/postgres/init` would give it.
+    """A read-only role holding the grants `docker/postgres-init.sql` would give it.
 
     The role is cluster-wide, but grants are per-database: everything here
     happens in the test database, so a developer's `opuscovintel` database is

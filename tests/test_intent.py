@@ -3,7 +3,7 @@
 The class that matters is UNSUPPORTED. Everything else degrades gracefully --
 a covenant question misrouted to document search still returns cited text --
 but a forecast answered confidently is the failure mode that discredits the
-whole system (PLAN.md 7).
+whole system (docs/plan.md 7).
 """
 
 from __future__ import annotations

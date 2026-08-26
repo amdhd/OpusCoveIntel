@@ -1,6 +1,6 @@
 """OpenAI adapter: GPT-4o for vision (VLM OCR).
 
-PLAN.md: scanned / low-confidence pages route to GPT-4o for OCR. This adapter
+docs/plan.md: scanned / low-confidence pages route to GPT-4o for OCR. This adapter
 also supports regular chat for potential future use, but its primary role in
 Phase 5 is the vision model behind the VLM fallback.
 

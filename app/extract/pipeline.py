@@ -1,6 +1,6 @@
 """Extraction pipeline — rule + LLM in parallel, disagreement → review.
 
-PLAN.md §3: "We run the rule-based extractor and the Opus extractor on every
+docs/plan.md §3: "We run the rule-based extractor and the Opus extractor on every
 candidate span." This module orchestrates that:
 
 1. Rule extraction runs on all chunks and is **persisted** (free, always) --
@@ -98,7 +98,7 @@ class PipelineOutcome:
     Rule and LLM counts are kept apart on purpose. They used to share
     `rule_clauses`, so every persisted LLM clause incremented the rule counter
     and the reported numbers described neither extractor -- which also meant
-    the "did the LLM actually help?" measurement PLAN.md 3 exists to enable was
+    the "did the LLM actually help?" measurement docs/plan.md 3 exists to enable was
     reading a number that mixed both.
 
     `rule_clauses` and `rule_covenants` are rows `RuleExtractionService` wrote,
@@ -254,7 +254,7 @@ class ExtractionPipeline:
         document_id = document.id
 
         # --- Rule extraction (always, free, and persisted) ------------------
-        # Persisted *before* any billable call, which is what makes PLAN.md 3's
+        # Persisted *before* any billable call, which is what makes docs/plan.md 3's
         # fallback real: when the budget guard trips mid-document, the rule
         # extractor's clauses and covenants are already rows rather than
         # something that was computed and discarded. This pipeline used to run
@@ -637,7 +637,7 @@ class ExtractionPipeline:
 
         Falling back to best-overlap when no same-type extraction exists is
         deliberate: that pairing is what a genuine type disagreement looks like,
-        and it is exactly the case PLAN.md 3 wants a human to see.
+        and it is exactly the case docs/plan.md 3 wants a human to see.
         """
         candidates: list[tuple[int, _RuleResult]] = []
         for rule_extraction, chunk in rule_results.get(candidate.chunk_id, ()):
@@ -741,7 +741,7 @@ class ExtractionPipeline:
     ) -> None:
         """Record the terminal state of this run and commit.
 
-        A budget-exhausted run is neither a success nor a failure: PLAN.md 2
+        A budget-exhausted run is neither a success nor a failure: docs/plan.md 2
         calls for the document to be marked `budget_exceeded`. It used to be
         marked EXTRACTED, which told every downstream reader that the document
         had been fully processed when the candidates after the ceiling were

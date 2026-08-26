@@ -5,7 +5,7 @@ to Opus. ~20x saving."
 
 Three legs: regex over `app/extract/patterns.py`, Postgres FTS, and pgvector kNN,
 the last two against the clause-type exemplars in `app/extract/exemplars.py`.
-This is what PLAN.md 2 specifies, and for a long time only the first of the three
+This is what docs/plan.md 2 specifies, and for a long time only the first of the three
 was built.
 
 **That mattered more than "an enhancement is pending" suggested.** The LLM
@@ -101,7 +101,7 @@ MIN_KNN_SIMILARITY: Final[float] = 0.40
 # and no covenant.
 #
 # They are kept, not reverted, because that measurement says more about the
-# fixtures than about the legs. PLAN.md 9 is explicit that the synthetic corpus
+# fixtures than about the legs. docs/plan.md 9 is explicit that the synthetic corpus
 # was written to suit the regexes and that real prospectuses will not be; the
 # case where regex coverage is 15/15 is exactly the case where an additional
 # leg cannot show a benefit. Turn them on and re-measure the day a licensed

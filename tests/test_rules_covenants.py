@@ -1,6 +1,6 @@
 """The rules engine.
 
-PLAN.md, Phase 4 acceptance: **unit tests cover every covenant type.** The
+docs/plan.md, Phase 4 acceptance: **unit tests cover every covenant type.** The
 completeness test at the bottom enforces that mechanically -- adding a new
 `CovenantType` without a test for it fails the suite rather than shipping a
 covenant the engine silently mishandles.
@@ -325,7 +325,7 @@ def test_evaluate_all_and_breaches_filter_together() -> None:
 
 
 def test_every_covenant_type_has_a_dedicated_test() -> None:
-    """PLAN.md, Phase 4 acceptance, enforced mechanically.
+    """docs/plan.md, Phase 4 acceptance, enforced mechanically.
 
     Adding a `CovenantType` without a test for it fails here rather than
     shipping a covenant the engine handles silently and wrongly.

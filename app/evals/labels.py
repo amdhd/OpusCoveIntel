@@ -25,7 +25,7 @@ copyrighted and none are in the corpus (CLAUDE.md 7), so an F1 computed against
 this set says how the pipeline does on text that was written to be extractable.
 It is a regression baseline, not a production accuracy estimate -- the report
 writer says so on every run, and it will need re-baselining the day licensed
-documents arrive (PLAN.md 9, open question 1).
+documents arrive (docs/plan.md 9, open question 1).
 """
 
 from __future__ import annotations
@@ -169,7 +169,7 @@ COVENANT_LABELS: Final[tuple[CovenantLabel, ...]] = (
     # -- prospectus, page 4: the same universe, in Bahasa Malaysia ----------
     # Labelled, not skipped. The BM restatement is a real covenant statement,
     # and scoring it is what makes the English/Malay gap a number in the report
-    # rather than an assumption (PLAN.md 9, open question 7).
+    # rather than an assumption (docs/plan.md 9, open question 7).
     CovenantLabel(
         document_sha256=PROSPECTUS_SHA,
         covenant_type=CovenantType.GEARING_RATIO,

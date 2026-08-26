@@ -22,7 +22,7 @@ def test_budget_guards_are_decimal_not_float() -> None:
 
 
 def test_budget_defaults_match_the_plan() -> None:
-    """PLAN.md 2. A silent change here is a silent change to the spend ceiling.
+    """docs/plan.md 2. A silent change here is a silent change to the spend ceiling.
 
     The per-document cap is $5.00 and the global ceiling $10.00, so one
     document cannot exhaust the budget. The original $2.00 per-document was
@@ -45,7 +45,7 @@ def test_non_positive_budget_is_rejected(monkeypatch: pytest.MonkeyPatch, value:
 
 
 def test_vector_dimension_default_is_1024() -> None:
-    """Changing this forces a full re-embed and index rebuild (PLAN.md 9, Q2)."""
+    """Changing this forces a full re-embed and index rebuild (docs/plan.md 9, Q2)."""
     assert Settings().VECTOR_DIMENSION == 1024
 
 

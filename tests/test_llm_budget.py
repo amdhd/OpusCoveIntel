@@ -1,6 +1,6 @@
 """Budget guard tests.
 
-PLAN.md Phase 5 acceptance: "budget guard provably blocks an over-budget call
+docs/plan.md Phase 5 acceptance: "budget guard provably blocks an over-budget call
 (unit test)." These are those tests.
 
 Uses settings injection rather than monkeypatch to avoid cached-settings issues.

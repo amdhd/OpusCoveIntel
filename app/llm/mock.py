@@ -1,6 +1,6 @@
 """Mock LLM provider — drives the full pipeline in CI for $0.
 
-PLAN.md Phase 5 acceptance: "mock provider drives the whole pipeline in CI"
+docs/plan.md Phase 5 acceptance: "mock provider drives the whole pipeline in CI"
 and "make test makes zero paid API calls."
 
 This is not a stub that returns noise. It returns deterministic, plausible
@@ -170,7 +170,7 @@ def _est_output_tokens(content: str | dict[str, Any]) -> int:
 # A citation is verified against the source chunk before anything is persisted
 # (CLAUDE.md 1.3), so a placeholder here fails that check every time -- which
 # meant the mock could never exercise the extraction *success* path, only the
-# review-queue path, and PLAN.md Phase 5's "mock provider drives the whole
+# review-queue path, and docs/plan.md Phase 5's "mock provider drives the whole
 # pipeline in CI" was true only of its unhappy half.
 _QUOTE_FIELDS: Final[tuple[str, ...]] = ("source_quote",)
 

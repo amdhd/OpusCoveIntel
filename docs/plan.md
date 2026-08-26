@@ -1,4 +1,4 @@
-# PLAN.md — OpusCovIntel Implementation Plan
+# Implementation plan — OpusCovIntel
 
 **Status:** Phases 1–9 built. Phase 10 (accuracy and coverage) is the remaining work — see §6.
 **Written:** 2026-08-04 · **Last revised:** 2026-08-07
@@ -172,7 +172,7 @@ Phases 0–9 are **built**. Phase 10 is not. Each heading below carries its stat
 reader can stop guessing from commit history.
 
 ### Phase 0 — Plan *(this document)* ✅
-Deliverables: `CLAUDE.md`, `PLAN.md`.
+Deliverables: `CLAUDE.md`, `docs/plan.md`.
 
 ### Phase 1 — Scaffold ✅ *($0)*
 `pyproject.toml`, Dockerfile, compose (postgres+pgvector, api, worker), Makefile, `.env.example`,
@@ -225,7 +225,7 @@ Eval harness (field-level F1, enum exact match, numeric tolerance, date toleranc
 precision/recall, answer faithfulness, refusal correctness, **rules-vs-LLM agreement**, cost/doc).
 GitHub Actions (lint, type, test — no paid calls). Then, only now: Celery/Redis, S3/MinIO, RBAC/OIDC,
 OTel/Prometheus, deployment docs, runbook.
-**Accept:** `make eval` emits metrics to `evals/results/` · CI green · docs cover deploy + operate.
+**Accept:** `make eval` emits metrics to `var/evals/` · CI green · docs cover deploy + operate.
 
 **Delivered except the deferred infra**, which Phase 10 resolves by decision rather than
 by building most of it.
@@ -245,7 +245,7 @@ on screen links to its highlighted source span · anonymous requests are refused
 The remaining work. Phases 1–9 built the machine; this is about whether it is *right* and
 whether it is *safe*, neither of which the current numbers answer.
 
-Findings and their evidence are in **[docs/review.md](docs/review.md)** — an audit taken at
+Findings and their evidence are in **[docs/review.md](review.md)** — an audit taken at
 `dc30321` against the running stack and three real 200–535 page prospectuses. This section is
 the plan; that document is the reasoning behind it. Items 7–10 below came out of it.
 

@@ -1,6 +1,6 @@
 """Audit log read endpoint.
 
-PLAN.md, Phase 7: "audit log, audit read endpoint."
+docs/plan.md, Phase 7: "audit log, audit read endpoint."
 
 The audit log is append-only — rows are written by the review queue API, the
 extraction pipeline, and the query agent. This endpoint returns the trail for

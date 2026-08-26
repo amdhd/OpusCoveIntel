@@ -188,7 +188,7 @@ Everything except extraction and vision OCR runs at $0, including the entire tes
 
 ```bash
 make check    # lint + type check + 990 tests
-make eval     # score extraction accuracy -> evals/results/
+make eval     # score extraction accuracy -> var/evals/
 make audit    # known vulnerabilities in the Python and client trees
 ```
 
@@ -236,7 +236,7 @@ its first line.
 | **Packaging** | `uv`, multi-stage Docker, non-root | Locked dependencies; the runtime image contains no build tooling. |
 
 **Deliberately not used:** Redis, Celery, MinIO, Kubernetes, a vector database. Each was
-considered and declined — the reasoning is in [PLAN.md](PLAN.md). They can be added when
+considered and declined — the reasoning is in [docs/plan.md](docs/plan.md). They can be added when
 something actually needs them.
 
 A frontend framework was on that list until the upload screen needed one. Read-only pages have no
@@ -345,7 +345,7 @@ Three things to be clear about:
   the re-baseline exists to catch. Only labels will separate the two.
 
 The prioritised plan, including known bugs, security gaps and cost issues, is in
-**[docs/review.md](docs/review.md)**. The phase plan is in [PLAN.md](PLAN.md); the architectural
+**[docs/review.md](docs/review.md)**. The phase plan is in [docs/plan.md](docs/plan.md); the architectural
 rules that shouldn't be broken are in [CLAUDE.md](CLAUDE.md). Day-to-day operation is in
 [docs/operate.md](docs/operate.md) and deployment in [docs/deploy.md](docs/deploy.md).
 

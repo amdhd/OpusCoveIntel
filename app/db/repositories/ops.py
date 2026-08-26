@@ -99,7 +99,7 @@ class LLMCallRepository(BaseRepository[LLMCall]):
     model = LLMCall
 
     async def total_cost(self) -> Decimal:
-        """Global spend -- what the circuit breaker tests (PLAN.md 2)."""
+        """Global spend -- what the circuit breaker tests (docs/plan.md 2)."""
         result = await self.session.execute(
             select(func.coalesce(func.sum(LLMCall.estimated_cost_usd), 0))
         )

@@ -6,7 +6,7 @@ calls `router.chat()` with:
 - Structured output (JSON Schema matching LLMCovenantExtraction)
 - `max_tokens ≥ 8000` (thinking + response together, per CLAUDE.md §2)
 
-Pydantic validation + one feedback retry, per PLAN.md Phase 6. After the retry,
+Pydantic validation + one feedback retry, per docs/plan.md Phase 6. After the retry,
 a still-invalid extraction goes to the human review queue — never silently dropped.
 """
 

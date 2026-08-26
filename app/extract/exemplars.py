@@ -1,11 +1,11 @@
 """Canonical phrasings of each clause type, for semantic candidate detection.
 
-PLAN.md 2 describes candidate narrowing as "regex + Postgres FTS + pgvector kNN
+docs/plan.md 2 describes candidate narrowing as "regex + Postgres FTS + pgvector kNN
 against clause-type exemplars". These are the exemplars: what FTS searches for
 and what kNN is compared against.
 
 **Why exemplars rather than more regexes.** A regex fires on the phrasing it was
-written for. `app/extract/patterns.py` is deliberately precise -- PLAN.md is
+written for. `app/extract/patterns.py` is deliberately precise -- docs/plan.md is
 blunt that a pattern firing on anything containing "shall not" is worse than
 nothing -- and precision bought that way costs recall on every paraphrase. An
 exemplar is not matched literally: FTS scores a chunk on how many of its terms
