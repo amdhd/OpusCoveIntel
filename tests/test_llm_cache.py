@@ -1,6 +1,6 @@
 """Response cache tests.
 
-PLAN.md Phase 5 acceptance: "cache hit costs $0." These tests prove that a
+docs/plan.md Phase 5 acceptance: "cache hit costs $0." These tests prove that a
 cache hit returns the stored response with zero cost, and that cache keys
 are correctly invalidated by prompt/model/content changes.
 """

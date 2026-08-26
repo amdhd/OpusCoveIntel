@@ -1,6 +1,6 @@
 """The deterministic query path, and the golden set it is measured against.
 
-PLAN.md, Phase 4 acceptance: **≥6 of the original 10 golden questions answered
+docs/plan.md, Phase 4 acceptance: **≥6 of the original 10 golden questions answered
 with zero LLM calls**, now ≥9 of 13 -- the three Phase 10 additions are
 refusals, so the bar moved with the set. There is no LLM adapter in the
 codebase yet, so "zero LLM calls" is structural rather than mocked -- nothing

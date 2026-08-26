@@ -12,7 +12,7 @@ every other user's questions and answers, raw cached model output, and the
 audit trail itself -- the record of what the agent did. None of it is needed to
 answer a covenant question.
 
-The grant never followed the allowlist. `docker/postgres/init` hands
+The grant never followed the allowlist. `docker/postgres-init.sql` hands
 `opuscovintel_ro` SELECT on every table, present and future, and calls that
 grant "the actual boundary" with the guardrail as "defence in depth". For these
 six tables only the defence in depth existed: anything bypassing the SQL parser

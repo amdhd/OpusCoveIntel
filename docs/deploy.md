@@ -4,7 +4,7 @@ What it takes to stand this up somewhere other than a laptop, and what is
 deliberately not here yet.
 
 The MVP is three processes and a database. That is a decision, not an omission:
-PLAN.md defers Celery, Redis, MinIO, OIDC and Prometheus to Phase 8 and nothing
+docs/plan.md defers Celery, Redis, MinIO, OIDC and Prometheus to Phase 8 and nothing
 in Phases 1–7 needs them. §6 below says what to add first when it does.
 
 ---
@@ -28,7 +28,7 @@ operator-invoked from the CLI and never triggered by an upload.
 
 - **Postgres 16+ with `vector`, `pg_trgm` and `unaccent`.** The schema will not
   create without `vector` — `document_chunks.embedding` is `vector(1024)`.
-- **Two database roles.** `docker/postgres/init/01-init.sql` creates them, and
+- **Two database roles.** `docker/postgres-init.sql` creates them, and
   a managed Postgres needs it run by hand:
   - the application role, read-write;
   - `opuscovintel_ro`, `SELECT`-only, with `default_transaction_read_only = on`
@@ -113,7 +113,7 @@ two releases; there is no online-schema-change tooling here to hide behind.
 ## 6. What is deferred, and what to add first
 
 CLAUDE.md 9 deferred Celery/Redis, S3/MinIO, RBAC/OIDC and OTel/Prometheus.
-Phase 9 built authentication; PLAN.md Phase 10.6 declines most of the rest with
+Phase 9 built authentication; docs/plan.md Phase 10.6 declines most of the rest with
 reasons. In the order the remaining constraints actually bite:
 
 1. **Object storage (S3).** The first thing to break when the API and worker
@@ -185,7 +185,7 @@ them, and a corpus that has to be re-ingested rather than restored.
 
 **Production is a different question.** A shared filesystem stops working the
 moment `api` and `worker` run on different hosts; `app/ingest/storage.py` is
-already an S3-shaped interface for exactly that day (PLAN.md defers S3/MinIO to
+already an S3-shaped interface for exactly that day (docs/plan.md defers S3/MinIO to
 Phase 8).
 
 Nothing else is precious. Chunks, embeddings, clauses and covenants can all be

@@ -746,7 +746,7 @@ class TestLLMCallRepository:
         assert by_stage[LLMStage.EMBED.value] == Decimal("0.001500")
 
     async def test_a_cache_hit_must_be_free(self, db_session: AsyncSession) -> None:
-        """PLAN.md 2: a cached response that still bills is a broken cache."""
+        """docs/plan.md 2: a cached response that still bills is a broken cache."""
         calls = LLMCallRepository(db_session)
         with pytest.raises(IntegrityError):
             await calls.add(

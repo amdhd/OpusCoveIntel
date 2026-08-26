@@ -1,0 +1,60 @@
+# The build context is uploaded to the daemon in full before the first COPY
+# runs, so what is excluded here is a build-time cost, not just image size:
+# `.venv/`, `.git/` and the licensed prospectuses in `var/` are hundreds of
+# megabytes that no stage reads.
+
+# -- secrets -------------------------------------------------------------
+# `.env` is never in an image. Configuration comes from the environment at
+# run time (docker-compose passes it with `env_file`).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# -- host build artefacts ------------------------------------------------
+# The builder stage resolves dependencies from pyproject.toml + uv.lock, and
+# the client stage runs `npm ci`. A host venv or node_modules copied in would
+# be the wrong platform's binaries.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# -- runtime data --------------------------------------------------------
+# Ingested documents live on a bind mount, not in the image.
+var/
+*.db
+*.sqlite3
+
+# -- not needed to build or run ------------------------------------------
+.git/
+.github/
+.claude/
+docs/
+tests/
+migrations/
+scripts/
+Makefile
+docker-compose.yml
+Dockerfile
+*.md
+!README.md
+
+# -- tooling caches ------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# -- editors / os --------------------------------------------------------
+.vscode/
+.idea/
+.DS_Store

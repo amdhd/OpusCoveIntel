@@ -1,7 +1,7 @@
 # Engineering review — 2026-08-07
 
 A point-in-time audit of the codebase at commit `dc30321`, covering correctness, security and
-cost. This is a **findings document**, not a roadmap: [PLAN.md §6](../PLAN.md) remains the single
+cost. This is a **findings document**, not a roadmap: [docs/plan.md §6](plan.md) remains the single
 roadmap, and the items below feed into its Phase 10 rather than competing with it.
 
 Each finding states what was checked, what was found, and what it would take to fix. Severity is
@@ -63,7 +63,7 @@ six:
 audit_logs · human_reviews · query_logs · llm_calls · llm_cache · extraction_jobs
 ```
 
-This matters because [`docker/postgres/init`](../docker/postgres/init) calls the grant **"the
+This matters because [`docker/postgres-init.sql`](../docker/postgres-init.sql) calls the grant **"the
 actual boundary"** and the guardrail "defence in depth". For these six tables the boundary was
 never moved — only the defence in depth exists. Anything that bypasses the SQL parser (a parser
 bug, a future code path using the read-only session directly) reaches them.
@@ -298,7 +298,7 @@ extracted document, which is harder to reason about than a clean refusal.
 2. Make the guard **refuse to start** a document whose dry-run ceiling already exceeds the cap,
    rather than discovering it partway. Failing before spending is strictly better than failing
    after.
-3. Build the **Batch API** path that [PLAN.md §2](../PLAN.md) specifies and nothing implements —
+3. Build the **Batch API** path that [docs/plan.md §2](plan.md) specifies and nothing implements —
    50% off, and backfilling a corpus is exactly the non-interactive workload it is for.
 
 Worth noting the estimator is honest about being a ceiling: it prices every completion at the full
@@ -322,7 +322,7 @@ operator can tell a $0 clean refusal from a mid-document abort. On the numbers a
 GMTN ($4.28) now starts; the two larger documents are refused up front until they run through the
 Batch API path.
 
-Step 3 — the **Batch API** — stays open as a separate item (PLAN.md §6 finding 4.3). It halves the
+Step 3 — the **Batch API** — stays open as a separate item (docs/plan.md §6 finding 4.3). It halves the
 cost of exactly the two documents the raised cap does not yet admit, so it is the natural next step,
 not part of this change.
 
@@ -484,7 +484,7 @@ most easily have caused.
 **Noticed while fixing, not fixed:** `_format_portfolio_answer` reads the `get_portfolio_holdings`
 result before the `run_read_only_sql` one, so the generated SQL is executed and its rows are then
 ignored whenever holdings exist. Dead work rather than a wrong answer, but the SQL path is what
-PLAN.md §5 says portfolio aggregation runs on.
+docs/plan.md §5 says portfolio aggregation runs on.
 
 ### 15. A covenant question about one document is answered from every document — High
 
@@ -678,7 +678,7 @@ either leg alone is untested with real vectors, and the FTS/kNN candidate legs d
 
 This now matters more: the real corpus is ~6,000 chunks rather than ~20.
 
-**Fix:** close [PLAN.md §9 Q2](../PLAN.md) (endpoint region and dimensionality) *before* indexing.
+**Fix:** close [docs/plan.md §9 Q2](plan.md) (endpoint region and dimensionality) *before* indexing.
 1024 dimensions is baked into the schema; changing it later means re-embedding everything and
 rebuilding the HNSW index.
 
@@ -748,7 +748,7 @@ Grouped by what they buy, hardest-hitting first.
 
 **Then — the accuracy question that matters most**
 
-8. Extract one real prospectus and re-baseline every accuracy figure *(PLAN.md Phase 10.1)*
+8. Extract one real prospectus and re-baseline every accuracy figure *(docs/plan.md Phase 10.1)*
 9. Live-verify the OCR path — 12 pages, ~$0.26 *(finding 10)*
 10. Real embeddings, after settling dimensionality *(finding 11)*
 

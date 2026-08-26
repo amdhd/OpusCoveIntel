@@ -1,7 +1,7 @@
 """The deterministic extractor: chunk text in, cited extractions out.
 
 Free, offline, and reproducible. It will not survive a real trust deed on its
-own (PLAN.md is explicit about that), which is why Phase 6 runs Opus over the
+own (docs/plan.md is explicit about that), which is why Phase 6 runs Opus over the
 same spans and treats disagreement as a review trigger at no extra model cost.
 
 Two properties this must have to be worth anything:

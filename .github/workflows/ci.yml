@@ -3,7 +3,7 @@
 # One job per reason a build can be wrong, so a red tick says which: `check` is
 # the code, `migrations` is the schema, `eval` is the accuracy, `client app` is
 # the browser bundle and its contract with the server, `image` is the container,
-# and `dependency audit` is everything we did not write. PLAN.md Phase 8
+# and `dependency audit` is everything we did not write. docs/plan.md Phase 8
 # scheduled this; it lands early because Phase 3 is the first phase with enough
 # moving parts to regress silently.
 #
@@ -96,7 +96,7 @@ jobs:
           PGPASSWORD: opuscovintel
         run: |
           psql -h localhost -U opuscovintel -d opuscovintel -v ON_ERROR_STOP=1 \
-            -f docker/postgres/init/01-init.sql
+            -f docker/postgres-init.sql
 
       - name: Lint
         run: make lint
@@ -222,13 +222,13 @@ jobs:
           PGPASSWORD: opuscovintel
         run: |
           psql -h localhost -U opuscovintel -d opuscovintel -v ON_ERROR_STOP=1 \
-            -f docker/postgres/init/01-init.sql
+            -f docker/postgres-init.sql
 
       - name: Ingest the corpus and score it
         # `eval-demo` is migrate + seed + ingest + index + extract + eval, so
         # this also proves the $0 pipeline still runs end to end from nothing.
         # `opuscovintel eval` exits non-zero when a read path misses its
-        # PLAN.md target (9/13 deterministic, 11/13 agent), and when a labelled
+        # docs/plan.md target (9/13 deterministic, 11/13 agent), and when a labelled
         # document was not scored at all. The second gate is what makes this job
         # able to catch fixture drift: it ingests from the fixture builders and
         # joins on the hashes pinned in `app/evals/labels.py`, so a PDF library
@@ -242,7 +242,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: eval-results
-          path: evals/results/
+          path: var/evals/
           if-no-files-found: warn
 
   frontend:

@@ -138,7 +138,7 @@ async def test_service_detects_on_indexed_corpus(
 
 
 class TestSemanticLegs:
-    """FTS and kNN against clause-type exemplars (PLAN.md 2's other two legs).
+    """FTS and kNN against clause-type exemplars (docs/plan.md 2's other two legs).
 
     Off by default — see `SEMANTIC_LEGS_DEFAULT`. These pin the behaviour so the
     legs are correct whenever they are switched on, and pin the relevance floors,

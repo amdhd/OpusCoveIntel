@@ -14,7 +14,7 @@ recomputing it:
 
 **Both report "no data" rather than a flattering default.** A corpus with no
 LLM extraction has no agreement rate -- not 100 per cent -- and a system that
-has never called a provider has no cost per document. PLAN.md 2's whole posture
+has never called a provider has no cost per document. docs/plan.md 2's whole posture
 is that unmeasured spend is the danger; a harness that prints $0.00 for
 "nobody has looked" would be part of the problem.
 """

@@ -1,6 +1,6 @@
 """Pricing a document before spending anything on it.
 
-PLAN.md 2: "a `--dry-run` estimator that prices a document via `count_tokens`
+docs/plan.md 2: "a `--dry-run` estimator that prices a document via `count_tokens`
 before spending anything." This is that estimator, and it is free: candidate
 detection is regex over text already in the database, and token counts come
 from the offline estimator in `app/llm/cost.py`.

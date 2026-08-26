@@ -47,16 +47,16 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 5
     DB_POOL_MAX_OVERFLOW: int = 10
     DB_ECHO: bool = False
-    # Applied to every read-only agent session (PLAN.md 5).
+    # Applied to every read-only agent session (docs/plan.md 5).
     DB_STATEMENT_TIMEOUT_MS: int = 5_000
 
     # -- object storage ---------------------------------------------------
-    # Local filesystem for the MVP behind an S3-shaped interface (PLAN.md, Phase 3).
+    # Local filesystem for the MVP behind an S3-shaped interface (docs/plan.md, Phase 3).
     STORAGE_DIR: Path = Path("./var/storage")
 
     # -- retrieval --------------------------------------------------------
     # Qwen text-embedding-v4. Changing this forces a full re-embed and index
-    # rebuild -- see PLAN.md 9, open question 2.
+    # rebuild -- see docs/plan.md 9, open question 2.
     VECTOR_DIMENSION: int = 1024
 
     # -- llm providers ----------------------------------------------------
@@ -71,11 +71,11 @@ class Settings(BaseSettings):
     JUDGE_MODEL: str = "claude-opus-5"
     CHEAP_MODEL: str = "qwen-plus"
     EMBEDDING_MODEL: str = "text-embedding-v4"
-    # Needs a current, verified ID before the VLM cap can be tuned (PLAN.md 9, Q3).
+    # Needs a current, verified ID before the VLM cap can be tuned (docs/plan.md 9, Q3).
     VLM_MODEL: str = "gpt-4o"
 
     # -- budget guards ----------------------------------------------------
-    # PLAN.md 2. Money is Decimal, never float (CLAUDE.md 6).
+    # docs/plan.md 2. Money is Decimal, never float (CLAUDE.md 6).
     # Calibrated for real 200-535pp prospectuses, whose dry-run ceilings run
     # $4-21 (docs/review.md finding 4). The original $2.00 was sized for the
     # 1-5pp synthetic fixtures and aborted every real document mid-extraction;
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     # $200 was sized for a build phase that has since been built; the corpus is
     # three synthetic fixtures plus three real prospectuses, and the whole of
     # Phase 10 costs single-digit dollars. A ceiling only does its job when it
-    # is close enough to normal spend to stop something. Closes PLAN.md 9 Q6.
+    # is close enough to normal spend to stop something. Closes docs/plan.md 9 Q6.
     MAX_TOTAL_COST_USD: Decimal = Decimal("10.00")
     MAX_COST_PER_CALL_USD: Decimal = Decimal("0.50")
     MAX_VLM_PAGES_PER_DOC: int = 40

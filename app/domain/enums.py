@@ -41,7 +41,7 @@ class DocumentStatus(StrEnum):
     EXTRACTING = "extracting"
     EXTRACTED = "extracted"
     FAILED = "failed"
-    # PLAN.md 2: a document abandoned because it hit a budget ceiling is not
+    # docs/plan.md 2: a document abandoned because it hit a budget ceiling is not
     # "failed" -- it is complete work that stopped for a policy reason.
     BUDGET_EXCEEDED = "budget_exceeded"
 
@@ -169,7 +169,7 @@ class CallType(StrEnum):
 
 
 class ExtractionMethod(StrEnum):
-    """How a value was obtained. PLAN.md 3 -- rule and llm run in parallel."""
+    """How a value was obtained. docs/plan.md 3 -- rule and llm run in parallel."""
 
     RULE = "rule"
     LLM = "llm"
@@ -267,7 +267,7 @@ class UserRole(StrEnum):
 
 
 class QueryIntent(StrEnum):
-    """PLAN.md 5 -- the LangGraph classifier's output space."""
+    """docs/plan.md 5 -- the LangGraph classifier's output space."""
 
     DOCUMENT_SEARCH = "document_search"
     COVENANT_LOOKUP = "covenant_lookup"

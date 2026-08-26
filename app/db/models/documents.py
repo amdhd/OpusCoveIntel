@@ -35,7 +35,7 @@ from app.domain.enums import (
 )
 
 # Fixed at table-definition time; changing it forces a re-embed and index
-# rebuild (PLAN.md 9, Q2), which is a migration, not a config toggle.
+# rebuild (docs/plan.md 9, Q2), which is a migration, not a config toggle.
 _VECTOR_DIM = get_settings().VECTOR_DIMENSION
 
 

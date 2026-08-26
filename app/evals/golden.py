@@ -3,7 +3,7 @@
 Thirteen questions an analyst would actually ask, against the synthetic corpus:
 the three seeded instruments, two portfolios, and the generated prospectus.
 
-**Four are unanswerable on purpose.** PLAN.md 8.5 requires the system to refuse
+**Four are unanswerable on purpose.** docs/plan.md 8.5 requires the system to refuse
 what it cannot evidence, and a golden set with no refusal case measures only
 eagerness. G10 asks for a market forecast. G11-G13 are the harder kind, added
 in Phase 10: questions that *classify as answerable* and are not, because they
@@ -12,7 +12,7 @@ looked like a system that refuses correctly while it was answering
 `What is the CEO of the issuer paid?` at confidence 0.95.
 
 Phase 4's bar was **≥6 of the original 10 answered with zero LLM calls**
-(PLAN.md, Phase 4) and Phase 7's ≥8 of 10; both were raised by three when
+(docs/plan.md, Phase 4) and Phase 7's ≥8 of 10; both were raised by three when
 G11-G13 landed, so the bar still means what it meant. Keeping the same
 questions across both paths is what makes "did the LLM actually help?" a
 measurable question rather than an assumption.
@@ -139,7 +139,7 @@ GOLDEN_QUESTIONS: tuple[GoldenQuestion, ...] = (
         expect_refusal=True,
         notes=(
             "The one that must be refused. Investment advice is out of scope "
-            "(PLAN.md 7) and unevidenced by any corpus."
+            "(docs/plan.md 7) and unevidenced by any corpus."
         ),
         tags=("refusal",),
     ),
@@ -243,8 +243,8 @@ RETRIEVAL_CASES: tuple[RetrievalCase, ...] = (
 )
 
 
-# PLAN.md, Phase 4 acceptance: 6 of the original 10.
-# PLAN.md, Phase 7 acceptance: 8 of the original 10.
+# docs/plan.md, Phase 4 acceptance: 6 of the original 10.
+# docs/plan.md, Phase 7 acceptance: 8 of the original 10.
 #
 # Both were raised by three when G11-G13 were added, so the bar means the same
 # thing it did: the three new questions are refusals both paths must get right,

@@ -1,8 +1,8 @@
 """The regex library behind the deterministic extractor.
 
-PLAN.md is blunt about the limits of this approach: regexes tuned on tidy text
+docs/plan.md is blunt about the limits of this approach: regexes tuned on tidy text
 "will not survive one real trust deed". They are here anyway, for the four
-reasons in PLAN.md 3 -- a free quality signal against the LLM, a fallback when
+reasons in docs/plan.md 3 -- a free quality signal against the LLM, a fallback when
 the budget guard trips, an A/B baseline, and a system that still answers
 questions at $0 in CI and demos.
 

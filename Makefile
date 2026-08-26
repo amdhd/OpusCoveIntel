@@ -173,7 +173,7 @@ golden:  ## Run the golden question set. Phase 4 target: 6/10 with zero LLM call
 
 # -- evaluation ----------------------------------------------------------
 
-eval:  ## Score extraction + answers -> evals/results/. $0, no model calls
+eval:  ## Score extraction + answers -> var/evals/. $0, no model calls
 	$(UV) run opuscovintel eval
 
 eval-demo: migrate seed ingest-corpus index extract-sample eval  ## Corpus + eval from nothing

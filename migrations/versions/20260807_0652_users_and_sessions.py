@@ -65,7 +65,7 @@ def upgrade() -> None:
 def _revoke_from_readonly_role() -> None:
     """Keep credentials out of reach of the query agent's role.
 
-    `docker/postgres/init` sets ALTER DEFAULT PRIVILEGES so `opuscovintel_ro`
+    `docker/postgres-init.sql` sets ALTER DEFAULT PRIVILEGES so `opuscovintel_ro`
     gets SELECT on every table Alembic creates from Phase 2 onward. That was
     right for the covenant tables and is wrong for these two: it would hand the
     agent's role read access to password hashes and live session fingerprints.

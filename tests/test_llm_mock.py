@@ -1,6 +1,6 @@
 """Mock provider tests.
 
-PLAN.md Phase 5 acceptance: "mock provider drives the whole pipeline in CI."
+docs/plan.md Phase 5 acceptance: "mock provider drives the whole pipeline in CI."
 These tests prove the mock is deterministic, returns plausible responses,
 satisfies the provider interface, and — critically — costs $0.
 """

@@ -524,7 +524,7 @@ def ask(
 def golden() -> None:
     """Run the golden question set over the deterministic path.
 
-    PLAN.md, Phase 4 acceptance: at least 6 of 10 answered with zero LLM calls.
+    docs/plan.md, Phase 4 acceptance: at least 6 of 10 answered with zero LLM calls.
     """
     # Read-only, for the same reason as `query` above (CLAUDE.md 1.6).
     from app.db.session import get_readonly_sessionmaker
@@ -573,7 +573,7 @@ def golden() -> None:
 @app.command("eval")
 def eval_command(
     output_dir: Path = typer.Option(
-        Path("evals/results"), "--output-dir", help="Where the JSON and Markdown land."
+        Path("var/evals"), "--output-dir", help="Where the JSON and Markdown land."
     ),
     skip_agent: bool = typer.Option(
         False, "--skip-agent", help="Score only the deterministic path."
@@ -582,10 +582,10 @@ def eval_command(
 ) -> None:
     """Score extraction and answers against the golden set. $0, no model calls.
 
-    PLAN.md Phase 8 acceptance: metrics land in `evals/results/`. Exits 1 when a
-    read path misses its PLAN.md target -- 9/13 deterministic, 11/13 for the
+    docs/plan.md Phase 8 acceptance: metrics land in `var/evals/`. Exits 1 when a
+    read path misses its docs/plan.md target -- 9/13 deterministic, 11/13 for the
     agent -- and when a labelled document was not scored at all. Extraction F1
-    is reported and never gated: PLAN.md sets no target for it, and a threshold
+    is reported and never gated: docs/plan.md sets no target for it, and a threshold
     invented against a synthetic corpus would be a gate that says nothing about
     production. Whether the corpus was there to measure is not a threshold.
     """
@@ -667,7 +667,7 @@ def cost_report() -> None:
     """Report LLM spend by stage and by document. Reads `llm_calls`, $0.
 
     The ledger is the only source. A cost figure computed anywhere else would
-    be an estimate of the number this table already holds (PLAN.md 2).
+    be an estimate of the number this table already holds (docs/plan.md 2).
     """
     # The app role, not the read-only one. `opuscovintel_ro` exists for the
     # query agent, and the agent is denied `llm_calls` on purpose -- an agent
@@ -704,7 +704,7 @@ def cost_report() -> None:
         f"{report.cache_read_tokens:,} prompt-cache read token(s)"
     )
     if report.cache_read_tokens == 0:
-        # PLAN.md 2 treats this as a bug rather than a tuning issue, so it is
+        # docs/plan.md 2 treats this as a bug rather than a tuning issue, so it is
         # said here rather than left for someone to notice in the totals.
         typer.echo("  ! zero cache reads across repeated extractions means a cache invalidator")
     if report.cost_per_document is not None:

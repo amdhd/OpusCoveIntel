@@ -388,7 +388,7 @@ async def test_pipeline_budget_exceeded_is_reported(
     assert isinstance(outcome, PipelineOutcome)
     assert outcome.budget_exceeded
 
-    # PLAN.md 2: abort the document and mark it `budget_exceeded`. Marking it
+    # docs/plan.md 2: abort the document and mark it `budget_exceeded`. Marking it
     # EXTRACTED -- the previous behaviour -- told every downstream reader the
     # document was fully processed when the candidates past the ceiling were
     # never looked at.
@@ -434,7 +434,7 @@ class TestRefuseBeforeSpending:
         assert outcome.total_cost_usd == Decimal("0")
         assert outcome.llm_extracted == 0
         assert outcome.llm_clauses == 0
-        # But the deterministic fallback still persisted (PLAN.md 3): a refused
+        # But the deterministic fallback still persisted (docs/plan.md 3): a refused
         # document is not an empty one.
         assert outcome.rule_clauses > 0
 
@@ -556,7 +556,7 @@ async def test_pipeline_handles_candidate_without_rule_match(
 
 
 class TestRuleExtractionIsPersistedBeforeSpending:
-    """PLAN.md 3: the rules are the fallback when the budget guard trips.
+    """docs/plan.md 3: the rules are the fallback when the budget guard trips.
 
     That fallback did not exist. The pipeline ran the rule extractor purely as
     an in-memory comparison baseline and persisted none of it, so a document

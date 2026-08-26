@@ -1,6 +1,6 @@
 """Persisting rule extractions as cited clauses and covenants.
 
-This is what makes the system answer questions at $0 (PLAN.md 3). It is also
+This is what makes the system answer questions at $0 (docs/plan.md 3). It is also
 where the review-queue policy from CLAUDE.md 5 first becomes real code:
 
 * confidence below the threshold  -> review, trigger LOW_CONFIDENCE

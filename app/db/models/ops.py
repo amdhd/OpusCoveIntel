@@ -1,6 +1,6 @@
 """Operational models: jobs, LLM spend, cache, review queue, audit, query log.
 
-This is where cost governance (PLAN.md 2) and auditability (CLAUDE.md 1) become
+This is where cost governance (docs/plan.md 2) and auditability (CLAUDE.md 1) become
 queryable rather than aspirational.
 """
 
@@ -112,7 +112,7 @@ class LLMCall(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    # PLAN.md 2: a cache_read_tokens of zero across repeated extractions means a
+    # docs/plan.md 2: a cache_read_tokens of zero across repeated extractions means a
     # silent prompt-cache invalidator. Recorded so that is detectable.
     cache_read_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -132,7 +132,7 @@ class LLMCall(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class LLMCache(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Response cache keyed on prompt version + model + content hash (PLAN.md 2)."""
+    """Response cache keyed on prompt version + model + content hash (docs/plan.md 2)."""
 
     __tablename__ = "llm_cache"
 
@@ -155,7 +155,7 @@ class HumanReview(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Review queue entry.
 
     `old_value` is retained on correction so an audit can reconstruct what the
-    machine originally said (PLAN.md, Phase 7 acceptance).
+    machine originally said (docs/plan.md, Phase 7 acceptance).
     """
 
     __tablename__ = "human_reviews"
@@ -230,7 +230,7 @@ class QueryLog(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     retrieved_chunk_ids: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
     tools_called: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
-    # Every generated statement is logged, whether or not it executed (PLAN.md 5).
+    # Every generated statement is logged, whether or not it executed (docs/plan.md 5).
     sql_generated: Mapped[str | None] = mapped_column(Text)
 
     answer: Mapped[str | None] = mapped_column(Text)

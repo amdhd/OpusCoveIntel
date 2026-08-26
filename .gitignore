@@ -28,12 +28,10 @@ htmlcov/
 # reproduced later.
 
 # -- runtime data --------------------------------------------------------
+# Ingested documents, object storage and eval output all land here.
 var/
 *.db
 *.sqlite3
-
-# -- evaluation output ---------------------------------------------------
-evals/results/
 
 # -- corpus --------------------------------------------------------------
 # Real prospectuses are copyrighted -- synthetic fixtures only (CLAUDE.md 7).

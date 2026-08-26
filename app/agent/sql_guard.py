@@ -1,6 +1,6 @@
 """SQL guardrail — the last line of defence before a generated statement executes.
 
-PLAN.md 5: read-only role · SELECT only, parsed via sqlglot (not regex) ·
+docs/plan.md 5: read-only role · SELECT only, parsed via sqlglot (not regex) ·
 table+column allowlist · statement_timeout=5s · forced LIMIT 1000.
 
 Every statement is validated here before it reaches Postgres. A statement that
@@ -56,7 +56,7 @@ ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
 # This list is enforced. It previously was not -- `validate_sql` checked only
 # that a qualified column's *table* was allowed, never the column itself -- so
 # the exclusions below were decorative and `documents.storage_uri`,
-# `document_chunks.embedding` and the rest were readable. PLAN.md 5 specifies a
+# `document_chunks.embedding` and the rest were readable. docs/plan.md 5 specifies a
 # "table+column allowlist"; only half of it existed.
 ALLOWED_COLUMNS: Final[frozenset[str]] = frozenset(
     {

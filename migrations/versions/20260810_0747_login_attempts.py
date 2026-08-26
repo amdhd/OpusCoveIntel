@@ -7,7 +7,7 @@ Create Date: 2026-08-10 07:47:08.197770+00:00
 The rate limiter's counter (app/auth/rate_limit.py). One row per credential
 check: who was tried, from where, and whether it worked.
 
-The revoke at the end is not optional bookkeeping. `docker/postgres/init` sets
+The revoke at the end is not optional bookkeeping. `docker/postgres-init.sql` sets
 `ALTER DEFAULT PRIVILEGES`, so a table created here arrives readable by
 `opuscovintel_ro` -- and this one is a list of usernames and the addresses they
 were tried from, which is neither needed to answer a covenant question nor

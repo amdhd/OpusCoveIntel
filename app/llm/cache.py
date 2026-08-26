@@ -1,6 +1,6 @@
 """Response cache — keyed on sha256(prompt_version | model_id | content).
 
-PLAN.md 2, cost reducer #3: re-running an unchanged pipeline costs $0. Two tiers:
+docs/plan.md 2, cost reducer #3: re-running an unchanged pipeline costs $0. Two tiers:
 
 1. **In-process LRU** — sub-ms lookup for repeated calls within a single run
    (same chunk, same prompt). Avoids the DB round-trip for the common case.

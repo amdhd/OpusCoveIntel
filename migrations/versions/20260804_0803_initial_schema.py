@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Extensions first. docker/postgres/init/01-init.sql also creates these, but
+    # Extensions first. docker/postgres-init.sql also creates these, but
     # that script only runs on first initialisation of a local volume -- against
     # a managed Postgres (RDS, Cloud SQL) the migration is the only thing that
     # runs, and document_chunks.embedding cannot be created without `vector`.

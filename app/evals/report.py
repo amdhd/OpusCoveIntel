@@ -1,4 +1,4 @@
-"""Rendering an `EvalReport` to `evals/results/`.
+"""Rendering an `EvalReport` to `var/evals/`.
 
 Two artefacts per run, because they have two readers:
 
@@ -26,7 +26,7 @@ from pathlib import Path
 from app.evals.harness import CORPUS_CAVEAT, EvalReport
 from app.evals.metrics import Score
 
-DEFAULT_RESULTS_DIR = Path("evals/results")
+DEFAULT_RESULTS_DIR = Path("var/evals")
 
 
 def write_report(report: EvalReport, *, directory: Path | None = None) -> tuple[Path, Path]:
@@ -276,14 +276,14 @@ def _cost_section(report: EvalReport) -> list[str]:
         f"- Budget remaining: ${cost.budget_total_usd - cost.total_usd} of "
         f"${cost.budget_total_usd}",
     ]
-    # PLAN.md 2: cache_read_tokens of zero across repeated extractions means a
+    # docs/plan.md 2: cache_read_tokens of zero across repeated extractions means a
     # silent cache invalidator in the prompt prefix. Say it here, where someone
     # is already reading the cost numbers.
     if cost.cache_read_tokens == 0:
         lines.append(
             "- **Prompt-cache reads: 0.** Across repeated extractions that means "
             "the cached prefix is being invalidated — a bug, not a tuning issue "
-            "(PLAN.md 2)."
+            "(docs/plan.md 2)."
         )
     else:
         lines.append(

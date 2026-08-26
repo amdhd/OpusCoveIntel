@@ -1085,7 +1085,7 @@
         "type": "string"
       },
       "ExtractionMethod": {
-        "description": "How a value was obtained. PLAN.md 3 -- rule and llm run in parallel.",
+        "description": "How a value was obtained. docs/plan.md 3 -- rule and llm run in parallel.",
         "enum": [
           "rule",
           "llm",
@@ -1801,7 +1801,7 @@
         "type": "object"
       },
       "QueryIntent": {
-        "description": "PLAN.md 5 -- the LangGraph classifier's output space.",
+        "description": "docs/plan.md 5 -- the LangGraph classifier's output space.",
         "enum": [
           "document_search",
           "covenant_lookup",

@@ -11,7 +11,7 @@ The two paths share the parts that read a question -- `classify` and
 differently. They already had, once, before the agent was given an entry point
 and anyone could compare them.
 
-That ordering is deliberate (PLAN.md 6): building the deterministic path first
+That ordering is deliberate (docs/plan.md 6): building the deterministic path first
 gives a baseline to measure LLM lift against, and means a budget bug in Phase 5
 cannot take down a system that already works.
 """

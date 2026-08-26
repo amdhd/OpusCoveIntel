@@ -1,9 +1,9 @@
 """The eval harness: run every metric, return one report.
 
-PLAN.md Phase 8 names nine metrics. They live in four modules and are assembled
+docs/plan.md Phase 8 names nine metrics. They live in four modules and are assembled
 here so a run produces one artefact rather than nine command invocations:
 
-| Metric (PLAN.md 6)            | Where it is computed                    |
+| Metric (docs/plan.md 6)            | Where it is computed                    |
 |-------------------------------|-----------------------------------------|
 | Field-level F1                | `evals/extraction.py`                   |
 | Enum exact match              | `evals/metrics.py` (no partial credit)  |
@@ -17,7 +17,7 @@ here so a run produces one artefact rather than nine command invocations:
 
 **The run costs $0.** Both read paths are deterministic and no metric calls a
 model, so `make eval` runs in CI under the same rule as `make test`
-(CLAUDE.md 7). PLAN.md's routing table reserves an LLM judge for faithfulness;
+(CLAUDE.md 7). docs/plan.md's routing table reserves an LLM judge for faithfulness;
 it is not built, and if it ever is it needs the `RUN_LIVE_LLM_TESTS=1` gate
 before it can be part of this run.
 
@@ -62,7 +62,7 @@ AGENT_PATH = "agent"
 # Stamped on every report. The golden set is synthetic (CLAUDE.md 7 forbids
 # committing real prospectuses), so these numbers describe text written to be
 # extractable. Saying so in the artefact is the only thing that stops a
-# synthetic F1 being quoted later as a production one (PLAN.md 9, question 1).
+# synthetic F1 being quoted later as a production one (docs/plan.md 9, question 1).
 CORPUS_CAVEAT = (
     "Scored against synthetic fixtures only. No licensed prospectus is in this "
     "corpus, so these figures are a regression baseline, not a production "
@@ -97,7 +97,7 @@ class EvalReport:
     def meets_targets(self) -> bool:
         """Whether the run measured its corpus and met every acceptance target.
 
-        Extraction F1 has no target here on purpose: PLAN.md sets one for the
+        Extraction F1 has no target here on purpose: docs/plan.md sets one for the
         golden questions and none for extraction, and inventing a threshold
         against a synthetic corpus would turn a measurement into a gate that
         says nothing about production.

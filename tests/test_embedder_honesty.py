@@ -13,7 +13,7 @@ Two things are pinned here, both about *knowing*:
   different model says that, rather than silently degrading to keyword-only.
 
 Neither test asserts retrieval quality. That needs a real key and a re-baseline
-(PLAN.md Phase 10.4); what these defend is that nobody has to guess which
+(docs/plan.md Phase 10.4); what these defend is that nobody has to guess which
 embedder they are running.
 """
 

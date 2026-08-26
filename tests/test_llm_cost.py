@@ -106,7 +106,7 @@ class TestCostEstimation:
     def test_unknown_model_raises_rather_than_pricing_at_zero(self) -> None:
         """An unpriced model must fail closed, not cost $0.
 
-        A zero here would pass every budget ceiling in PLAN.md 2, so one typo
+        A zero here would pass every budget ceiling in docs/plan.md 2, so one typo
         in `EXTRACTION_MODEL` would disable the guards entirely.
         """
         with pytest.raises(UnknownModelPricingError):

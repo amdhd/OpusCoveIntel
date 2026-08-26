@@ -1,4 +1,4 @@
-"""Seed script tests (PLAN.md Phase 2 acceptance: 'seed creates a demo portfolio')."""
+"""Seed script tests (docs/plan.md Phase 2 acceptance: 'seed creates a demo portfolio')."""
 
 from __future__ import annotations
 

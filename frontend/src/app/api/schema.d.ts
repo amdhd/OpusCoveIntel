@@ -894,7 +894,7 @@ export interface components {
         DocumentType: "prospectus" | "information_memorandum" | "trust_deed" | "rating_report" | "announcement" | "supplemental" | "unknown";
         /**
          * ExtractionMethod
-         * @description How a value was obtained. PLAN.md 3 -- rule and llm run in parallel.
+         * @description How a value was obtained. docs/plan.md 3 -- rule and llm run in parallel.
          * @enum {string}
          */
         ExtractionMethod: "rule" | "llm" | "vlm" | "human";
@@ -1145,7 +1145,7 @@ export interface components {
         };
         /**
          * QueryIntent
-         * @description PLAN.md 5 -- the LangGraph classifier's output space.
+         * @description docs/plan.md 5 -- the LangGraph classifier's output space.
          * @enum {string}
          */
         QueryIntent: "document_search" | "covenant_lookup" | "instrument_lookup" | "portfolio_query" | "covenant_breach_check" | "unsupported";

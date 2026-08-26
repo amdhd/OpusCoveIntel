@@ -1,6 +1,6 @@
 """Cost estimation and token pricing for every provider/model combination.
 
-PLAN.md 2: the budget guard checks cost *before* dispatch. This module provides
+docs/plan.md 2: the budget guard checks cost *before* dispatch. This module provides
 the prices so the guard doesn't guess. Money is Decimal, never float (CLAUDE.md 6).
 
 Prices are per million tokens (MTok). Model IDs are read from settings, not
@@ -80,7 +80,7 @@ class UnknownModelPricingError(LookupError):
     Failing closed is the whole point. If an unpriced model returned $0, the
     per-call, per-document and global guards would all pass it, and a single
     typo in `EXTRACTION_MODEL` -- or a provider shipping a new model id --
-    would silently disable every ceiling in PLAN.md 2. CLAUDE.md 1.4 says
+    would silently disable every ceiling in docs/plan.md 2. CLAUDE.md 1.4 says
     there is no silent LLM spend; an unknown price is the loudest possible
     version of silent.
     """

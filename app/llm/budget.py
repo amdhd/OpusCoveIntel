@@ -1,6 +1,6 @@
 """Budget guard — the gate every LLM call passes through before dispatch.
 
-PLAN.md 2 specifies four guards, checked in this order:
+docs/plan.md 2 specifies four guards, checked in this order:
 1. Per-call ceiling (MAX_COST_PER_CALL_USD) — reject before dispatch
 2. Per-document ceiling (MAX_COST_PER_DOCUMENT_USD) — abort doc, mark budget_exceeded
 3. Global ceiling (MAX_TOTAL_COST_USD) — circuit-breaker opens, all calls refused

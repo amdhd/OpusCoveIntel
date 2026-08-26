@@ -17,7 +17,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       # Runs only on first init of the volume; see the file header.
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U opuscovintel -d opuscovintel"]
       interval: 5s
@@ -93,5 +93,5 @@ volumes:
 # point a colleague at, which a named volume is not.
 #
 # Production is a different question and has a different answer: object storage
-# (PLAN.md defers S3/MinIO to Phase 8), where the shared-filesystem assumption
+# (docs/plan.md defers S3/MinIO to Phase 8), where the shared-filesystem assumption
 # stops holding the moment the api and the worker run on different hosts.

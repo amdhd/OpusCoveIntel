@@ -1,6 +1,6 @@
 """Review queue API — approve, correct, or reject items flagged for human review.
 
-PLAN.md, Phase 7: "Review queue API (approve/reject/edit with value history),
+docs/plan.md, Phase 7: "Review queue API (approve/reject/edit with value history),
 audit log, audit read endpoint."
 
 Every mutation here writes an AuditLog row. The review queue is the structured

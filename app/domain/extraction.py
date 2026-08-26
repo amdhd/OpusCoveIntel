@@ -1,6 +1,6 @@
 """What an extractor produces, before it becomes a row.
 
-PLAN.md 3 runs a rule-based extractor and an LLM extractor over the same spans,
+docs/plan.md 3 runs a rule-based extractor and an LLM extractor over the same spans,
 deliberately. This is the type they both produce, which is what makes them
 comparable at all: where they disagree, the field goes to human review at no
 extra model cost.
