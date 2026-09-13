@@ -187,7 +187,7 @@ Everything except extraction and vision OCR runs at $0, including the entire tes
 ## Testing
 
 ```bash
-make check    # lint + type check + 990 tests
+make check    # lint + type check + 997 tests
 make eval     # score extraction accuracy -> var/evals/
 make audit    # known vulnerabilities in the Python and client trees
 ```

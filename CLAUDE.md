@@ -36,8 +36,11 @@ even if tests pass.
 
 ## 2. Model routing
 
-Configured in `configs/models.yaml`, never hardcoded. Model IDs live in env vars — **verify current
-IDs against provider docs before changing defaults**.
+Model IDs are settings, never literals in code: `EXTRACTION_MODEL`, `SYNTHESIS_MODEL`,
+`JUDGE_MODEL`, `CHEAP_MODEL`, `EMBEDDING_MODEL` and `VLM_MODEL` in
+[`app/core/config.py`](app/core/config.py), overridable per environment. **Verify a current ID
+against the provider's docs before changing a default** — a wrong one fails at the first call,
+which is the cheapest place for it to fail.
 
 **The `Status` column is the point of this table.** It is a routing *design*,
 and most of it is not wired yet — an agent reading only the first two columns
@@ -50,7 +53,7 @@ change the wiring, in the same commit.
 | Document classification, section detection | Qwen (`qwen-plus`) | **not built** — nothing calls `CHEAP_MODEL` | High volume, low stakes, cheap |
 | Candidate clause detection | rules + pgvector + FTS (no LLM) | **live** — regex only; FTS/kNN reserved | Free; narrows 300pp → ~30 spans |
 | **Covenant / legal structured extraction** | **`claude-opus-5`**, `effort: high` | **live** — verified against the API | Highest stakes; long-context legal reasoning |
-| Scanned / low-confidence page OCR | GPT vision model (`VLM_MODEL`) | **built, unwired** — `VlmService` has no caller | Only pages that fail the text-layer check |
+| Scanned / low-confidence page OCR | GPT vision model (`VLM_MODEL`) | **wired, never run live** — `opuscovintel ocr` drives `VlmService`; no real provider call has ever been made (docs/review.md finding 10) | Only pages that fail the text-layer check |
 | Embeddings | Qwen `text-embedding-v4`, **1024 dims** | **inactive** — falls back to `HashingEmbedder` without `QWEN_API_KEY` | Strong multilingual (EN + Bahasa Malaysia) |
 | Answer synthesis | `claude-opus-5`, `effort: medium` | **not built** — `app/agent/` is fully deterministic and imports nothing from `app/llm/` | Citation discipline, refusal calibration |
 | Eval judge (faithfulness) | `claude-opus-5`, separate prompt version | **not built** — `app/evals/` scores faithfulness deterministically (citations re-verified against their chunks); no model is called | Must not share prompt with generator |
@@ -86,15 +89,20 @@ app/
   api/        FastAPI routers only. No business logic, no SQL.
   core/       settings (pydantic-settings), structured logging, request_id middleware
   domain/     Pydantic v2 schemas + enums. Pure — imports nothing from db/ or llm/
-  db/         SQLAlchemy 2.x models, Alembic, repositories
+  db/         SQLAlchemy 2.x models, repositories, dual read-write / read-only engines
+  auth/       scrypt password hashing, sessions, login backoff
   ingest/     PyMuPDF/pdfplumber, page-confidence scoring, VLM fallback, chunking
   llm/        adapters/ (anthropic, openai, qwen) + router.py + budget.py + cache.py
-  extract/    prompts/*.jinja2, candidate detection, extractors, validation loop
+  extract/    prompts/ (Python, byte-stable), candidate detection, extractors, validation loop
   rules/      deterministic covenant evaluation. Pure functions. Heavily unit-tested.
+  retrieval/  hybrid search: pgvector kNN + Postgres FTS, fused by reciprocal rank
+  query/      the deterministic read path: intent, answerability, service
   agent/      LangGraph query graph + tools + SQL guardrail
-  review/     human review queue service
+  catalog/    read-side assembly of instruments, covenants and their provenance
   evals/      golden set + metrics harness
   web/        Jinja templates + static CSS. The read screens, server-rendered.
+  worker/     the FOR UPDATE SKIP LOCKED job poller
+  cli.py      the `opuscovintel` command; main.py mounts the app
 
 frontend/     Angular 20 client app, served at /app by the same process. The
               screens that need client-side state: upload with transfer and
