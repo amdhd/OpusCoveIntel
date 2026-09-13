@@ -1,7 +1,7 @@
 # Implementation plan — OpusCovIntel
 
 **Status:** Phases 1–9 built. Phase 10 (accuracy and coverage) is the remaining work — see §6.
-**Written:** 2026-08-04 · **Last revised:** 2026-08-07
+**Written:** 2026-08-04 · **Last revised:** 2026-09-13
 
 This plan reconciles two prior drafts — a production-grade spec (`100usd`) and a minimal offline MVP
 (`10usd`) — against the actual target: a LangGraph-orchestrated, multi-provider covenant intelligence
@@ -326,10 +326,14 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
 8. **Raise the cost cap, and fail before spending rather than during.** ✅ *(cap + preflight; Batch
    API still open)* All three real prospectuses exceeded `MAX_COST_PER_DOCUMENT_USD=2.00` — worst
    case $20.94, $11.48 and $4.28 — so each would abort mid-document, paying for the calls made and
-   leaving a partial extraction. The default is now **$8.00**, calibrated for the $3–7 real spend,
-   and `ExtractionPipeline` **refuses before the first call** any document whose dry-run ceiling
-   already exceeds the cap — pricing it with the same `estimate_candidate_cost` the `--dry-run` CLI
-   uses, so the operator's number and the guard's number cannot drift. Still open: the **Batch API**
+   leaving a partial extraction. The default was raised to **$8.00**, then **halved to $5.00** on
+   2026-08-16 — half the $10.00 global ceiling, so no single document can exhaust the budget, where
+   $8.00 was 80% of it and left the global breaker to stop only the *second* expensive document.
+   Checked before changing rather than after: the corpus prices at $0.45, $0.90, $0.90, $1.57,
+   $4.28, $11.48 and $20.94, so nothing sits between the two figures and the halving refuses
+   nothing $8.00 admitted. `ExtractionPipeline` **refuses before the first call** any document whose
+   dry-run ceiling already exceeds the cap — pricing it with the same `estimate_candidate_cost`
+   the `--dry-run` CLI uses, so the operator's number and the guard's number cannot drift. Still open: the **Batch API**
    path §2 specifies and nothing implements (50% off, and backfilling a corpus is exactly its
    workload) — which is what would let the two documents still over the cap through.
 9. **Close the auth gaps.** ✅ *Rate limiting* — `login_attempts` plus exponential backoff per
@@ -337,20 +341,28 @@ the plan; that document is the reasoning behind it. Items 7–10 below came out 
    `AuthService.authenticate` so both login paths inherit it; backoff rather than lockout, so
    nobody needs an operator to get back in. ✅ *Password policy* — twelve characters, no
    composition rules, checked where a password is chosen rather than at login so the floor cannot
-   lock out an account that predates it. Still open: **security response headers**. A CSP matters
-   more here than usual because the UI renders clause text lifted verbatim out of third-party
-   PDFs — autoescaping is on and tested, and CSP is the layer that holds when an escaping bug
-   slips through.
+   lock out an account that predates it. ✅ *Security response headers* — `SecurityHeadersMiddleware`
+   sets all five as middleware rather than per-route, so a screen added later inherits the policy
+   instead of quietly having none; HSTS is gated on `SESSION_COOKIE_SECURE`, absent on the
+   plain-HTTP local stack and present the moment a deployment is HTTPS. A CSP matters more here
+   than usual because the UI renders clause text lifted verbatim out of third-party PDFs —
+   autoescaping is on and tested, and CSP is the layer that holds when an escaping bug slips
+   through. It is also why the client build keeps `inlineCritical` off (finding 5).
 10. ✅ **Upload from the browser, and a client app to do it in.** `extraction_jobs` held the
     ingestion progress and nothing exposed it, so `GET /documents/{id}/status` was added: document
     status, page and chunk counts, per-job timings, failure message, and a `terminal` flag the
     client polls on. The screen is Angular (`frontend/`, served at `/app` by the same process, so
     the session cookie keeps `SameSite=lax`); the read-only pages stay server-rendered, and both
     share one stylesheet. Closes finding 7.
-11. **Batch the portfolio page's rule evaluation.** It calls `evaluate_covenant_rule` once per
-    holding, each issuing several queries — fine for two positions, hundreds of queries for a
-    realistic 200-bond portfolio. Reusing the agent's tool was right; a second rules
-    implementation would eventually disagree with the first. Batch the loading, not the logic.
+11. ~~**Batch the portfolio page's rule evaluation.**~~ ✅ It called `evaluate_covenant_rule` once
+    per holding, each issuing several queries — fine for two positions, hundreds of queries for a
+    realistic 200-bond portfolio. `evaluate_covenant_rules` now loads instruments, rating triggers
+    and covenants in **three queries regardless of how many instruments are asked for**: ~600 round
+    trips down to 3 for a 200-bond portfolio. The loading was batched, not the logic — the
+    per-instrument evaluation was lifted into `_evaluate_loaded`, which both the single-instrument
+    tool and the batch entry point call, with a test asserting the two return identical data
+    field-for-field. A second rules implementation would eventually disagree with the first.
+    Long lists also page at fifty rows (finding 13).
 
 **Accept:** one real document ingests, extracts, and has its numbers written down next to the
 synthetic baseline, however bad they are · `rating_agency` F1 ≥0.9 on both methods · one page
