@@ -6,7 +6,7 @@
  * the screen does with the server's answers rather than that Angular renders.
  */
 import { HttpEventType, HttpResponse } from '@angular/common/http';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 
@@ -32,18 +32,24 @@ function status(overrides: Partial<DocumentStatusRead> = {}): DocumentStatusRead
   } as DocumentStatusRead;
 }
 
+function createApiMock() {
+  return {
+    listDocuments: vi.fn<Api['listDocuments']>(),
+    uploadDocument: vi.fn<Api['uploadDocument']>(),
+    documentStatus: vi.fn<Api['documentStatus']>(),
+    processDocument: vi.fn<Api['processDocument']>(),
+  };
+}
+
 describe('DocumentsPage', () => {
-  let api: jasmine.SpyObj<Api>;
+  let api: ReturnType<typeof createApiMock>;
+
+  afterEach(() => vi.useRealTimers());
 
   beforeEach(() => {
-    api = jasmine.createSpyObj<Api>('Api', [
-      'listDocuments',
-      'uploadDocument',
-      'documentStatus',
-      'processDocument',
-    ]);
-    api.listDocuments.and.returnValue(of([]));
-    api.documentStatus.and.returnValue(of(status()));
+    api = createApiMock();
+    api.listDocuments.mockReturnValue(of([]));
+    api.documentStatus.mockReturnValue(of(status()));
 
     TestBed.configureTestingModule({
       imports: [DocumentsPage],
@@ -59,7 +65,7 @@ describe('DocumentsPage', () => {
     // The screen used to show the browser's "Choose File" beside our "Upload",
     // and ours was disabled until the other had been used -- so the obvious
     // button did nothing and explained nothing.
-    api.uploadDocument.and.returnValue(
+    api.uploadDocument.mockReturnValue(
       of({ type: HttpEventType.UploadProgress, loaded: 1, total: 1024 }),
     );
     const fixture = TestBed.createComponent(DocumentsPage);
@@ -68,10 +74,10 @@ describe('DocumentsPage', () => {
     const button = (): HTMLButtonElement =>
       fixture.nativeElement.querySelector('.field-row button');
     const input: HTMLInputElement = fixture.nativeElement.querySelector('input[type=file]');
-    const clicked = spyOn(input, 'click');
+    const clicked = vi.spyOn(input, 'click').mockImplementation(() => undefined);
 
     // Nothing chosen: live, and it opens the picker rather than uploading.
-    expect(button().disabled).toBeFalse();
+    expect(button().disabled).toBe(false);
     expect(button().textContent?.trim()).toBe('Choose a PDF…');
     button().click();
     expect(clicked).toHaveBeenCalled();
@@ -97,16 +103,17 @@ describe('DocumentsPage', () => {
     expect(page.typeLabel('prospectus')).toBe('Prospectus');
   });
 
-  it('says which row the detail panel is describing', fakeAsync(() => {
+  it('says which row the detail panel is describing', () => {
+    vi.useFakeTimers();
     // The panel is above the table and every row's button is identical, so
     // without this the screen shows one document's jobs beside five rows of
     // buttons and no way to tell which one you pressed.
-    api.listDocuments.and.returnValue(
+    api.listDocuments.mockReturnValue(
       of([{ id: 'doc-1', filename: 'prospectus.pdf', document_type: 'unknown' } as DocumentRead]),
     );
     // Terminal, so the poll delivers once and completes rather than leaving a
     // timer running past the end of the test.
-    api.documentStatus.and.returnValue(of(status({ terminal: true })));
+    api.documentStatus.mockReturnValue(of(status({ terminal: true })));
     const fixture = TestBed.createComponent(DocumentsPage);
     fixture.detectChanges();
 
@@ -117,16 +124,16 @@ describe('DocumentsPage', () => {
     expect(row().classList).not.toContain('selected');
 
     button().click();
-    tick();
+    vi.advanceTimersByTime(0);
     fixture.detectChanges();
 
     expect(button().textContent?.trim()).toBe('Showing detail');
     expect(button().getAttribute('aria-pressed')).toBe('true');
     expect(row().classList).toContain('selected');
-  }));
+  });
 
   it('reports transfer progress while bytes are in flight', () => {
-    api.uploadDocument.and.returnValue(
+    api.uploadDocument.mockReturnValue(
       of({ type: HttpEventType.UploadProgress, loaded: 512, total: 1024 }),
     );
     const page = create() as unknown as {
@@ -141,23 +148,25 @@ describe('DocumentsPage', () => {
     expect(page.transferPercent()).toBe(50);
   });
 
-  it('keeps polling while the server says the document is not terminal', fakeAsync(() => {
+  it('keeps polling while the server says the document is not terminal', () => {
+    vi.useFakeTimers();
     const page = create() as unknown as { watch(id: string): void; ngOnDestroy(): void };
 
     page.watch('doc-1');
-    tick(0);
+    vi.advanceTimersByTime(0);
     expect(api.documentStatus).toHaveBeenCalledTimes(1);
 
-    tick(1500);
+    vi.advanceTimersByTime(1500);
 
     expect(api.documentStatus).toHaveBeenCalledTimes(2);
     // Still queued, so the list has not been refreshed as though it were done.
     expect(api.listDocuments).toHaveBeenCalledTimes(1);
     page.ngOnDestroy();
-  }));
+  });
 
-  it('stops and refreshes the list once the server says terminal', fakeAsync(() => {
-    api.documentStatus.and.returnValue(
+  it('stops and refreshes the list once the server says terminal', () => {
+    vi.useFakeTimers();
+    api.documentStatus.mockReturnValue(
       of(status({ status: 'chunked', terminal: true, page_count: 4, chunk_count: 12 })),
     );
     const page = create() as unknown as {
@@ -166,20 +175,20 @@ describe('DocumentsPage', () => {
     };
 
     page.watch('doc-1');
-    tick(0);
+    vi.advanceTimersByTime(0);
 
-    expect(page.watching()?.terminal).toBeTrue();
+    expect(page.watching()?.terminal).toBe(true);
     // Refreshed exactly once more than the constructor's load.
     expect(api.listDocuments).toHaveBeenCalledTimes(2);
 
     // And stopped: a poller that keeps asking after the answer is in has not
     // stopped, it is just quiet.
-    tick(10_000);
+    vi.advanceTimersByTime(10_000);
     expect(api.documentStatus).toHaveBeenCalledTimes(1);
-  }));
+  });
 
   it('shows the server’s reason rather than a status code', () => {
-    api.uploadDocument.and.returnValue(
+    api.uploadDocument.mockReturnValue(
       throwError(
         () =>
           new HttpErrorResponse({
@@ -222,7 +231,7 @@ describe('DocumentsPage', () => {
       duplicate: true,
       document: { id: 'doc-1', filename: 'prospectus.pdf' } as DocumentRead,
     };
-    api.uploadDocument.and.returnValue(of(new HttpResponse({ body })));
+    api.uploadDocument.mockReturnValue(of(new HttpResponse({ body })));
     const page = create() as unknown as {
       file: File | null;
       upload(): void;

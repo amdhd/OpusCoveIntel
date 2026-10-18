@@ -91,24 +91,14 @@
           "builder": "@angular/build:extract-i18n"
         },
         "test": {
-          "builder": "@angular/build:karma",
+          "builder": "@angular/build:unit-test",
           "options": {
-            "polyfills": [
-              "zone.js",
-              "zone.js/testing"
-            ],
             "tsConfig": "tsconfig.spec.json",
-            "assets": [
-              {
-                "glob": "**/*",
-                "input": "public"
-              }
-            ],
-            "styles": [
-              "../app/web/static/app.css",
-              "src/styles.css"
-            ],
-            "karmaConfig": "karma.conf.js"
+            "runner": "vitest",
+            "buildTarget": "::development",
+            "browsers": [
+              "chromiumHeadless"
+            ]
           }
         }
       }

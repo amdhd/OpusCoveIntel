@@ -78,12 +78,12 @@ describe('confidence', () => {
   });
 
   it('marks a figure under the bar, and only under it', () => {
-    expect(belowReviewBar(REVIEW_THRESHOLD - 0.01)).toBeTrue();
+    expect(belowReviewBar(REVIEW_THRESHOLD - 0.01)).toBe(true);
     // The bar itself is not below itself: `confidence < threshold` queues an
     // item, so 0.85 is settled and must not wear the marker.
-    expect(belowReviewBar(REVIEW_THRESHOLD)).toBeFalse();
-    expect(belowReviewBar(null)).toBeFalse();
-    expect(belowReviewBar(undefined)).toBeFalse();
+    expect(belowReviewBar(REVIEW_THRESHOLD)).toBe(false);
+    expect(belowReviewBar(null)).toBe(false);
+    expect(belowReviewBar(undefined)).toBe(false);
   });
 });
 
