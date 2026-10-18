@@ -17,50 +17,58 @@ import { landingGuard } from './auth-guard';
 
 const REVIEWER = { username: 'aminah', display_name: 'Aminah', role: 'reviewer' } as UserRead;
 
+function createApiMock() {
+  return {
+    me: vi.fn<Api['me']>(),
+    login: vi.fn<Api['login']>(),
+    logout: vi.fn<Api['logout']>(),
+  };
+}
+
 describe('Auth', () => {
-  let api: jasmine.SpyObj<Api>;
+  let api: ReturnType<typeof createApiMock>;
   let auth: Auth;
 
   beforeEach(() => {
-    api = jasmine.createSpyObj<Api>('Api', ['me', 'login', 'logout']);
+    api = createApiMock();
     TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: api }] });
     auth = TestBed.inject(Auth);
   });
 
   it('asks the server once per page load, not once per navigation', async () => {
-    api.me.and.returnValue(of(REVIEWER));
+    api.me.mockReturnValue(of(REVIEWER));
 
     await auth.load();
     await auth.load();
     await auth.load();
 
     expect(api.me).toHaveBeenCalledTimes(1);
-    expect(auth.signedIn()).toBeTrue();
+    expect(auth.signedIn()).toBe(true);
   });
 
   it('treats a 401 from /auth/me as "not signed in", not as an error', async () => {
-    api.me.and.returnValue(throwError(() => new HttpErrorResponse({ status: 401 })));
+    api.me.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 401 })));
 
     const user = await auth.load();
 
     expect(user).toBeNull();
-    expect(auth.signedIn()).toBeFalse();
+    expect(auth.signedIn()).toBe(false);
   });
 
   it('only an analyst who is a reviewer may be offered review controls', async () => {
-    api.me.and.returnValue(of({ ...REVIEWER, role: 'analyst' } as UserRead));
+    api.me.mockReturnValue(of({ ...REVIEWER, role: 'analyst' } as UserRead));
 
     await auth.load();
 
-    expect(auth.signedIn()).toBeTrue();
-    expect(auth.canReview()).toBeFalse();
+    expect(auth.signedIn()).toBe(true);
+    expect(auth.canReview()).toBe(false);
   });
 
   it('lands a reviewer on the queue and everyone else on the corpus', async () => {
     const router = TestBed.inject(Router);
     const landing = async (role: string): Promise<string> => {
-      api.me.calls.reset();
-      api.me.and.returnValue(of({ ...REVIEWER, role } as UserRead));
+      api.me.mockClear();
+      api.me.mockReturnValue(of({ ...REVIEWER, role } as UserRead));
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({ providers: [{ provide: Api, useValue: api }] });
       await TestBed.inject(Auth).load();
@@ -76,13 +84,13 @@ describe('Auth', () => {
   });
 
   it('forgets the user even when the logout request fails', async () => {
-    api.me.and.returnValue(of(REVIEWER));
-    api.logout.and.returnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+    api.me.mockReturnValue(of(REVIEWER));
+    api.logout.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
     await auth.load();
 
     await auth.logout();
 
     // A stale name in the corner of the screen is worse than an extra login.
-    expect(auth.signedIn()).toBeFalse();
+    expect(auth.signedIn()).toBe(false);
   });
 });

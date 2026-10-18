@@ -110,6 +110,7 @@ jobs:
         # every database-backed test and CI would still be green.
         env:
           REQUIRE_POSTGRES: "1"
+          READONLY_POLICY_TEST_URL: postgresql://opuscovintel:opuscovintel@localhost:5432/opuscovintel
         run: make test
 
   migrations:
@@ -287,8 +288,11 @@ jobs:
         run: npm run build
         working-directory: frontend
 
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+
       - name: Test
-        # Chrome is preinstalled on the runner; karma.conf.js adds --no-sandbox.
         run: npm run test:ci
         working-directory: frontend
 

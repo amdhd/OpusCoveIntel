@@ -1,9 +1,9 @@
 """What the query agent's database role can actually read.
 
 `app/agent/sql_guard.py` keeps six operational tables out of the agent's
-allowlist, and `docker/postgres-init.sql` calls the Postgres grant "the actual
+allowlist, and the original bootstrap called the Postgres grant "the actual
 boundary" with that allowlist as "defence in depth". Those two statements were
-not both true: the init script grants SELECT on every table, so for
+not both true: that script granted SELECT on every table, so for
 `audit_logs`, `extraction_jobs`, `human_reviews`, `llm_cache`, `llm_calls` and
 `query_logs` the boundary existed only in the SQL parser.
 
@@ -16,8 +16,8 @@ only place the claim can be checked. Three things are pinned:
 * the migration's own SQL is what produces the denial (the statement is
   imported from the migration, not retyped here), and
 * what the role can read afterwards is precisely `ALLOWED_TABLES`, so a table
-  added later cannot quietly inherit SELECT from the init script's
-  `ALTER DEFAULT PRIVILEGES` without this going red.
+  added later cannot evade the historical exclusion sweep. The replacement
+  bootstrap's lifecycle policy is tested separately in test_readonly_policy.py.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ class _Probe:
 
 @pytest_asyncio.fixture
 async def probe(db_engine: AsyncEngine) -> AsyncIterator[_Probe]:
-    """A read-only role holding the grants `docker/postgres-init.sql` would give it.
+    """A read-only role holding the legacy bootstrap's broad grants.
 
     The role is cluster-wide, but grants are per-database: everything here
     happens in the test database, so a developer's `opuscovintel` database is
@@ -219,9 +219,9 @@ async def test_the_covenant_tables_stay_readable(revoked: _Probe, table: str) ->
 async def test_the_readable_set_is_exactly_the_guardrail_allowlist(revoked: _Probe) -> None:
     """The whole boundary, in one assertion.
 
-    `ALTER DEFAULT PRIVILEGES` in the init script gives every future table
-    SELECT, so a table added later arrives readable by the agent's role unless
-    someone thinks about it. This fails when that happens -- which is the point.
+    The legacy bootstrap gave every future table SELECT. This tests the
+    historical revokes; test_readonly_policy.py verifies the replacement
+    default-deny policy and bootstrap/migration ordering.
     """
     for module in REVOKING_MIGRATIONS:
         await revoked.admin_execute(module.revoke_sql())

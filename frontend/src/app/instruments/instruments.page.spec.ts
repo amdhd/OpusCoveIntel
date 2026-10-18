@@ -29,13 +29,20 @@ function instrument(overrides: Partial<InstrumentRead> = {}): InstrumentRead {
   } as InstrumentRead;
 }
 
+function createApiMock() {
+  return {
+    listInstruments: vi.fn<Api['listInstruments']>(),
+    instrumentCovenants: vi.fn<Api['instrumentCovenants']>(),
+  };
+}
+
 describe('InstrumentsPage', () => {
-  let api: jasmine.SpyObj<Api>;
+  let api: ReturnType<typeof createApiMock>;
 
   beforeEach(() => {
-    api = jasmine.createSpyObj<Api>('Api', ['listInstruments', 'instrumentCovenants']);
-    api.listInstruments.and.returnValue(of([instrument()]));
-    api.instrumentCovenants.and.returnValue(of([] as CovenantRead[]));
+    api = createApiMock();
+    api.listInstruments.mockReturnValue(of([instrument()]));
+    api.instrumentCovenants.mockReturnValue(of([] as CovenantRead[]));
 
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: Api, useValue: api }],

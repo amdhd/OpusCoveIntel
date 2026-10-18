@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import uuid
 from typing import Final, Protocol, runtime_checkable
 
 from app.core.config import get_settings
@@ -99,23 +100,17 @@ class HashingEmbedder:
 
 
 class QwenEmbedder:
-    """Real Qwen text-embedding-v4 via the OpenAI-compatible DashScope endpoint.
+    """Qwen embeddings through the router's budget guard and spend ledger.
 
-    Implements the Embedder protocol so it is a drop-in replacement for
-    HashingEmbedder. Batches requests (EMBED_BATCH_SIZE at a time) because
-    Qwen bills per API call.
-
-    Semantics: this closes the gap documented on HashingEmbedder — "gearing"
-    and "leverage" are now related. Multilingual (EN + BM), 1024 dims.
+    Accounting owns a separate write transaction: retrieval may use a read-only
+    session, and a later ingestion rollback must not erase already billed work.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, document_id: uuid.UUID | None = None) -> None:
         settings = get_settings()
         self._model_id = settings.EMBEDDING_MODEL
         self._dimension = settings.VECTOR_DIMENSION
-        # Lazy-init on first call so imports don't fail when keys are absent
-        # and the mock is in use.
-        self._adapter: object | None = None
+        self._document_id = document_id
 
     @property
     def model_id(self) -> str:
@@ -126,15 +121,25 @@ class QwenEmbedder:
         return self._dimension
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        if self._adapter is None:
-            from app.llm.adapters.qwen import QwenAdapter
+        from app.db.session import get_sessionmaker
+        from app.llm.router import LLMRouter
 
-            self._adapter = QwenAdapter()
-        adapter: QwenAdapter = self._adapter  # type: ignore[assignment]
-        return await adapter.embed(texts, model_id=self._model_id)
+        async with get_sessionmaker()() as session:
+            router = LLMRouter(session)
+            try:
+                vectors = await router.embed(
+                    texts=texts,
+                    provider_name="qwen",
+                    model_id=self._model_id,
+                    document_id=self._document_id,
+                )
+                await session.commit()
+                return vectors
+            finally:
+                await router.aclose()
 
 
-def get_embedder() -> Embedder:
+def get_embedder(*, document_id: uuid.UUID | None = None) -> Embedder:
     """The embedder for this deployment.
 
     Returns a QwenEmbedder when EMBEDDING_MODEL is set to a real provider and
@@ -165,7 +170,7 @@ def get_embedder() -> Embedder:
 
     # Check if EMBEDDING_MODEL names a real provider rather than the fake one.
     if settings.EMBEDDING_MODEL in ("text-embedding-v4", "text-embedding-v3"):
-        return QwenEmbedder()
+        return QwenEmbedder(document_id=document_id)
 
     _warn_placeholder(f"EMBEDDING_MODEL={settings.EMBEDDING_MODEL!r} names no real provider")
     return HashingEmbedder()

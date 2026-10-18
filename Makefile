@@ -59,7 +59,7 @@ frontend-install:  ## Install the client app's dependencies
 frontend: frontend-install  ## Build the client app into frontend/dist
 	cd frontend && npm run build
 
-frontend-test:  ## Run the client app's unit tests (headless Chrome)
+frontend-test:  ## Run the client app's unit tests (headless Chromium)
 	cd frontend && npm run test:ci
 
 frontend-serve:  ## Dev server on :4200, proxying the API on :8000

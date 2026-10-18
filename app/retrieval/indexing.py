@@ -6,7 +6,8 @@ is where a chunk becomes findable.
 
 Indexing is a pipeline stage like parsing and chunking, with the same identity
 key (CLAUDE.md 1.7), so re-indexing an unchanged document is a no-op. It is
-also still **$0**: the embedder is the offline hashing one until Phase 5.
+free when using the offline hashing embedder. Configured Qwen embeddings pass
+through the router's budget guard and separately committed spend ledger.
 
 The embedding model is recorded on every row. Vectors from two models are not
 comparable, so `search_by_vector` filters on it -- and that filter is only
@@ -51,7 +52,7 @@ class IndexingOutcome:
 class IndexingService:
     def __init__(self, session: AsyncSession, embedder: Embedder | None = None) -> None:
         self._session = session
-        self._embedder = embedder or get_embedder()
+        self._embedder = embedder
         self._documents = DocumentRepository(session)
         self._chunks = DocumentChunkRepository(session)
         self._jobs = ExtractionJobRepository(session)
@@ -62,17 +63,18 @@ class IndexingService:
         if document is None:
             raise LookupError(f"document {document_id} not found")
 
-        job = await self._ensure_job(document)
+        embedder = self._embedder or get_embedder(document_id=document_id)
+        job = await self._ensure_job(document, model_id=embedder.model_id)
         if job.status is JobStatus.SUCCEEDED:
             logger.info(
                 "indexing skipped; extraction identity already satisfied",
-                extra={"document_id": str(document_id), "model_id": self._embedder.model_id},
+                extra={"document_id": str(document_id), "model_id": embedder.model_id},
             )
             return IndexingOutcome(
                 document_id=document_id,
                 chunks_embedded=await self._chunks.count_embedded(document_id),
                 chunks_indexed_for_fts=0,
-                embedding_model=self._embedder.model_id,
+                embedding_model=embedder.model_id,
                 skipped=True,
             )
 
@@ -82,7 +84,7 @@ class IndexingService:
 
         try:
             fts_rows = await self._chunks.refresh_fts(document_id)
-            embedded = await self._embed_chunks(document_id)
+            embedded = await self._embed_chunks(document_id, embedder)
 
             document.status = DocumentStatus.EMBEDDED
             job.status = JobStatus.SUCCEEDED
@@ -90,7 +92,7 @@ class IndexingService:
             await self._session.commit()
         except Exception as exc:
             await self._session.rollback()
-            await self._fail(document_id, exc)
+            await self._fail(document_id, exc, model_id=embedder.model_id)
             raise
 
         logger.info(
@@ -99,47 +101,46 @@ class IndexingService:
                 "document_id": str(document_id),
                 "chunks_embedded": embedded,
                 "chunks_indexed_for_fts": fts_rows,
-                "embedding_model": self._embedder.model_id,
+                "embedding_model": embedder.model_id,
             },
         )
         return IndexingOutcome(
             document_id=document_id,
             chunks_embedded=embedded,
             chunks_indexed_for_fts=fts_rows,
-            embedding_model=self._embedder.model_id,
+            embedding_model=embedder.model_id,
             skipped=False,
         )
 
-    async def _embed_chunks(self, document_id: uuid.UUID) -> int:
+    async def _embed_chunks(self, document_id: uuid.UUID, embedder: Embedder) -> int:
         chunks = list(await self._chunks.list_for_document(document_id, limit=100_000))
         embedded = 0
         for start in range(0, len(chunks), EMBED_BATCH_SIZE):
             batch = chunks[start : start + EMBED_BATCH_SIZE]
-            vectors = await self._embedder.embed([chunk.chunk_text for chunk in batch])
+            vectors = await embedder.embed([chunk.chunk_text for chunk in batch])
             if len(vectors) != len(batch):
                 raise RuntimeError(
                     f"embedder returned {len(vectors)} vectors for {len(batch)} chunks"
                 )
             for chunk, vector in zip(batch, vectors, strict=True):
-                if len(vector) != self._embedder.dimension:
+                if len(vector) != embedder.dimension:
                     raise RuntimeError(
-                        f"embedder returned {len(vector)} dimensions, "
-                        f"expected {self._embedder.dimension}"
+                        f"embedder returned {len(vector)} dimensions, expected {embedder.dimension}"
                     )
                 chunk.embedding = vector
-                chunk.embedding_model = self._embedder.model_id
+                chunk.embedding_model = embedder.model_id
                 embedded += 1
             await self._session.flush()
         return embedded
 
-    async def _ensure_job(self, document: Document) -> ExtractionJob:
+    async def _ensure_job(self, document: Document, *, model_id: str) -> ExtractionJob:
         job = await self._jobs.find_by_identity(
             document_sha256=document.sha256,
             job_type=JobType.EMBED,
             prompt_version=INDEX_PROMPT_VERSION,
             # The embedding model is part of the identity: switching models
             # must re-index rather than silently mix vector spaces.
-            model_id=self._embedder.model_id,
+            model_id=model_id,
             extractor_version=INDEX_VERSION,
         )
         if job is not None:
@@ -150,19 +151,19 @@ class IndexingService:
                 document_sha256=document.sha256,
                 job_type=JobType.EMBED,
                 status=JobStatus.QUEUED,
-                model_id=self._embedder.model_id,
+                model_id=model_id,
                 prompt_version=INDEX_PROMPT_VERSION,
                 extractor_version=INDEX_VERSION,
             )
         )
 
-    async def _fail(self, document_id: uuid.UUID, exc: BaseException) -> None:
+    async def _fail(self, document_id: uuid.UUID, exc: BaseException, *, model_id: str) -> None:
         message = f"{type(exc).__name__}: {exc}"
         logger.error("indexing failed", extra={"document_id": str(document_id), "error": message})
         document = await self._documents.get(document_id)
         if document is None:
             return
-        job = await self._ensure_job(document)
+        job = await self._ensure_job(document, model_id=model_id)
         if job.status is not JobStatus.SUCCEEDED:
             job.status = JobStatus.FAILED
             job.error_message = message[:2000]

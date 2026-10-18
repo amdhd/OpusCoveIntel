@@ -54,7 +54,7 @@ change the wiring, in the same commit.
 | Candidate clause detection | rules + pgvector + FTS (no LLM) | **live** — regex only; FTS/kNN reserved | Free; narrows 300pp → ~30 spans |
 | **Covenant / legal structured extraction** | **`claude-opus-5`**, `effort: high` | **live** — verified against the API | Highest stakes; long-context legal reasoning |
 | Scanned / low-confidence page OCR | GPT vision model (`VLM_MODEL`) | **wired, never run live** — `opuscovintel ocr` drives `VlmService`; no real provider call has ever been made (docs/review.md finding 10) | Only pages that fail the text-layer check |
-| Embeddings | Qwen `text-embedding-v4`, **1024 dims** | **inactive** — falls back to `HashingEmbedder` without `QWEN_API_KEY` | Strong multilingual (EN + Bahasa Malaysia) |
+| Embeddings | Qwen `text-embedding-v4`, **1024 dims** | **wired** — search, indexing and semantic candidates use the budget router and committed spend ledger; falls back to `HashingEmbedder` without `QWEN_API_KEY` or in tests | Strong multilingual (EN + Bahasa Malaysia) |
 | Answer synthesis | `claude-opus-5`, `effort: medium` | **not built** — `app/agent/` is fully deterministic and imports nothing from `app/llm/` | Citation discipline, refusal calibration |
 | Eval judge (faithfulness) | `claude-opus-5`, separate prompt version | **not built** — `app/evals/` scores faithfulness deterministically (citations re-verified against their chunks); no model is called | Must not share prompt with generator |
 

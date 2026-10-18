@@ -23,9 +23,29 @@ because they share one stylesheet — the build references
 ```bash
 make frontend          # npm ci && ng build  -> frontend/dist, served at /app
 make frontend-serve    # ng serve on :4200, proxying the API on :8000
-make frontend-test     # unit tests, headless Chrome
+make frontend-test     # unit tests, headless Chromium
 make frontend-types    # regenerate src/app/api/schema.d.ts from the API's OpenAPI
 ```
+
+Tests use Vitest in a real Playwright Chromium browser. After `npm ci`, run
+`npx playwright install chromium` once in `frontend/` before `make frontend-test`.
+CI installs Chromium and its Linux system dependencies automatically. The browser
+is a development dependency and is not included in the application image.
+
+Angular 20's `unit-test` builder is experimental. We use it to remove Karma's
+unpatched dependency tree, while retaining real browser DOM tests and all existing
+assertions. Polling tests use Vitest's fake timers instead of Angular `fakeAsync`.
+The scoped `vitest → tinypool` override pins 2.1.2 to remove worker-option RCE
+advisories; the suite exercises browser mode rather than the Node worker pool.
+Remove the override when a supported Vitest version depends on a patched release.
+
+`npm audit` still reports the moderate
+[Vitest redirect-mock advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)
+through four package entries. Its fix is in Vitest 4.1.11+, while Angular 20's
+builder supports Vitest 3. Browser-mode mock RPC is token protected; this setup
+does not use standalone mocker plugins or expose the test server to the network.
+A supported Angular/Vitest upgrade is the follow-up. CI retains its existing
+high-severity threshold; no advisories are ignored.
 
 The build is optional: the API and `/ui` run without it, and `app/main.py` logs that `/app` is
 unavailable rather than failing to start.

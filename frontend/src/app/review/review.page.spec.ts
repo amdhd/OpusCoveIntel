@@ -31,28 +31,32 @@ function item(overrides: Partial<ReviewItem> = {}): ReviewItem {
   } as ReviewItem;
 }
 
+function createApiMock() {
+  return {
+    pendingReviews: vi.fn<Api['pendingReviews']>(),
+    approveReview: vi.fn<Api['approveReview']>(),
+    correctReview: vi.fn<Api['correctReview']>(),
+    rejectReview: vi.fn<Api['rejectReview']>(),
+    me: vi.fn<Api['me']>(),
+  };
+}
+
 describe('ReviewPage', () => {
-  let api: jasmine.SpyObj<Api>;
+  let api: ReturnType<typeof createApiMock>;
 
   beforeEach(() => {
-    api = jasmine.createSpyObj<Api>('Api', [
-      'pendingReviews',
-      'approveReview',
-      'correctReview',
-      'rejectReview',
-      'me',
-    ]);
-    api.pendingReviews.and.returnValue(
+    api = createApiMock();
+    api.pendingReviews.mockReturnValue(
       of({ items: [item()], total_pending: 1 } as PendingResponse),
     );
-    api.rejectReview.and.returnValue(of({} as ReviewActionResponse));
-    api.correctReview.and.returnValue(of({} as ReviewActionResponse));
+    api.rejectReview.mockReturnValue(of({} as ReviewActionResponse));
+    api.correctReview.mockReturnValue(of({} as ReviewActionResponse));
 
     TestBed.configureTestingModule({
       providers: [provideRouter([]), { provide: Api, useValue: api }],
     });
     // The buttons render only for a reviewer.
-    spyOn(TestBed.inject(Auth), 'canReview').and.returnValue(true);
+    vi.spyOn(TestBed.inject(Auth), 'canReview').mockReturnValue(true);
   });
 
   function page(): {
