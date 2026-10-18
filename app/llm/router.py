@@ -22,8 +22,8 @@ import hashlib
 import inspect
 import json
 import uuid
-from dataclasses import dataclass
-from decimal import Decimal
+from dataclasses import dataclass, replace
+from decimal import ROUND_CEILING, Decimal
 from typing import Any, Final, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -279,6 +279,12 @@ class LLMRouter:
             prompt_tokens=estimated_tokens,
             max_output_tokens=0,
         )
+        # llm_calls stores six decimal places. A short query can cost less than
+        # half a micro-dollar and otherwise round to zero on every insert,
+        # defeating the cumulative ceiling. Use the same conservative amount
+        # for the preflight and ledger so even these calls consume budget.
+        ledger_cost = cost.total.quantize(Decimal("0.000001"), rounding=ROUND_CEILING)
+        cost = replace(cost, input_cost=ledger_cost, total=ledger_cost)
 
         # Budget guard
         decision = await self._budget.check_call(

@@ -173,7 +173,7 @@ class CandidateDetectionService:
     def __init__(self, session: AsyncSession, embedder: Embedder | None = None) -> None:
         self._session = session
         self._chunks = DocumentChunkRepository(session)
-        self._embedder = embedder or get_embedder()
+        self._embedder = embedder
 
     async def detect(
         self,
@@ -297,12 +297,13 @@ class CandidateDetectionService:
             logger.warning("candidate fts leg failed", extra={"error": str(exc)})
 
         try:
-            vectors = await self._embedder.embed([query])
+            embedder = self._embedder or get_embedder(document_id=document_id)
+            vectors = await embedder.embed([query])
             for chunk, value in await self._chunks.search_by_vector(
                 vectors[0],
                 limit=EXEMPLAR_HITS,
                 document_id=document_id,
-                embedding_model=self._embedder.model_id,
+                embedding_model=embedder.model_id,
             ):
                 if float(value) >= MIN_KNN_SIMILARITY:
                     results.append((chunk.id, "knn", float(value)))
