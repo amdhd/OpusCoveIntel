@@ -28,9 +28,10 @@ operator-invoked from the CLI and never triggered by an upload.
 
 - **Postgres 16+ with `vector`, `pg_trgm` and `unaccent`.** The schema will not
   create without `vector` — `document_chunks.embedding` is `vector(1024)`.
-- **Two database roles.** `docker/postgres-init.sql` creates them, and
-  a managed Postgres needs it run by hand:
-  - the application role, read-write;
+- **Two database roles.** Provision the application/migration role separately;
+  Compose obtains it from `POSTGRES_USER`. Run `docker/postgres-init.sql` with
+  `psql` against the intended database to create/reconcile the query role:
+  - the application role, read-write and owner of application tables;
   - `opuscovintel_ro`, `SELECT`-only, with `default_transaction_read_only = on`
     and `statement_timeout = '5s'`.
 
@@ -109,6 +110,49 @@ Order of operations on a deploy: **migrate first, then roll the application.**
 Nothing in the schema is destructive today, and a new column that no running
 code writes is harmless. A migration that drops or renames must be split across
 two releases; there is no online-schema-change tooling here to hide behind.
+
+### Query-role privilege reconciliation
+
+Bootstrap and migration `8c2d5f0a91be` share the versioned policy in
+`app/db/readonly_v1.sql`. It grants SELECT only to the explicit corpus/portfolio
+table allowlist. Authentication tables, operational records, `alembic_version`
+and future tables receive no read grants. Historical blanket table/default
+grants and separate column grants are removed. Existing installations receive
+the reconciliation with `alembic upgrade head`.
+
+Fresh bootstrap before migration, role provisioning after migration, and
+bootstrap replay all produce the same privileges once tables exist. To
+reconcile an existing database without destroying its volume, an operator can
+run this from a complete repository checkout, using the appropriate database
+connection options:
+
+```bash
+psql -v ON_ERROR_STOP=1 -d <database> -f docker/postgres-init.sql
+```
+
+The relative SQL include must accompany the bootstrap script; Compose mounts
+both files. Extensions are installed by the initial schema migration. Bootstrap
+creates a missing role with development credentials; set a deployment-specific
+password before using it outside the local stack. Replay preserves an existing
+role's password.
+
+Run reconciliation as the table/migration owner, or as an administrator able to
+change legacy default privileges belonging to other object creators. The query
+role must have no elevated attributes, role memberships, or ownership of the
+database or public application objects. PUBLIC grants/defaults that defeat the
+allowlist cause an error rather than a successful but ineffective restriction;
+resolve those grants deliberately and rerun. Policy application is transactional.
+Downgrading this migration retains its security restriction.
+
+When a future table should be query-readable, add a new version of the SQL
+policy and a migration, update bootstrap to include that version, and keep the
+policy allowlist aligned with the SQL guard. Existing policy versions stay
+immutable. No automatic SELECT default is added for new tables.
+
+The grant lifecycle tests accept `READONLY_POLICY_TEST_URL` only as an explicit
+connection to a disposable test cluster; they never read the application's
+database settings. CI supplies its dedicated PostgreSQL service. Tests create
+and remove synthetic databases and uniquely named roles on that cluster.
 
 ## 6. What is deferred, and what to add first
 

@@ -110,6 +110,7 @@ jobs:
         # every database-backed test and CI would still be green.
         env:
           REQUIRE_POSTGRES: "1"
+          READONLY_POLICY_TEST_URL: postgresql://opuscovintel:opuscovintel@localhost:5432/opuscovintel
         run: make test
 
   migrations:
